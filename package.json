@@ -2,10 +2,10 @@
   "name": "ssb-browser-core",
   "description": "",
   "version": "1.0.0",
-  "homepage": "",
+  "homepage": "https://github.com/arj03/ssb-browser-core",
   "repository": {
     "type": "git",
-    "url": ""
+    "url": "git@github.com:arj03/ssb-browser-core.git"
   },
   "dependencies": {
     "flumecodec": "0.0.1",
