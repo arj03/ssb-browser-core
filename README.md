@@ -67,6 +67,51 @@ module with a few extra modules
 loaded. [ssb-ws](https://github.com/ssbc/ssb-ws) is used to create web
 socket connections to pubs.
 
+## dir
+
+The path to where the database and blobs are stored.
+
+## publish(msg, cb)
+
+Validates a message and stores it in the database. See db.add for format.
+
+## messagesByType
+
+A convinience method around db.query to get messages of a particular type.
+
+## state
+
+The current [state](https://github.com/ssbc/ssb-validate#state) of
+known feeds.
+
+## remoteAddress
+
+The remote server to connect to. Must be web socket.
+
+## sync
+
+Start a EBT replication with the remote server. This syncs all the
+feeds known in `SSB.state.feeds`.
+
+FIXME: document how this works with following
+
+## validMessageTypes
+
+An array of message types to store during sync.
+
+FIXME: document how this works with following
+
+## privateMessages
+
+A boolean to indicate if private messages are to be stored during sync.
+
+FIXME: document how this works with following
+
+
+There are a few other undocumented methods, these will probably be
+moved to another module in a later version as they are quite tied to
+[ssb-browser-demo](https://github.com/arj03/ssb-browser-demo).
+
 # Building
 
 The following patches (patch -p0 < x.patch) from the patches folder
