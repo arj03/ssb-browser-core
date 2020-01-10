@@ -16,7 +16,7 @@ s.events.on('sodium-browserify:wasm loaded', function() {
 
   console.log("wasm loaded")
 
-  var net = require('./server').init(dir)
+  var net = require('./net').init(dir)
   var db = require('./db').init(dir, net.id)
 
   console.log("my id: ", net.id)

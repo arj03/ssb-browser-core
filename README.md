@@ -60,6 +60,13 @@ The [peer-invites](https://github.com/ssbc/ssb-peer-invites) module
 Gets the current db status, same functionality as
 [db.status](https://github.com/ssbc/ssb-db#dbstatus) in ssb-db.
 
+## net
+
+This is the [secret-stack](https://github.com/ssbc/secret-stack)
+module with a few extra modules
+loaded. [ssb-ws](https://github.com/ssbc/ssb-ws) is used to create web
+socket connections to pubs.
+
 # Building
 
 The following patches (patch -p0 < x.patch) from the patches folder
