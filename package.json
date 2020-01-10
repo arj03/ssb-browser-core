@@ -33,7 +33,7 @@
   },
   "devDependencies": {},
   "scripts": {
-    "build": "node write-dist.js"
+    "build": "mkdir dist && browserify --full-paths core.js > dist/bundle-core.js"
   },
   "author": "arj",
   "license": "beerware"
