@@ -33,7 +33,7 @@
   },
   "devDependencies": {},
   "scripts": {
-    "build": "mkdir dist && browserify --full-paths core.js > dist/bundle-core.js"
+    "build": "mkdir -p dist && browserify --full-paths core.js > dist/bundle-core.js"
   },
   "author": "arj",
   "license": "beerware"

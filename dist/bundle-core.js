@@ -26415,7 +26415,7 @@ const raf = require('polyraf')
 
 var remote
 
-function connected(cb)
+exports.connected = function(cb)
 {
   if (!remote || remote.closed)
   {
@@ -26475,43 +26475,9 @@ exports.removeBlobs = function() {
   })
 }
 
-// this uses https://github.com/arj03/ssb-get-thread plugin
-exports.getThread = function(msgId, cb)
-{
-  connected((rpc) => {
-    rpc.getThread.get(msgId, (err, messages) => {
-      if (err) return cb(err)
-
-      exports.syncThread(messages, cb)
-    })
-  })
-}
-
-exports.getOOO = function(msgId, cb)
-{
-  connected((rpc) => {
-    SSB.net.ooo.get(msgId, cb)
-  })
-}
-
-exports.syncThread = function(messages, cb) {
-  pull(
-    pull.values(messages),
-    pull.filter((msg) => msg && msg.content.type == "post"),
-    pull.asyncMap((msg, cb) => {
-      state = validate.appendOOO(SSB.state, null, msg)
-
-      if (SSB.state.error) return cb(SSB.state.error)
-
-      SSB.db.add(msg, cb)
-    }),
-    pull.collect(cb)
-  )
-}
-
 exports.sync = function()
 {
-  connected((rpc) => {
+  exports.connected((rpc) => {
     if (!SSB.state.feeds[SSB.net.id])
       SSB.net.replicate.request(SSB.net.id, true)
 
@@ -26556,119 +26522,6 @@ exports.saveProfiles = function() {
 exports.loadProfiles = function() {
   if (localStorage['profiles.json'])
     SSB.profiles = JSON.parse(localStorage['profiles.json'])
-}
-
-// this uses https://github.com/arj03/ssb-partial-replication
-exports.syncFeedAfterFollow = function(feedId) {
-  connected((rpc) => {
-    delete SSB.state.feeds[feedId]
-    SSB.db.last.setPartialLogState(feedId, false)
-
-    console.time("downloading messages")
-
-    pull(
-      rpc.partialReplication.partialReplicationReverse({ id: feedId, limit: 100, keys: false }),
-      pull.asyncMap(SSB.net.add),
-      pull.collect((err) => {
-        if (err) throw err
-
-        console.timeEnd("downloading messages")
-        SSB.state.queue = []
-      })
-    )
-  })
-}
-
-exports.syncFeedFromSequence = function(feedId, sequence, cb) {
-  connected((rpc) => {
-    var seqStart = sequence - 100
-    if (seqStart < 0)
-      seqStart = 0
-
-    console.time("downloading messages")
-
-    pull(
-      rpc.partialReplication.partialReplication({ id: feedId, seq: seqStart, keys: false }),
-      pull.asyncMap(SSB.net.add),
-      pull.collect((err, msgs) => {
-        if (err) throw err
-
-        console.timeEnd("downloading messages")
-        SSB.state.queue = []
-
-        if (cb)
-          cb()
-      })
-    )
-  })
-}
-
-exports.syncFeedFromLatest = function(feedId, cb) {
-  connected((rpc) => {
-    console.time("downloading messages")
-
-    pull(
-      rpc.partialReplication.partialReplicationReverse({ id: feedId, keys: false, limit: 25 }),
-      pull.asyncMap(SSB.net.add),
-      pull.collect((err, msgs) => {
-        if (err) throw err
-
-        console.timeEnd("downloading messages")
-        SSB.state.queue = []
-
-        if (cb)
-          cb()
-      })
-    )
-  })
-}
-
-exports.syncLatestProfile = function(feedId, profile, latestSeq, cb) {
-  connected((rpc) => {
-    if (latestSeq <= 0) return cb()
-
-    var seqStart = latestSeq - 200
-    if (seqStart < 0)
-      seqStart = 0
-
-    pull(
-      rpc.partialReplication.partialReplication({ id: feedId, seq: seqStart, keys: false, limit: 200 }),
-      pull.collect((err, msgs) => {
-        if (err) throw err
-
-        msgs.reverse()
-
-        msgs = msgs.filter((msg) => msg && msg.content.type == "about" && msg.content.about == feedId)
-
-        for (var i = 0; i < msgs.length; ++i)
-        {
-          SSB.state = validate.appendOOO(SSB.state, null, msgs[i])
-          if (SSB.state.error) return cb(SSB.state.error)
-
-          var content = msgs[i].content
-
-          if (content.name && !profile.name)
-            profile.name = content.name
-
-          if (!profile.image)
-          {
-            if (content.image && typeof content.image.link === 'string')
-              profile.image = content.image.link
-            else if (typeof content.image === 'string')
-              profile.image = content.image
-          }
-
-          if (content.description && !profile.description)
-            profile.description = content.description
-        }
-
-        if (profile.name && profile.image)
-          cb(null, profile)
-        else
-          exports.syncLatestProfile(feedId, profile, latestSeq - 200, cb)
-      })
-    )
-  })
 }
 
 exports.initialSync = function()
@@ -26774,7 +26627,7 @@ s.events.on('sodium-browserify:wasm loaded', function() {
 
   console.log("wasm loaded")
 
-  var net = require('./server').init(dir)
+  var net = require('./net').init(dir)
   var db = require('./db').init(dir, net.id)
 
   console.log("my id: ", net.id)
@@ -26802,6 +26655,11 @@ s.events.on('sodium-browserify:wasm loaded', function() {
     net,
     dir,
 
+    validate,
+    state,
+
+    connected: helpers.connected,
+
     // helpers
     saveProfiles: helpers.saveProfiles,
     loadProfiles: helpers.loadProfiles,
@@ -26809,17 +26667,9 @@ s.events.on('sodium-browserify:wasm loaded', function() {
     removeDB: helpers.removeDB,
     removeBlobs: helpers.removeBlobs,
 
-    syncFeedAfterFollow: helpers.syncFeedAfterFollow,
-    syncFeedFromSequence: helpers.syncFeedFromSequence,
-    syncFeedFromLatest: helpers.syncFeedFromLatest,
-    syncLatestProfile: helpers.syncLatestProfile,
     initialSync: helpers.initialSync,
     sync: helpers.sync,
-    getThread: helpers.getThread,
-    getOOO: helpers.getOOO,
-    generateMessage: validate.appendNew,
     box: require('ssb-keys').box,
-    state,
 
     blobFiles: require('ssb-blob-files'),
 
@@ -26860,7 +26710,7 @@ s.events.on('sodium-browserify:wasm loaded', function() {
   SSB.events.emit("SSB: loaded")
 })
 
-},{"./core-helpers":"/home/chrx/dev/ssb-browser-core/core-helpers.js","./db":"/home/chrx/dev/ssb-browser-core/db.js","./raw-connect":"/home/chrx/dev/ssb-browser-core/raw-connect.js","./server":"/home/chrx/dev/ssb-browser-core/server.js","events":"/home/chrx/.nvm/versions/node/v10.11.0/lib/node_modules/browserify/node_modules/events/events.js","os":"/home/chrx/.nvm/versions/node/v10.11.0/lib/node_modules/browserify/node_modules/os-browserify/browser.js","path":"/home/chrx/.nvm/versions/node/v10.11.0/lib/node_modules/browserify/node_modules/path-browserify/index.js","pull-stream":"/home/chrx/dev/ssb-browser-core/node_modules/pull-stream/index.js","sodium-browserify":"/home/chrx/dev/ssb-browser-core/node_modules/sodium-browserify/index.js","ssb-blob-files":"/home/chrx/dev/ssb-browser-core/node_modules/ssb-blob-files/index.js","ssb-keys":"/home/chrx/dev/ssb-browser-core/node_modules/ssb-keys/index.js","ssb-validate":"/home/chrx/dev/ssb-browser-core/node_modules/ssb-validate/index.js"}],"/home/chrx/dev/ssb-browser-core/db.js":[function(require,module,exports){
+},{"./core-helpers":"/home/chrx/dev/ssb-browser-core/core-helpers.js","./db":"/home/chrx/dev/ssb-browser-core/db.js","./net":"/home/chrx/dev/ssb-browser-core/net.js","./raw-connect":"/home/chrx/dev/ssb-browser-core/raw-connect.js","events":"/home/chrx/.nvm/versions/node/v10.11.0/lib/node_modules/browserify/node_modules/events/events.js","os":"/home/chrx/.nvm/versions/node/v10.11.0/lib/node_modules/browserify/node_modules/os-browserify/browser.js","path":"/home/chrx/.nvm/versions/node/v10.11.0/lib/node_modules/browserify/node_modules/path-browserify/index.js","pull-stream":"/home/chrx/dev/ssb-browser-core/node_modules/pull-stream/index.js","sodium-browserify":"/home/chrx/dev/ssb-browser-core/node_modules/sodium-browserify/index.js","ssb-blob-files":"/home/chrx/dev/ssb-browser-core/node_modules/ssb-blob-files/index.js","ssb-keys":"/home/chrx/dev/ssb-browser-core/node_modules/ssb-keys/index.js","ssb-validate":"/home/chrx/dev/ssb-browser-core/node_modules/ssb-validate/index.js"}],"/home/chrx/dev/ssb-browser-core/db.js":[function(require,module,exports){
 const Store = require('./store')
 const pull = require('pull-stream')
 
@@ -27048,7 +26898,84 @@ module.exports = function () {
   }
 }
 
-},{"ssb-validate":"/home/chrx/dev/ssb-browser-core/node_modules/ssb-validate/index.js"}],"/home/chrx/dev/ssb-browser-core/node_modules/abstract-leveldown/abstract-chained-batch.js":[function(require,module,exports){
+},{"ssb-validate":"/home/chrx/dev/ssb-browser-core/node_modules/ssb-validate/index.js"}],"/home/chrx/dev/ssb-browser-core/net.js":[function(require,module,exports){
+(function (Buffer){
+var SecretStack = require('secret-stack')
+var caps = require('ssb-caps')
+var ssbKeys = require('ssb-keys')
+
+var path = require('path')
+
+exports.init = function(dir) {
+  var keys = ssbKeys.loadOrCreateSync(path.join(dir, 'secret'))
+
+  var r = SecretStack({
+    caps: { shs: Buffer.from(caps.shs, 'base64') },
+    keys,
+    connections: {
+      incoming: {
+	tunnel: [{ transform: 'shs' }]
+      },
+      outgoing: {
+	net: [{ transform: 'shs' }],
+	ws: [{ transform: 'shs' }],
+	tunnel: [{ transform: 'shs' }]
+      }
+    },
+    path: dir,
+    timers: {
+      inactivity: 30e3
+    },
+    tunnel: {
+      logging: true
+    },
+    replicate: {
+      legacy: false
+    }
+  })
+  .use(require('./ssb-db'))
+  .use(require('./ssb-get-thread'))
+  .use(require('./simple-ooo'))
+  .use(require('ssb-ws'))
+  .use(require('ssb-replicate'))
+  .use(require('ssb-ebt'))
+  .use(require('ssb-tunnel'))
+  .use(require('./tunnel-chat'))
+  .use(require("./simple-blobs"))
+  ()
+
+  var timer
+
+  r.on('rpc:connect', function (rpc, isClient) {
+    console.log("connected to:", rpc.id)
+
+    function ping() {
+      rpc.tunnel.ping(function (err, _ts) {
+	if (err) return console.error(err)
+	clearTimeout(timer)
+	timer = setTimeout(ping, 10e3)
+      })
+    }
+
+    ping()
+  })
+
+  r.on('replicate:finish', function () {
+    console.log("finished ebt replicate")
+  })
+
+  r.gossip = {
+    connect: function(addr, cb) {
+      // hack for ssb-tunnel
+      r.connect(SSB.remoteAddress, cb)
+    }
+  }
+
+  return r
+}
+
+}).call(this,require("buffer").Buffer)
+},{"./simple-blobs":"/home/chrx/dev/ssb-browser-core/simple-blobs.js","./simple-ooo":"/home/chrx/dev/ssb-browser-core/simple-ooo.js","./ssb-db":"/home/chrx/dev/ssb-browser-core/ssb-db.js","./ssb-get-thread":"/home/chrx/dev/ssb-browser-core/ssb-get-thread.js","./tunnel-chat":"/home/chrx/dev/ssb-browser-core/tunnel-chat.js","buffer":"/home/chrx/.nvm/versions/node/v10.11.0/lib/node_modules/browserify/node_modules/buffer/index.js","path":"/home/chrx/.nvm/versions/node/v10.11.0/lib/node_modules/browserify/node_modules/path-browserify/index.js","secret-stack":"/home/chrx/dev/ssb-browser-core/node_modules/secret-stack/index.js","ssb-caps":"/home/chrx/dev/ssb-browser-core/node_modules/ssb-caps/caps.json","ssb-ebt":"/home/chrx/dev/ssb-browser-core/node_modules/ssb-ebt/index.js","ssb-keys":"/home/chrx/dev/ssb-browser-core/node_modules/ssb-keys/index.js","ssb-replicate":"/home/chrx/dev/ssb-browser-core/node_modules/ssb-replicate/index.js","ssb-tunnel":"/home/chrx/dev/ssb-browser-core/node_modules/ssb-tunnel/index.js","ssb-ws":"/home/chrx/dev/ssb-browser-core/node_modules/ssb-ws/client.js"}],"/home/chrx/dev/ssb-browser-core/node_modules/abstract-leveldown/abstract-chained-batch.js":[function(require,module,exports){
 function AbstractChainedBatch (db) {
   if (typeof db !== 'object' || db === null) {
     throw new TypeError('First argument must be an abstract-leveldown compliant store')
@@ -58762,84 +58689,7 @@ exports.init = function(keys, caps, manifest) {
 }
 
 }).call(this,require("buffer").Buffer)
-},{"buffer":"/home/chrx/.nvm/versions/node/v10.11.0/lib/node_modules/browserify/node_modules/buffer/index.js","secret-stack":"/home/chrx/dev/ssb-browser-core/node_modules/secret-stack/index.js","ssb-caps":"/home/chrx/dev/ssb-browser-core/node_modules/ssb-caps/caps.json","ssb-ws":"/home/chrx/dev/ssb-browser-core/node_modules/ssb-ws/client.js"}],"/home/chrx/dev/ssb-browser-core/server.js":[function(require,module,exports){
-(function (Buffer){
-var SecretStack = require('secret-stack')
-var caps = require('ssb-caps')
-var ssbKeys = require('ssb-keys')
-
-var path = require('path')
-
-exports.init = function(dir) {
-  var keys = ssbKeys.loadOrCreateSync(path.join(dir, 'secret'))
-
-  var r = SecretStack({
-    caps: { shs: Buffer.from(caps.shs, 'base64') },
-    keys,
-    connections: {
-      incoming: {
-	tunnel: [{ transform: 'shs' }]
-      },
-      outgoing: {
-	net: [{ transform: 'shs' }],
-	ws: [{ transform: 'shs' }],
-	tunnel: [{ transform: 'shs' }]
-      }
-    },
-    path: dir,
-    timers: {
-      inactivity: 30e3
-    },
-    tunnel: {
-      logging: true
-    },
-    replicate: {
-      legacy: false
-    }
-  })
-  .use(require('./ssb-db'))
-  .use(require('./ssb-get-thread'))
-  .use(require('./simple-ooo'))
-  .use(require('ssb-ws'))
-  .use(require('ssb-replicate'))
-  .use(require('ssb-ebt'))
-  .use(require('ssb-tunnel'))
-  .use(require('./tunnel-chat'))
-  .use(require("./simple-blobs"))
-  ()
-
-  var timer
-
-  r.on('rpc:connect', function (rpc, isClient) {
-    console.log("connected to:", rpc.id)
-
-    function ping() {
-      rpc.tunnel.ping(function (err, _ts) {
-	if (err) return console.error(err)
-	clearTimeout(timer)
-	timer = setTimeout(ping, 10e3)
-      })
-    }
-
-    ping()
-  })
-
-  r.on('replicate:finish', function () {
-    console.log("finished ebt replicate")
-  })
-
-  r.gossip = {
-    connect: function(addr, cb) {
-      // hack for ssb-tunnel
-      r.connect(SSB.remoteAddress, cb)
-    }
-  }
-
-  return r
-}
-
-}).call(this,require("buffer").Buffer)
-},{"./simple-blobs":"/home/chrx/dev/ssb-browser-core/simple-blobs.js","./simple-ooo":"/home/chrx/dev/ssb-browser-core/simple-ooo.js","./ssb-db":"/home/chrx/dev/ssb-browser-core/ssb-db.js","./ssb-get-thread":"/home/chrx/dev/ssb-browser-core/ssb-get-thread.js","./tunnel-chat":"/home/chrx/dev/ssb-browser-core/tunnel-chat.js","buffer":"/home/chrx/.nvm/versions/node/v10.11.0/lib/node_modules/browserify/node_modules/buffer/index.js","path":"/home/chrx/.nvm/versions/node/v10.11.0/lib/node_modules/browserify/node_modules/path-browserify/index.js","secret-stack":"/home/chrx/dev/ssb-browser-core/node_modules/secret-stack/index.js","ssb-caps":"/home/chrx/dev/ssb-browser-core/node_modules/ssb-caps/caps.json","ssb-ebt":"/home/chrx/dev/ssb-browser-core/node_modules/ssb-ebt/index.js","ssb-keys":"/home/chrx/dev/ssb-browser-core/node_modules/ssb-keys/index.js","ssb-replicate":"/home/chrx/dev/ssb-browser-core/node_modules/ssb-replicate/index.js","ssb-tunnel":"/home/chrx/dev/ssb-browser-core/node_modules/ssb-tunnel/index.js","ssb-ws":"/home/chrx/dev/ssb-browser-core/node_modules/ssb-ws/client.js"}],"/home/chrx/dev/ssb-browser-core/simple-blobs.js":[function(require,module,exports){
+},{"buffer":"/home/chrx/.nvm/versions/node/v10.11.0/lib/node_modules/browserify/node_modules/buffer/index.js","secret-stack":"/home/chrx/dev/ssb-browser-core/node_modules/secret-stack/index.js","ssb-caps":"/home/chrx/dev/ssb-browser-core/node_modules/ssb-caps/caps.json","ssb-ws":"/home/chrx/dev/ssb-browser-core/node_modules/ssb-ws/client.js"}],"/home/chrx/dev/ssb-browser-core/simple-blobs.js":[function(require,module,exports){
 (function (Buffer){
 // this needs refactoring, but is close to ssb-blobs
 

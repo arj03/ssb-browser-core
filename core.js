@@ -44,6 +44,11 @@ s.events.on('sodium-browserify:wasm loaded', function() {
     net,
     dir,
 
+    validate,
+    state,
+
+    connected: helpers.connected,
+
     // helpers
     saveProfiles: helpers.saveProfiles,
     loadProfiles: helpers.loadProfiles,
@@ -51,17 +56,9 @@ s.events.on('sodium-browserify:wasm loaded', function() {
     removeDB: helpers.removeDB,
     removeBlobs: helpers.removeBlobs,
 
-    syncFeedAfterFollow: helpers.syncFeedAfterFollow,
-    syncFeedFromSequence: helpers.syncFeedFromSequence,
-    syncFeedFromLatest: helpers.syncFeedFromLatest,
-    syncLatestProfile: helpers.syncLatestProfile,
     initialSync: helpers.initialSync,
     sync: helpers.sync,
-    getThread: helpers.getThread,
-    getOOO: helpers.getOOO,
-    generateMessage: validate.appendNew,
     box: require('ssb-keys').box,
-    state,
 
     blobFiles: require('ssb-blob-files'),
 

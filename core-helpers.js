@@ -5,7 +5,7 @@ const raf = require('polyraf')
 
 var remote
 
-function connected(cb)
+exports.connected = function(cb)
 {
   if (!remote || remote.closed)
   {
@@ -65,43 +65,9 @@ exports.removeBlobs = function() {
   })
 }
 
-// this uses https://github.com/arj03/ssb-get-thread plugin
-exports.getThread = function(msgId, cb)
-{
-  connected((rpc) => {
-    rpc.getThread.get(msgId, (err, messages) => {
-      if (err) return cb(err)
-
-      exports.syncThread(messages, cb)
-    })
-  })
-}
-
-exports.getOOO = function(msgId, cb)
-{
-  connected((rpc) => {
-    SSB.net.ooo.get(msgId, cb)
-  })
-}
-
-exports.syncThread = function(messages, cb) {
-  pull(
-    pull.values(messages),
-    pull.filter((msg) => msg && msg.content.type == "post"),
-    pull.asyncMap((msg, cb) => {
-      state = validate.appendOOO(SSB.state, null, msg)
-
-      if (SSB.state.error) return cb(SSB.state.error)
-
-      SSB.db.add(msg, cb)
-    }),
-    pull.collect(cb)
-  )
-}
-
 exports.sync = function()
 {
-  connected((rpc) => {
+  exports.connected((rpc) => {
     if (!SSB.state.feeds[SSB.net.id])
       SSB.net.replicate.request(SSB.net.id, true)
 
@@ -146,119 +112,6 @@ exports.saveProfiles = function() {
 exports.loadProfiles = function() {
   if (localStorage['profiles.json'])
     SSB.profiles = JSON.parse(localStorage['profiles.json'])
-}
-
-// this uses https://github.com/arj03/ssb-partial-replication
-exports.syncFeedAfterFollow = function(feedId) {
-  connected((rpc) => {
-    delete SSB.state.feeds[feedId]
-    SSB.db.last.setPartialLogState(feedId, false)
-
-    console.time("downloading messages")
-
-    pull(
-      rpc.partialReplication.partialReplicationReverse({ id: feedId, limit: 100, keys: false }),
-      pull.asyncMap(SSB.net.add),
-      pull.collect((err) => {
-        if (err) throw err
-
-        console.timeEnd("downloading messages")
-        SSB.state.queue = []
-      })
-    )
-  })
-}
-
-exports.syncFeedFromSequence = function(feedId, sequence, cb) {
-  connected((rpc) => {
-    var seqStart = sequence - 100
-    if (seqStart < 0)
-      seqStart = 0
-
-    console.time("downloading messages")
-
-    pull(
-      rpc.partialReplication.partialReplication({ id: feedId, seq: seqStart, keys: false }),
-      pull.asyncMap(SSB.net.add),
-      pull.collect((err, msgs) => {
-        if (err) throw err
-
-        console.timeEnd("downloading messages")
-        SSB.state.queue = []
-
-        if (cb)
-          cb()
-      })
-    )
-  })
-}
-
-exports.syncFeedFromLatest = function(feedId, cb) {
-  connected((rpc) => {
-    console.time("downloading messages")
-
-    pull(
-      rpc.partialReplication.partialReplicationReverse({ id: feedId, keys: false, limit: 25 }),
-      pull.asyncMap(SSB.net.add),
-      pull.collect((err, msgs) => {
-        if (err) throw err
-
-        console.timeEnd("downloading messages")
-        SSB.state.queue = []
-
-        if (cb)
-          cb()
-      })
-    )
-  })
-}
-
-exports.syncLatestProfile = function(feedId, profile, latestSeq, cb) {
-  connected((rpc) => {
-    if (latestSeq <= 0) return cb()
-
-    var seqStart = latestSeq - 200
-    if (seqStart < 0)
-      seqStart = 0
-
-    pull(
-      rpc.partialReplication.partialReplication({ id: feedId, seq: seqStart, keys: false, limit: 200 }),
-      pull.collect((err, msgs) => {
-        if (err) throw err
-
-        msgs.reverse()
-
-        msgs = msgs.filter((msg) => msg && msg.content.type == "about" && msg.content.about == feedId)
-
-        for (var i = 0; i < msgs.length; ++i)
-        {
-          SSB.state = validate.appendOOO(SSB.state, null, msgs[i])
-          if (SSB.state.error) return cb(SSB.state.error)
-
-          var content = msgs[i].content
-
-          if (content.name && !profile.name)
-            profile.name = content.name
-
-          if (!profile.image)
-          {
-            if (content.image && typeof content.image.link === 'string')
-              profile.image = content.image.link
-            else if (typeof content.image === 'string')
-              profile.image = content.image
-          }
-
-          if (content.description && !profile.description)
-            profile.description = content.description
-        }
-
-        if (profile.name && profile.image)
-          cb(null, profile)
-        else
-          exports.syncLatestProfile(feedId, profile, latestSeq - 200, cb)
-      })
-    )
-  })
 }
 
 exports.initialSync = function()

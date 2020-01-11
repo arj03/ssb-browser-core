@@ -64,9 +64,32 @@ Gets the current db status, same functionality as
 This is the [secret-stack] module with a few extra modules
 loaded. [ssb-ws] is used to create web socket connections to pubs.
 
+Two modules are special compared to a normal SSB distribution and to
+use this optional functionality the pub needs these plugins:
+
+- [ssb-get-thread]
+- [ssb-partial-replication]
+
 ## dir
 
 The path to where the database and blobs are stored.
+
+## validate
+
+The [ssb-validate] module.
+
+## state
+
+The current [state](https://github.com/ssbc/ssb-validate#state) of
+known feeds.
+
+## connected(cb)
+
+Will ensure a connection is ready. Cb signature is (err, rpc).
+
+## profiles
+
+FIXME: document this
 
 ## publish(msg, cb)
 
@@ -75,11 +98,6 @@ Validates a message and stores it in the database. See db.add for format.
 ## messagesByType
 
 A convinience method around db.query to get messages of a particular type.
-
-## state
-
-The current [state](https://github.com/ssbc/ssb-validate#state) of
-known feeds.
 
 ## remoteAddress
 
@@ -91,6 +109,17 @@ Start a EBT replication with the remote server. This syncs all the
 feeds known in `SSB.state.feeds`.
 
 FIXME: document how this works with following
+
+## initialSync
+
+FIXME: document
+
+FIXME: this requires the partial replication plugin
+
+## box
+
+[box](https://github.com/ssbc/ssb-keys#boxcontent-recipients--boxed)
+method from ssb-keys. Useful for private messages.
 
 ## validMessageTypes
 
@@ -132,3 +161,6 @@ patches/sodium-browserify.patch
 [ssb-ws]: https://github.com/ssbc/ssb-ws
 [ssb-friends]: https://github.com/ssbc/ssb-friends
 [ssb-peer-invites]: https://github.com/ssbc/ssb-peer-invites
+
+[ssb-get-thread]: https://github.com/arj03/ssb-get-thread
+[ssb-partial-replication]: https://github.com/arj03/ssb-partial-replication
