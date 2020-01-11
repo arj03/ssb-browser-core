@@ -157,3 +157,23 @@
              cb(null, confirm)
            })
          })
+--- node_modules/ssb-peer-invites/valid.js~	1985-10-26 09:15:00.000000000 +0100
++++ node_modules/ssb-peer-invites/valid.js	2020-01-11 21:28:14.627876580 +0100
+@@ -35,7 +35,7 @@
+ }
+ 
+ 
+-exports.createInvite = function (seed, host, reveal, private, caps) {
++exports.createInvite = function (seed, host, reveal, priv, caps) {
+   if(!isObject(caps)) throw new Error('caps *must* be provided')
+ 
+   seed = toBuffer(seed)
+@@ -47,7 +47,7 @@
+     invite: keys.id,
+     host: host, //sign our own key, to prove we created K
+     reveal: reveal ? u.box(reveal, hash2(seed)) : undefined,
+-    private: private ? u.box(private, hash(seed)) : undefined
++    private: priv ? u.box(priv, hash(seed)) : undefined
+   })
+ }
+ 

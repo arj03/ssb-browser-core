@@ -1,7 +1,7 @@
 {
   "name": "ssb-browser-core",
   "description": "",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "homepage": "https://github.com/arj03/ssb-browser-core",
   "repository": {
     "type": "git",
@@ -31,9 +31,13 @@
     "ssb-validate": "github:ssbc/ssb-validate#add-ooo-append",
     "ssb-ws": "^6.2.3"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "common-shakeify": "^0.6.2",
+    "uglifyify": "^5.0.2"
+  },
   "scripts": {
-    "build": "mkdir -p dist && browserify --full-paths core.js > dist/bundle-core.js"
+    "build": "mkdir -p dist && browserify --full-paths core.js > dist/bundle-core.js",
+    "release": "mkdir -p dist && browserify -g uglifyify -p common-shakeify core.js > dist/bundle-core.js"
   },
   "author": "arj",
   "license": "beerware"
