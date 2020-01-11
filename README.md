@@ -1,7 +1,6 @@
 # SSB browser core
 
-Scuttlebutt [ssb-server] in a browser. This was originally
-made as a demo for my bornhack [talk][bornhack-talk].
+Secure scuttlebutt core (similar to [ssb-server]) in a browser.
 
 # api
 
@@ -49,11 +48,11 @@ The clock index
 
 ### friends
 
-The [friends](https://github.com/ssbc/ssb-friends) module
+The [ssb-friends] module
 
 ### peerInvites
 
-The [peer-invites](https://github.com/ssbc/ssb-peer-invites) module
+The [ssb-peer-invites] module
 
 ### getStatus
 
@@ -62,10 +61,8 @@ Gets the current db status, same functionality as
 
 ## net
 
-This is the [secret-stack](https://github.com/ssbc/secret-stack)
-module with a few extra modules
-loaded. [ssb-ws](https://github.com/ssbc/ssb-ws) is used to create web
-socket connections to pubs.
+This is the [secret-stack] module with a few extra modules
+loaded. [ssb-ws] is used to create web socket connections to pubs.
 
 ## dir
 
@@ -110,7 +107,7 @@ FIXME: document how this works with following
 
 There are a few other undocumented methods, these will probably be
 moved to another module in a later version as they are quite tied to
-[ssb-browser-demo](https://github.com/arj03/ssb-browser-demo).
+[ssb-browser-demo].
 
 # Building
 
@@ -130,3 +127,8 @@ For a smaller bundle file, you can also apply
 patches/sodium-browserify.patch
 
 [ssb-server]: https://github.com/ssbc/ssb-server
+[ssb-browser-demo]: https://github.com/arj03/ssb-browser-demo
+[secret-stack]: https://github.com/ssbc/secret-stack
+[ssb-ws]: https://github.com/ssbc/ssb-ws
+[ssb-friends]: https://github.com/ssbc/ssb-friends
+[ssb-peer-invites]: https://github.com/ssbc/ssb-peer-invites
