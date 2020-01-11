@@ -129,3 +129,4 @@ The following branches are references directly until patches are merged and push
 For a smaller bundle file, you can also apply
 patches/sodium-browserify.patch
 
+[ssb-server]: https://github.com/ssbc/ssb-server
