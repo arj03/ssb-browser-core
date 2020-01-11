@@ -89,7 +89,15 @@ Will ensure a connection is ready. Cb signature is (err, rpc).
 
 ## profiles
 
-FIXME: document this
+A dict from feedId to { name, description, image }
+
+### loadProfiles()
+
+Populates profiles dict from localStorage
+
+### saveProfiles
+
+Save the profiles dict in localStorage
 
 ## publish(msg, cb)
 
@@ -108,13 +116,22 @@ The remote server to connect to. Must be web socket.
 Start a EBT replication with the remote server. This syncs all the
 feeds known in `SSB.state.feeds`.
 
+This uses `validMessageTypes` and `privateMessages` to determine what
+gets stored locally.
+
 FIXME: document how this works with following
 
-## initialSync
+## initialSync(onboard)
 
-FIXME: document
+This will do an initial sync of feeds from the `onboard` dict. Only
+profiles active within the last month and only the latest 25 messages
+are synced.
 
-FIXME: this requires the partial replication plugin
+The format of the onboard dict is: feedId to { latestMsg: { seq,
+timestamp }, imageAbout, image, descriptionAbout, description,
+nameAbout, name }
+
+This requires [ssb-partial-replication] on the pub.
 
 ## box
 

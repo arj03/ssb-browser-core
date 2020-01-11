@@ -38,7 +38,6 @@ s.events.on('sodium-browserify:wasm loaded', function() {
     }
   }
 
-  // FIXME: refactor this into its own module instead of global object
   SSB = Object.assign(SSB, {
     db,
     net,
@@ -48,10 +47,6 @@ s.events.on('sodium-browserify:wasm loaded', function() {
     state,
 
     connected: helpers.connected,
-
-    // helpers
-    saveProfiles: helpers.saveProfiles,
-    loadProfiles: helpers.loadProfiles,
 
     removeDB: helpers.removeDB,
     removeBlobs: helpers.removeBlobs,
@@ -90,9 +85,10 @@ s.events.on('sodium-browserify:wasm loaded', function() {
     validMessageTypes: ['post', 'peer-invite/confirm', 'peer-invite/accept', 'peer-invite'],
     privateMessages: true,
 
-    // will get added on load time:
-    // - onboard
-    // - remoteAddress
+    remoteAddress: '',
+
+    saveProfiles: helpers.saveProfiles,
+    loadProfiles: helpers.loadProfiles,
     profiles: {}
   })
 

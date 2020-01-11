@@ -26524,10 +26524,8 @@ exports.loadProfiles = function() {
     SSB.profiles = JSON.parse(localStorage['profiles.json'])
 }
 
-exports.initialSync = function()
+exports.initialSync = function(onboard)
 {
-  const onboard = SSB.onboard
-
   SSB.isInitialSync = true // for ssb-ebt
   SSB.net.connect(SSB.remoteAddress, (err, rpc) => {
     if (err) throw(err)
@@ -26649,7 +26647,6 @@ s.events.on('sodium-browserify:wasm loaded', function() {
     }
   }
 
-  // FIXME: refactor this into its own module instead of global object
   SSB = Object.assign(SSB, {
     db,
     net,
@@ -26660,17 +26657,13 @@ s.events.on('sodium-browserify:wasm loaded', function() {
 
     connected: helpers.connected,
 
-    // helpers
-    saveProfiles: helpers.saveProfiles,
-    loadProfiles: helpers.loadProfiles,
-
     removeDB: helpers.removeDB,
     removeBlobs: helpers.removeBlobs,
 
     initialSync: helpers.initialSync,
     sync: helpers.sync,
-    box: require('ssb-keys').box,
 
+    box: require('ssb-keys').box,
     blobFiles: require('ssb-blob-files'),
 
     // peer invites
@@ -26701,9 +26694,10 @@ s.events.on('sodium-browserify:wasm loaded', function() {
     validMessageTypes: ['post', 'peer-invite/confirm', 'peer-invite/accept', 'peer-invite'],
     privateMessages: true,
 
-    // will get added on load time:
-    // - onboard
-    // - remoteAddress
+    remoteAddress: '',
+
+    saveProfiles: helpers.saveProfiles,
+    loadProfiles: helpers.loadProfiles,
     profiles: {}
   })
 

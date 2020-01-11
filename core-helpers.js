@@ -114,10 +114,8 @@ exports.loadProfiles = function() {
     SSB.profiles = JSON.parse(localStorage['profiles.json'])
 }
 
-exports.initialSync = function()
+exports.initialSync = function(onboard)
 {
-  const onboard = SSB.onboard
-
   SSB.isInitialSync = true // for ssb-ebt
   SSB.net.connect(SSB.remoteAddress, (err, rpc) => {
     if (err) throw(err)
