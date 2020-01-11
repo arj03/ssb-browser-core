@@ -58,8 +58,8 @@ s.events.on('sodium-browserify:wasm loaded', function() {
 
     initialSync: helpers.initialSync,
     sync: helpers.sync,
-    box: require('ssb-keys').box,
 
+    box: require('ssb-keys').box,
     blobFiles: require('ssb-blob-files'),
 
     // peer invites

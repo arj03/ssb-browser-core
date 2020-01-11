@@ -97,7 +97,7 @@ Validates a message and stores it in the database. See db.add for format.
 
 ## messagesByType
 
-A convinience method around db.query to get messages of a particular type.
+A convenience method around db.query to get messages of a particular type.
 
 ## remoteAddress
 
@@ -120,6 +120,10 @@ FIXME: this requires the partial replication plugin
 
 [box](https://github.com/ssbc/ssb-keys#boxcontent-recipients--boxed)
 method from ssb-keys. Useful for private messages.
+
+## blobFiles
+
+The [ssb-blob-files] module.
 
 ## validMessageTypes
 
@@ -161,6 +165,8 @@ patches/sodium-browserify.patch
 [ssb-ws]: https://github.com/ssbc/ssb-ws
 [ssb-friends]: https://github.com/ssbc/ssb-friends
 [ssb-peer-invites]: https://github.com/ssbc/ssb-peer-invites
+[ssb-validate]: https://github.com/ssbc/ssb-validate
+[ssb-blob-files]: https://github.com/ssbc/ssb-blob-files
 
 [ssb-get-thread]: https://github.com/arj03/ssb-get-thread
 [ssb-partial-replication]: https://github.com/arj03/ssb-partial-replication
