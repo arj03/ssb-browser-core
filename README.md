@@ -159,6 +159,12 @@ There are a few other undocumented methods, these will probably be
 moved to another module in a later version as they are quite tied to
 [ssb-browser-demo].
 
+# Browser compatibility
+
+Tested with Chrome and Firefox. Chrome is faster because it uses fs
+instead of indexeddb. Also tested on android using Chrome and iOS
+using safari.
+
 # Building
 
 The following patches (patch -p0 < x.patch) from the patches folder
