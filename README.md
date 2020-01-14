@@ -70,6 +70,17 @@ use this optional functionality the pub needs these plugins:
 - [ssb-get-thread]
 - [ssb-partial-replication]
 
+Once a rpc connection has been established, the following extra
+methods are available:
+
+### getThread.get(msgId, cb)
+
+Will get a message includes all messages linking to the message.
+
+### partialReplication.partialReplication(feedId, seq, keys)
+
+Returns a stream of messages for the given `feedId` starting from `seq`.
+
 ## dir
 
 The path to where the database and blobs are stored.
