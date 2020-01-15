@@ -64,6 +64,52 @@ Gets the current db status, same functionality as
 This is the [secret-stack] module with a few extra modules
 loaded. [ssb-ws] is used to create web socket connections to pubs.
 
+This is where the `blobs` api can be found. The module implements the
+blobs protocol and so can exchange blobs with connection peers. It
+also contains with the the following extra methods:
+
+### hash(data, cb)
+
+Hashes data and returns the digest or err
+
+Example:
+```
+onFileSelect: function(ev) {
+  const file = ev.target.files[0]
+  file.arrayBuffer().then(function (buffer) {
+    SSB.net.blobs.hash(new Uint8Array(buffer), (err, digest) => {
+      console.log(digest)
+    })
+  })
+}
+```
+
+### add(blobId, file, cb)
+
+Adds the `file` (such as one obtained from ev.target.files when using
+a file select) to the blob store using the blobId name. BlobId is & +
+hash.
+
+### remoteURL(blobId)
+
+Returns a http URL string for the current connection. This is useful
+in a browser for images that you don't want to store directly on the
+device.
+
+### privateGet(blobId, unbox, cb)
+
+Callback with err or a url that works for e.g images that was received
+in a private message.
+
+### localGet(blobId, unbox, cb)
+
+If blob already exists will callback with err or a url that can be
+used for images for a blob. Otherwise the blob will get requested and
+if size is smaller than the maximum size, the blob will be stored
+locally and used for callback, otherwise the callback will return a
+`remoteURL` link.
+
+
 Two modules are special compared to a normal SSB distribution and to
 use this optional functionality the pub needs these plugins:
 
