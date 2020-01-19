@@ -57,18 +57,32 @@ exports.init = function (sbot, config) {
     file.write(0, blob, cb)
   }
 
+  function hash(blob, cb)
+  {
+    var hash = require('crypto').createHash('sha256')
+    hash.update(blob)
+    cb(null, hash.digest('base64') + '.sha256')
+  }
+
   function sanitizedPath(id) {
     return path.join(blobsDir, sanitize(id))
   }
 
   function add(id, blob, cb) {
-    console.log("wrote to local filesystem:", id)
-    const file = raf(sanitizedPath(id))
-    file.write(0, blob, (err) => {
-      if (err) return cb(err)
+    blob.arrayBuffer().then(function (buffer) {
+      hash(new Uint8Array(buffer), (err, hash) => {
+        if (err) return cb(err)
+        if ('&' + hash != id) return cb(`wrong blob hash in blobs.add, expected ${id} got &${hash}`)
 
-      delete want[id]
-      cb()
+        console.log("wrote to local filesystem:", id)
+        const file = raf(sanitizedPath(id))
+        file.write(0, blob, (err) => {
+          if (err) return cb(err)
+
+          delete want[id]
+          cb()
+        })
+      })
     })
   }
 
@@ -302,13 +316,6 @@ exports.init = function (sbot, config) {
     pull(rpc.blobs.createWants(), wantSink(rpc))
   })
   // end ssb-blobs
-
-  function hash(blob, cb)
-  {
-    var hash = require('crypto').createHash('sha256')
-    hash.update(blob)
-    cb(null, hash.digest('base64') + '.sha256')
-  }
 
   return {
     hash,
