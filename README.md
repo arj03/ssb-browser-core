@@ -34,6 +34,9 @@ peers.
 
 Delete all messages for a particular feed.
 
+Be sure to also call `removeFeedState` to clean up any other state
+stored about the feed.
+
 ### query
 
 The query index
@@ -143,6 +146,11 @@ known feeds.
 ## connected(cb)
 
 Will ensure a connection is ready. Cb signature is (err, rpc).
+
+## removeFeedState(feedId)
+
+Remove any state related to feed. This complements `db.deleteFeed`
+that removes the users messages from the local database.
 
 ## profiles
 

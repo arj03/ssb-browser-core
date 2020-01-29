@@ -48,6 +48,15 @@ s.events.on('sodium-browserify:wasm loaded', function() {
 
     connected: helpers.connected,
 
+    removeFeedState: function(feedId) {
+      db.last.removeFeed(feedId)
+
+      delete SSB.state.feeds[feedId]
+
+      delete SSB.profiles[this.feedId]
+      helpers.saveProfiles()
+    },
+
     removeDB: helpers.removeDB,
     removeBlobs: helpers.removeBlobs,
 

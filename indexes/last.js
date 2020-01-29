@@ -48,6 +48,11 @@ module.exports = function () {
       return state[msg.author]
     },
 
+    removeFeed: function(feedId) {
+      delete state[feedId]
+      save()
+    },
+
     get: function() {
       if (Object.keys(state).length == 0)
         load()
