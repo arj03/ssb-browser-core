@@ -84,14 +84,14 @@ exports.sync = function()
   })
 }
 
-function writeOnboardProfiles()
+function writeOnboardProfiles(onboard)
 {
   let cleaned = {}
-  for (var key in SSB.onboard) {
+  for (var key in onboard) {
     cleaned[key] = {
-      image: SSB.onboard[key].image,
-      name: SSB.onboard[key].name,
-      description: SSB.onboard[key].description
+      image: onboard[key].image,
+      name: onboard[key].name,
+      description: onboard[key].description
     }
   }
 
@@ -139,7 +139,7 @@ exports.initialSync = function(onboard)
         console.timeEnd("downloading messages")
 
         SSB.isInitialSync = false
-        writeOnboardProfiles()
+        writeOnboardProfiles(onboard)
 
         return
       }
