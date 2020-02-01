@@ -56,10 +56,8 @@ module.exports = function (dir, ssbId) {
   }
   store.id = ssbId
 
-  /*
   var backlinks = require('ssb-backlinks')
   store.backlinks = backlinks.init(store)
-  */
 
   var friends = require('ssb-friends')
   store.friends = friends.init(store, config)

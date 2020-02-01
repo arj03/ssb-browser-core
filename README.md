@@ -240,6 +240,7 @@ are needed:
  - ssb-tunnel.patch
  - ssb-peer-invites.patch
  - ssb-blob-files.patch
+ - ssb-backlinks.patch
 
 The following branches are references directly until patches are merged and pushed:
  - https://github.com/ssbc/ssb-validate/pull/16

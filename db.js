@@ -64,7 +64,7 @@ exports.init = function (dir, ssbId) {
     del: store.del,
     deleteFeed,
     // indexes
-    //backlinks: store.backlinks,
+    backlinks: store.backlinks,
     query: store.query,
     last: store.last,
     clock: store.clock,
