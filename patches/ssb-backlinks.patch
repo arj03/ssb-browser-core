@@ -1,0 +1,33 @@
+diff --git a/emit-links.js b/emit-links.js
+index d24dbd3..7b1ed76 100644
+--- a/emit-links.js
++++ b/emit-links.js
+@@ -3,6 +3,19 @@ var matchChannel = /^#[^\s#]+$/
+ 
+ module.exports = emitLinks
+ 
++function type(id) {
++  if(typeof(id) !== 'string') return false
++  var c = id.charAt(0)
++  if (c == '@' && ref.isFeedId(id))
++    return 'feed'
++  else if (c == '%' && ref.isMsgId(id))
++    return 'msg'
++  else if (c == '&' && ref.isBlobId(id))
++    return 'blob'
++  else
++    return false
++}
++
+ function emitLinks (msg, emit) {
+   var links = new Set()
+   walk(msg.value.content, function (path, value) {
+@@ -15,7 +28,7 @@ function emitLinks (msg, emit) {
+     }
+ 
+     // TODO: should add channel matching to ref.type
+-    if (ref.type(value)) {
++    if (type(value)) {
+       links.add(value)
+     } else if (isChannel(value)) {
+       links.add(`#${ref.normalizeChannel(value.slice(1))}`)
