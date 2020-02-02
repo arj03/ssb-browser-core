@@ -57,6 +57,10 @@ The [ssb-friends] module
 
 The [ssb-peer-invites] module
 
+### backlinks
+
+The [ssb-backlinks] module
+
 ### getStatus
 
 Gets the current db status, same functionality as
@@ -254,6 +258,7 @@ patches/sodium-browserify.patch
 [ssb-ws]: https://github.com/ssbc/ssb-ws
 [ssb-friends]: https://github.com/ssbc/ssb-friends
 [ssb-peer-invites]: https://github.com/ssbc/ssb-peer-invites
+[ssb-backlinks]: https://github.com/ssbc/ssb-backlinks
 [ssb-validate]: https://github.com/ssbc/ssb-validate
 [ssb-blob-files]: https://github.com/ssbc/ssb-blob-files
 
