@@ -2296,10 +2296,10 @@ var exports={crypto_auth:function(){},crypto_auth_verify:function(){},crypto_box
 module.exports=function(r,e){if(e<=0)throw new Error("cannot split into zero (or smaller) length buffers");if(r.length<=e)return[r];for(var n=[],t=0;t<r.length;)n.push(r.slice(t,Math.min(t+e,r.length))),t+=e;return n};
 
 },{}],545:[function(require,module,exports){
-var ref=require("ssb-ref"),deepEqual=require("deep-equal"),extend=require("xtend"),matchChannel=/^#[^\s#]+$/;function type(e){if("string"!=typeof e)return!1;var t=e.charAt(0);return"@"==t&&ref.isFeedId(e)?"feed":"%"==t&&ref.isMsgId(e)?"msg":!("&"!=t||!ref.isBlobId(e))&&"blob"}function emitLinks(e,t){var n=new Set;walk(e.value.content,function(e,t){if(deepEqual(e,["channel"])){var a=ref.normalizeChannel(t);a&&(t=`#${a}`)}type(t)?n.add(t):isChannel(t)&&n.add(`#${ref.normalizeChannel(t.slice(1))}`)}),n.forEach(n=>{t(extend(e,{rts:resolveTimestamp(e),dest:n}))})}function isChannel(e){return"string"==typeof e&&e.length<30&&matchChannel.test(e)}function resolveTimestamp(e){if(e&&e.value&&e.value.timestamp)return e.timestamp?Math.min(e.timestamp,e.value.timestamp):e.value.timestamp}function walk(e,t,n){if(e&&"object"==typeof e)for(var a in e)walk(e[a],t,(n||[]).concat(a));else t(n,e)}module.exports=emitLinks;
+var ref=require("ssb-ref"),matchChannel=/^#[^\s#]+$/;function type(e){if("string"!=typeof e)return"";var n=e.charAt(0);return"@"==n&&ref.isFeedId(e)?"feed":"%"==n&&ref.isMsgId(e)?"msg":"&"==n&&ref.isBlobId(e)?"blob":"#"==n&&isChannel(e)?"channel":""}function emitLinks(e,n){var t=new Set;walk(e.value.content,function(e,n){if(Array.isArray(e)&&"channel"===e[0]){var a=ref.normalizeChannel(n);a&&(n=`#${a}`)}var r=type(n);"channel"==r?t.add(`#${ref.normalizeChannel(n.slice(1))}`):""!=r&&t.add(n)}),t.forEach(t=>{n(Object.assign({},e,{rts:resolveTimestamp(e),dest:t}))})}function isChannel(e){return"string"==typeof e&&e.length<30&&matchChannel.test(e)}function resolveTimestamp(e){if(e&&e.value&&e.value.timestamp)return e.timestamp?Math.min(e.timestamp,e.value.timestamp):e.value.timestamp}function walk(e,n,t){if(e&&"object"==typeof e)for(var a in e)walk(e[a],n,(t||[]).concat(a));else n(t,e)}module.exports=emitLinks;
 
-},{"deep-equal":230,"ssb-ref":581,"xtend":607}],546:[function(require,module,exports){
-var FlumeQueryLinks=require("flumeview-query/links"),ssbKeys=require("ssb-keys"),toUrlFriendly=require("base64-url").escape,emitLinks=require("./emit-links"),indexes=[{key:"DTS",value:[["dest"],["timestamp"]]},{key:"DTA",value:[["dest"],["rts"]]},{key:"TDT",value:[["value","content","type"],["dest"],["rts"]]}],indexVersion=8;function selectValueByKey(e,r){for(var i=0;i<e.length;i++)if(e[i].key===r)return e[i].value}exports.name="backlinks",exports.version=require("./package.json").version,exports.manifest={read:"source"},exports.init=function(e,r){var i=e._flumeUse(`backlinks-${toUrlFriendly(e.id.slice(1,10))}`,FlumeQueryLinks(indexes,emitLinks,indexVersion));return{read:function(e){if(e.unlinkedValues=!0,e.index){var r=selectValueByKey(indexes,e.index);if(!r)throw new Error("Invalid index: "+e.index);e.query=e.query?[].concat(e.query):[],e.query.push({$sort:r})}return i.read(e)}}};
+},{"ssb-ref":581}],546:[function(require,module,exports){
+var FlumeQueryLinks=require("flumeview-query/links"),ssbKeys=require("ssb-keys"),toUrlFriendly=require("base64-url").escape,emitLinks=require("./emit-links"),indexes=[{key:"DTS",value:[["dest"],["timestamp"]]},{key:"DTA",value:[["dest"],["rts"]]},{key:"TDT",value:[["value","content","type"],["dest"],["rts"]]}],indexVersion=9;function selectValueByKey(e,r){for(var i=0;i<e.length;i++)if(e[i].key===r)return e[i].value}exports.name="backlinks",exports.version=require("./package.json").version,exports.manifest={read:"source"},exports.init=function(e,r){var i=e._flumeUse(`backlinks-${toUrlFriendly(e.id.slice(1,10))}`,FlumeQueryLinks(indexes,emitLinks,indexVersion));return{read:function(e){if(e.unlinkedValues=!0,e.index){var r=selectValueByKey(indexes,e.index);if(!r)throw new Error("Invalid index: "+e.index);e.query=e.query?[].concat(e.query):[],e.query.push({$sort:r})}return i.read(e)}}};
 
 },{"./emit-links":545,"./package.json":551,"base64-url":197,"flumeview-query/links":547,"ssb-keys":566}],547:[function(require,module,exports){
 "use strict";var pull=require("pull-stream"),query=require("./query"),select=require("./select"),mfr=require("map-filter-reduce"),keys=require("map-filter-reduce/keys"),u=require("./util"),Flatmap=require("pull-flatmap"),FlumeViewLevel=require("flumeview-level"),isArray=Array.isArray;module.exports=function(e,r,l){r||(r=function(e,r){r(e)});var t=FlumeViewLevel(l||1,function(l,t){var i=[];return r(l,function(r){i=i.concat(function(r,l){var t=[];return e.forEach(function(e){for(var i=[e.key],n=0;n<e.value.length;n++){var a=e.value[n];if(!u.has(a,r))return;i.push(u.get(a,r))}i.push(l),t.push(i)}),t}(r,t))}),i});return function(l,i){var n=t(l,i),a=n.read;return n.read=function(t){var i,n;isArray((t=(t=t||{})||{}).query)?(i=t.query[0].$filter||{},(n=t.query[t.query.length-1].$sort)&&t.query.pop()):i=t.query?t.query:{};var s=n?u.findByPath(e,n):select(e,i);if(n&&!s)return pull.error(new Error("could not sort by:"+JSON.stringify(n)));if(!s)return pull(l.stream({values:!0,seqs:!1,live:t.live,old:t.old,limit:t.limit,reverse:t.reverse}),Flatmap(function(e){var u=[];return r(e,function(e){u.push(e)}),u}));var v=query(s,i);return v.values=!0,v.keys=!0,v.reverse=!!t.reverse,v.live=t.live,v.old=t.old,v.sync=t.sync,v.unlinkedValues=t.unlinkedValues,pull(a(v),pull.map(function(e){if(e.sync)return e;for(var r=t.unlinkedValues?e.value:{},l=0;l<s.value.length;l++)u.set(s.value[l],e.key[l+1],r);return r}),isArray(t.query)?mfr(t.query):pull.through(),t.limit?pull.take(t.limit):pull.through())},n}};
@@ -2315,10 +2315,10 @@ var deepEqual=require("deep-equal");exports.has=function(r,e){if("string"==typeo
 
 },{"deep-equal":230}],551:[function(require,module,exports){
 module.exports={
-  "_from": "ssb-backlinks",
+  "_from": "github:ssbc/ssb-backlinks#fix-type-check",
   "_id": "ssb-backlinks@0.7.3",
   "_inBundle": false,
-  "_integrity": "sha512-84s5phSVyZsYV0FTmBJvICPgOMuu8ouzukG8Gz2XtuOui95GBP/G7UIBURgYVS82XA6g9xPA/jf38fsMxid38Q==",
+  "_integrity": "",
   "_location": "/ssb-backlinks",
   "_phantomChildren": {
     "deep-equal": "1.1.1",
@@ -2330,22 +2330,20 @@ module.exports={
     "pull-stream": "3.6.14"
   },
   "_requested": {
-    "type": "tag",
-    "registry": true,
-    "raw": "ssb-backlinks",
+    "type": "git",
+    "raw": "ssb-backlinks@github:ssbc/ssb-backlinks#fix-type-check",
     "name": "ssb-backlinks",
     "escapedName": "ssb-backlinks",
-    "rawSpec": "",
-    "saveSpec": null,
-    "fetchSpec": "latest"
+    "rawSpec": "github:ssbc/ssb-backlinks#fix-type-check",
+    "saveSpec": "github:ssbc/ssb-backlinks#fix-type-check",
+    "fetchSpec": null,
+    "gitCommittish": "fix-type-check"
   },
   "_requiredBy": [
-    "#USER",
     "/"
   ],
-  "_resolved": "https://registry.npmjs.org/ssb-backlinks/-/ssb-backlinks-0.7.3.tgz",
-  "_shasum": "4ed737facd176bbe713118a32e7b611b36f0f3a8",
-  "_spec": "ssb-backlinks",
+  "_resolved": "github:ssbc/ssb-backlinks#d637e763b69090b83f30d0f2e73f6c7f2e57b55c",
+  "_spec": "ssb-backlinks@github:ssbc/ssb-backlinks#fix-type-check",
   "_where": "/home/chrx/dev/ssb-browser-core",
   "author": {
     "name": "Secure Scuttlebutt Consortium"
@@ -2356,16 +2354,17 @@ module.exports={
   "bundleDependencies": false,
   "dependencies": {
     "base64-url": "^2.2.0",
-    "deep-equal": "^1.0.1",
     "flumeview-query": "^6.2.0",
     "pull-stream": "^3.6.7",
     "ssb-keys": "^7.0.14",
-    "ssb-ref": "^2.9.0",
-    "xtend": "^4.0.1"
+    "ssb-ref": "^2.9.0"
   },
   "deprecated": false,
   "description": "scuttlebot plugin for indexing all link mentions of messages",
-  "devDependencies": {},
+  "devDependencies": {
+    "ava": "^0.25.0",
+    "sinon": "^7.1.1"
+  },
   "homepage": "https://github.com/ssbc/ssb-backlinks",
   "license": "MIT",
   "name": "ssb-backlinks",
@@ -2373,7 +2372,9 @@ module.exports={
     "type": "git",
     "url": "git://github.com/ssbc/ssb-backlinks.git"
   },
-  "scripts": {},
+  "scripts": {
+    "test": "ava"
+  },
   "version": "0.7.3"
 }
 
