@@ -16,7 +16,7 @@ exports.init = function(dir) {
       },
       outgoing: {
 	net: [{ transform: 'shs' }],
-	ws: [{ transform: 'shs' }],
+	ws: [{ transform: 'shs' }, { transform: 'noauth' }],
 	tunnel: [{ transform: 'shs' }]
       }
     },
@@ -37,6 +37,7 @@ exports.init = function(dir) {
   .use(require('ssb-ws'))
   .use(require('ssb-replicate'))
   .use(require('ssb-ebt'))
+  .use(require('ssb-no-auth'))
   .use(require('ssb-tunnel'))
   .use(require('./tunnel-chat'))
   .use(require("./simple-blobs"))
