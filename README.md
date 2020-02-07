@@ -114,8 +114,10 @@ If blob already exists will callback with err or a url that can be
 used for images for a blob. Otherwise the blob will get requested and
 if size is smaller than the maximum size, the blob will be stored
 locally and used for callback, otherwise the callback will return a
-`remoteURL` link.
+`remoteURL` link.  
 
+&nbsp;
+&nbsp;
 
 Two modules are special compared to a normal SSB distribution and to
 use this optional functionality the pub needs these plugins:
