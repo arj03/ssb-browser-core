@@ -19,8 +19,8 @@ found an err will be returned.
 
 ### add(msg, cb)
 
-Add a raw message (without id and timestamp) to the database and
-return the stored message (id, timestamp, value = original message) or
+Add a raw message (without id and timestamp) to the database. Callback
+is the stored message (id, timestamp, value = original message) or
 err.
 
 ### del(id, cb)
@@ -71,11 +71,35 @@ Gets the current db status, same functionality as
 This is the [secret-stack] module with a few extra modules
 loaded. [ssb-ws] is used to create web socket connections to pubs.
 
+### id
+
+The public key of the current user
+
+### add(msg, cb)
+
+For historical reasons (see ssb-ebt) we have add here, which validates
+a raw message (without id and timestamp) and adds it to the
+database. Callback is the stored message (id, timestamp, value =
+original message) or err.
+
+### rpc:connect event
+
+Example:
+
+```
+SSB.net.on('rpc:connect', (rpc) => {
+  console.log("connected")
+  rpc.on('closed', () => console.log("bye"))
+})
+```
+
+### blobs
+
 This is where the `blobs` api can be found. The module implements the
 blobs protocol and so can exchange blobs with connection peers. It
 also contains with the the following extra methods:
 
-### hash(data, cb)
+#### hash(data, cb)
 
 Hashes data and returns the digest or err
 
@@ -91,24 +115,24 @@ onFileSelect: function(ev) {
 }
 ```
 
-### add(blobId, file, cb)
+#### add(blobId, file, cb)
 
 Adds the `file` (such as one obtained from ev.target.files when using
 a file select) to the blob store using the blobId name. BlobId is & +
 hash.
 
-### remoteURL(blobId)
+#### remoteURL(blobId)
 
 Returns a http URL string for the current connection. This is useful
 in a browser for images that you don't want to store directly on the
 device.
 
-### privateGet(blobId, unbox, cb)
+#### privateGet(blobId, unbox, cb)
 
 Callback with err or a url that works for e.g images that was received
 in a private message.
 
-### localGet(blobId, unbox, cb)
+#### localGet(blobId, unbox, cb)
 
 If blob already exists will callback with err or a url that can be
 used for images for a blob. Otherwise the blob will get requested and
@@ -116,8 +140,43 @@ if size is smaller than the maximum size, the blob will be stored
 locally and used for callback, otherwise the callback will return a
 `remoteURL` link.  
 
-&nbsp;
-&nbsp;
+### ooo
+
+The [ssb-ooo] module
+
+### tunnelChat
+
+Uses a modified version of [ssb-tunnel] to send and receive end-to-end
+encrypted ephemeral messages between two peers.
+
+#### acceptMessages
+
+After being called, allow incoming connections on confirmation.
+
+#### connect(feedId)
+
+Connect to a remote feedId. When connected a message will be put in
+`messages`.
+
+#### sendMessage(msg)
+
+Send a message to the remote user, adds the message to the `messages`
+stream.
+
+#### messages
+
+A stream of messages. Example usage:
+
+```
+pull(
+  messages(),
+  pull.drain((msg) => {
+    console.log(msg.user + "> " + msg.text)
+  })
+)
+```
+
+### Browser specific
 
 Two modules are special compared to a normal SSB distribution and to
 use this optional functionality the pub needs these plugins:
@@ -128,11 +187,11 @@ use this optional functionality the pub needs these plugins:
 Once a rpc connection has been established, the following extra
 methods are available:
 
-### getThread.get(msgId, cb)
+#### getThread.get(msgId, cb)
 
 Will get a message includes all messages linking to the message.
 
-### partialReplication.partialReplication(feedId, seq, keys)
+#### partialReplication.partialReplication(feedId, seq, keys)
 
 Returns a stream of messages for the given `feedId` starting from `seq`.
 
@@ -263,6 +322,8 @@ patches/sodium-browserify.patch
 [ssb-backlinks]: https://github.com/ssbc/ssb-backlinks
 [ssb-validate]: https://github.com/ssbc/ssb-validate
 [ssb-blob-files]: https://github.com/ssbc/ssb-blob-files
+[ssb-ooo]: https://github.com/ssbc/ssb-ooo
+[ssb-tunnel]: https://github.com/ssbc/ssb-tunnel
 
 [ssb-get-thread]: https://github.com/arj03/ssb-get-thread
 [ssb-partial-replication]: https://github.com/arj03/ssb-partial-replication
