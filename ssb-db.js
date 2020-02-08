@@ -102,7 +102,11 @@ exports.init = function (sbot, config) {
   }
 
   sbot.add = function(msg, cb) {
-    if (!(msg.author in SSB.state.feeds))
+    var isOOO = !(msg.author in SSB.state.feeds)
+    if (!isOOO && msg.value.sequence < SSB.state.feeds[msg.author])
+      isOOO = true
+
+    if (isOOO)
       SSB.state = validate.appendOOO(SSB.state, hmac_key, msg)
     else
       SSB.state = validate.append(SSB.state, hmac_key, msg)
