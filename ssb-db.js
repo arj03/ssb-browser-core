@@ -103,7 +103,7 @@ exports.init = function (sbot, config) {
 
   sbot.add = function(msg, cb) {
     var isOOO = !(msg.author in SSB.state.feeds)
-    if (!isOOO && msg.value.sequence < SSB.state.feeds[msg.author])
+    if (!isOOO && msg.sequence < SSB.state.feeds[msg.author].sequence)
       isOOO = true
 
     if (isOOO)
@@ -114,32 +114,34 @@ exports.init = function (sbot, config) {
     if (SSB.state.error)
       return cb(SSB.state.error)
 
-    var last = SSB.db.last.update(msg)
+    var updateLast = true
+    if (SSB.state.feeds[msg.author] && msg.sequence < SSB.state.feeds[msg.author].sequence)
+      updateLast = false
+
+    if (updateLast)
+      SSB.db.last.update(msg)
 
     var ok = true
 
-    if (last.partial) {
-      var isPrivate = (typeof (msg.content) === 'string')
+    var isPrivate = (typeof (msg.content) === 'string')
 
-      if (isPrivate && !SSB.privateMessages) {
-        ok = false
-      } else if (!isPrivate && msg.content.type == 'about' && msg.content.about == msg.author) {
-        updateProfile(msg)
-      } else if (!isPrivate && !SSB.validMessageTypes.includes(msg.content.type)) {
-        ok = false
-      } else if (isPrivate) {
-        var decrypted = decryptMessage(msg)
-        if (!decrypted) // not for us
-          ok = false
-      }
-    }
-    else if (msg.content.type == 'about' && msg.content.about == msg.author)
+    if (isPrivate && !SSB.privateMessages) {
+      ok = false
+    } else if (!isPrivate && msg.content.type == 'about' && msg.content.about == msg.author) {
       updateProfile(msg)
+    } else if (!isPrivate && !SSB.validMessageTypes.includes(msg.content.type)) {
+      ok = false
+    } else if (isPrivate) {
+      var decrypted = decryptMessage(msg)
+      if (!decrypted) // not for us
+        ok = false
+    }
 
-    if (ok)
+    if (ok) {
       SSB.db.add(msg, cb)
-    else {
-      SSB.db.last.setPartialLogState(msg.author, true)
+    } else {
+      if (updateLast)
+        SSB.db.last.setPartialLogState(msg.author, true)
       cb()
     }
   }
