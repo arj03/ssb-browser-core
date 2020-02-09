@@ -102,11 +102,10 @@ exports.init = function (sbot, config) {
   }
 
   sbot.add = function(msg, cb) {
-    var isOOO = !(msg.author in SSB.state.feeds)
-    if (!isOOO && msg.sequence < SSB.state.feeds[msg.author].sequence)
-      isOOO = true
+    const knownAuthor = msg.author in SSB.state.feeds
+    const earlierMessage = knownAuthor && msg.sequence < SSB.state.feeds[msg.author].sequence
 
-    if (isOOO)
+    if (!knownAuthor || earlierMessage)
       SSB.state = validate.appendOOO(SSB.state, hmac_key, msg)
     else
       SSB.state = validate.append(SSB.state, hmac_key, msg)
@@ -114,9 +113,7 @@ exports.init = function (sbot, config) {
     if (SSB.state.error)
       return cb(SSB.state.error)
 
-    var updateLast = true
-    if (SSB.state.feeds[msg.author] && msg.sequence < SSB.state.feeds[msg.author].sequence)
-      updateLast = false
+    const updateLast = !earlierMessage
 
     if (updateLast)
       SSB.db.last.update(msg)
