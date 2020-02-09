@@ -17,6 +17,14 @@ ssb-db. Overall there are two major parts: `db` and `net`.
 Will get a message with `id` from the database. If the message is not
 found an err will be returned.
 
+### validateAndAdd(msg, cb)
+
+Validate a raw message (without id and timestamp), checks if the
+message is of a known type. Will update profile if applicable. Finally
+adds the message to the database and updates the last index. Callback
+is the stored message (id, timestamp, value = original message) or
+err.
+
 ### add(msg, cb)
 
 Add a raw message (without id and timestamp) to the database. Callback
@@ -77,10 +85,8 @@ The public key of the current user
 
 ### add(msg, cb)
 
-For historical reasons (see ssb-ebt) we have add here, which validates
-a raw message (without id and timestamp) and adds it to the
-database. Callback is the stored message (id, timestamp, value =
-original message) or err.
+For historical reasons (see ssb-ebt) we have add here. This just calls
+`SSB.db.validateAndAdd`.
 
 ### rpc:connect event
 

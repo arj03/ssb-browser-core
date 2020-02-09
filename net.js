@@ -1,8 +1,8 @@
-var SecretStack = require('secret-stack')
-var caps = require('ssb-caps')
-var ssbKeys = require('ssb-keys')
+const SecretStack = require('secret-stack')
+const caps = require('ssb-caps')
+const ssbKeys = require('ssb-keys')
 
-var path = require('path')
+const path = require('path')
 
 exports.init = function(dir) {
   var keys = ssbKeys.loadOrCreateSync(path.join(dir, 'secret'))
