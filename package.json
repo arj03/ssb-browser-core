@@ -36,6 +36,7 @@
   "devDependencies": {
     "common-shakeify": "^0.6.2",
     "node-localstorage": "^2.1.5",
+    "rimraf": "^3.0.2",
     "tape": "^4.13.0",
     "tap-spec": "^5.0.0",
     "uglifyify": "^5.0.2"

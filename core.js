@@ -9,6 +9,11 @@ exports.init = function (dir) {
   // outside browser
   if (typeof localStorage === "undefined" || localStorage === null) {
     const path = require('path')
+    const fs = require('fs')
+
+    if (!fs.existsSync(dir))
+      fs.mkdirSync(dir)
+
     var LocalStorage = require('node-localstorage').LocalStorage
     localStorage = new LocalStorage(path.join(dir, 'localstorage'))
   }
