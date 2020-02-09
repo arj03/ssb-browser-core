@@ -40,7 +40,7 @@ exports.init = function (dir, ssbId) {
     }
   }
 
-    function decryptMessage(msg) {
+  function decryptMessage(msg) {
     return keys.unbox(msg.content, SSB.net.config.keys.private)
   }
 

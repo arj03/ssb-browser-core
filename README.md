@@ -280,7 +280,9 @@ The [ssb-blob-files] module.
 
 ## validMessageTypes
 
-An array of message types to store during sync.
+An
+[array](https://github.com/arj03/ssb-browser-core/blob/master/core.js#L94)
+of message types to store during sync.
 
 FIXME: document how this works with following
 
@@ -290,6 +292,19 @@ A boolean to indicate if private messages are to be stored during sync.
 
 FIXME: document how this works with following
 
+## SSB: loaded event
+
+Because loading wasm is async, an event will be fired when `SSB` is
+ready to use. Example:
+
+```
+SSB.events.on('SSB: loaded', function() {
+  console.log("ready to rock!")
+})
+```
+
+&nbsp;
+&nbsp;
 
 There are a few other undocumented methods, these will probably be
 moved to another module in a later version as they are quite tied to

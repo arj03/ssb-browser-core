@@ -5,7 +5,7 @@ const raf = require('polyraf')
 const pull = require('pull-stream')
 const defer = require('pull-defer')
 const BoxStream = require('pull-box-stream')
-const chromeFS = require('random-access-chrome-file')
+const PolyRAF = require('polyraf')
 const sanitize = require('sanitize-filename')
 
 exports.manifest = {
@@ -96,7 +96,7 @@ exports.init = function (sbot, config) {
   }
 
   function privateFsURL(id, cb) {
-    var file = chromeFS(sanitizedPrivatePath(id))
+    var file = PolyRAF(sanitizedPrivatePath(id))
     file.stat((err, file) => {
       cb(null, URL.createObjectURL(file))
     })
@@ -125,7 +125,7 @@ exports.init = function (sbot, config) {
     }
     else
     {
-      var file = chromeFS(sanitizedPath(id))
+      var file = PolyRAF(sanitizedPath(id))
       file.stat((err, file) => {
         cb(null, URL.createObjectURL(file))
       })
