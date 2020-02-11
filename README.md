@@ -10,6 +10,18 @@ object will be available.
 The api is not meant to be 100% compatible with regular
 ssb-db. Overall there are two major parts: `db` and `net`.
 
+# config
+
+Loading the bundle-core file as above will use `browser.js`, meaning
+default options. It is also possible to overwrite config options,
+like:
+
+```
+require('../core.js').init(dir, { blobs: { max: 512 * 1024 } })
+```
+
+Default config options are defined in `net.js`.
+
 ## db
 
 ### get(id, cb)

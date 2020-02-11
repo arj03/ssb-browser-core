@@ -4,10 +4,10 @@ const ssbKeys = require('ssb-keys')
 
 const path = require('path')
 
-exports.init = function(dir) {
+exports.init = function(dir, overwriteConfig) {
   var keys = ssbKeys.loadOrCreateSync(path.join(dir, 'secret'))
 
-  var r = SecretStack({
+  var config = Object.assign({
     caps: { shs: Buffer.from(caps.shs, 'base64') },
     keys,
     connections: {
@@ -36,7 +36,9 @@ exports.init = function(dir) {
       pushy: 3,
       max: 256*1024
     }
-  })
+  }, overwriteConfig)
+
+  var r = SecretStack(config)
   .use(require('./ssb-db'))
   .use(require('./ssb-get-thread'))
   .use(require('./simple-ooo'))

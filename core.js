@@ -1,4 +1,4 @@
-exports.init = function (dir) {
+exports.init = function (dir, config) {
   const pull = require('pull-stream')
 
   const EventEmitter = require('events')
@@ -23,7 +23,7 @@ exports.init = function (dir) {
 
     console.log("wasm loaded")
 
-    var net = require('./net').init(dir)
+    var net = require('./net').init(dir, config)
     var db = require('./db').init(dir, net.id)
 
     console.log("my id: ", net.id)
