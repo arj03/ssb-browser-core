@@ -159,12 +159,7 @@ exports.init = function (sbot, config) {
 
   var notify = Notify()
 
-  // FIXME: config
-  //sympathy controls whether you'll replicate
-  var sympathy = 0
-  var stingy = false
-  var pushy = 3
-  var max = 256*1024
+  const { sympathy, stingy, pushy, max } = config.blobs
 
   function isAvailable(id) {
     for(var peer in peers)

@@ -29,6 +29,12 @@ exports.init = function(dir) {
     },
     replicate: {
       legacy: false
+    },
+    blobs: {
+      sympathy: 0, //sympathy controls whether you'll replicate
+      stingy: false,
+      pushy: 3,
+      max: 256*1024
     }
   })
   .use(require('./ssb-db'))
