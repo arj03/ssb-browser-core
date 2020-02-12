@@ -71,7 +71,7 @@ exports.sync = function()
     if (!SSB.state.feeds[SSB.net.id])
       SSB.net.replicate.request(SSB.net.id, true)
 
-    if (localStorage["settings"] && JSON.parse(localStorage["settings"]).syncOnlyFollows) {
+    if (SSB.syncOnlyFeedsFollowing) {
       SSB.db.friends.hops((err, hops) => {
         for (var feed in hops)
           if (hops[feed] == 1)

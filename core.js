@@ -100,6 +100,7 @@ exports.init = function (dir, config) {
       // config
       validMessageTypes: ['post', 'peer-invite/confirm', 'peer-invite/accept', 'peer-invite'],
       privateMessages: true,
+      syncOnlyFeedsFollowing: false,
 
       remoteAddress: '',
 

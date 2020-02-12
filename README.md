@@ -271,12 +271,13 @@ The remote server to connect to. Must be web socket.
 ## sync
 
 Start a EBT replication with the remote server. This syncs all the
-feeds known in `SSB.state.feeds`.
+feeds known in `SSB.state.feeds`, unless `syncOnlyFeedsFollowing` is
+set, in which case only feeds you are following directly are
+synced. Compared to a normal SSB distribution this corresponds to hops
+1. There is currently no concept of blocked feeds.
 
 This uses `validMessageTypes` and `privateMessages` to determine what
 gets stored locally.
-
-FIXME: document how this works with following
 
 ## initialSync(onboard)
 
@@ -305,13 +306,17 @@ An
 [array](https://github.com/arj03/ssb-browser-core/blob/master/core.js#L94)
 of message types to store during sync.
 
-FIXME: document how this works with following
+By specifying these, only a subset of messages for feeds are
+potentially stored. This means it will not be possible to sync these
+feeds to other nodes.
 
 ## privateMessages
 
 A boolean to indicate if private messages are to be stored during sync.
 
-FIXME: document how this works with following
+By specifying this, only a subset of messages for feeds are
+potentially stored. This means it will not be possible to sync these
+feeds to other nodes.
 
 ## SSB: loaded event
 
