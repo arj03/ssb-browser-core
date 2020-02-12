@@ -57,7 +57,7 @@ exports.init = function(dir, overwriteConfig) {
     console.log("connected to:", rpc.id)
 
     function ping() {
-      rpc.tunnel.ping(function (err, _ts) {
+      rpc.gossip.ping(function (err, _ts) {
 	if (err) return console.error(err)
 	clearTimeout(timer)
 	timer = setTimeout(ping, 10e3)
