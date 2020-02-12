@@ -7,7 +7,8 @@ key of your feed is stored in the browser together with the log,
 indexes and smaller images. To reduce storage and network
 requirements, partial replication has been implemented. Wasm is used
 for crypto and is around 90% the speed of the C implementation. A
-WebSocket is used to connect to pubs.
+WebSocket is used to connect to pubs. The `bundle-core.js` file in
+dist/ is roughly 1.5mb.
 
 # api
 
@@ -54,6 +55,11 @@ stored during sync.
 By specifying this, only a subset of messages for feeds are
 potentially stored. This means it will not be possible to sync these
 feeds to other nodes.
+
+### syncOnlyFeedsFollowing
+
+When set, sync will only synchronize feeds you are directly following
+instead of all known feeds. Default to false.
 
 ## db
 
@@ -300,7 +306,8 @@ Start a EBT replication with the remote server. This syncs all the
 feeds known in `SSB.state.feeds`, unless `syncOnlyFeedsFollowing` is
 set, in which case only feeds you are following directly are
 synced. Compared to a normal SSB distribution this corresponds to hops
-1. There is currently no concept of blocked feeds.
+1. There is currently no concept of blocked feeds. There is the option
+of removing feeds.
 
 This uses `validMessageTypes` and `privateMessages` to determine what
 gets stored locally.
