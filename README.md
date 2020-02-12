@@ -227,7 +227,7 @@ pull(
 )
 ```
 
-### Browser specific
+### Browser specific methods on net
 
 Two modules are special compared to a normal SSB distribution and to
 use this optional functionality, the pub needs these plugins:
@@ -248,49 +248,53 @@ Returns a stream of messages for the given `feedId` starting from
 `seq`. The api is similar to
 [createHistoryStream](https://github.com/ssbc/ssb-db#dbcreatehistorystreamid-feedid-seq-int-live-bool-limit-int-keys-bool-values-bool---pullsource).
 
-## dir
+## SSB
+
+Other things directly on the global SSB object
+
+### dir
 
 The path to where the database and blobs are stored.
 
-## validate
+### validate
 
 The [ssb-validate] module.
 
-## state
+### state
 
 The current [state](https://github.com/ssbc/ssb-validate#state) of
 known feeds.
 
-## connected(cb)
+### connected(cb)
 
 Will ensure a connection is ready. Cb signature is (err, rpc).
 
-## removeFeedState(feedId)
+### removeFeedState(feedId)
 
 Remove any state related to feed. This complements `db.deleteFeed`
 that removes the users messages from the local database.
 
-## profiles
+### profiles
 
 A dict from feedId to { name, description, image }
 
-### loadProfiles()
+#### loadProfiles()
 
 Populates profiles dict from localStorage
 
-### saveProfiles
+#### saveProfiles
 
 Save the profiles dict in localStorage
 
-## publish(msg, cb)
+### publish(msg, cb)
 
 Validates a message and stores it in the database. See db.add for format.
 
-## messagesByType
+### messagesByType
 
 A convenience method around db.query to get messages of a particular type.
 
-## sync
+### sync()
 
 Start a EBT replication with the remote server. This syncs all the
 feeds known in `SSB.state.feeds`, unless `syncOnlyFeedsFollowing` is
@@ -301,7 +305,7 @@ synced. Compared to a normal SSB distribution this corresponds to hops
 This uses `validMessageTypes` and `privateMessages` to determine what
 gets stored locally.
 
-## initialSync(onboard)
+### initialSync(onboard)
 
 This will do an initial sync of feeds from the `onboard` dict. Only
 profiles active within the last month and only the latest 25 messages
@@ -313,16 +317,16 @@ nameAbout, name }
 
 This requires [ssb-partial-replication] on the pub.
 
-## box
+### box
 
 [box](https://github.com/ssbc/ssb-keys#boxcontent-recipients--boxed)
 method from ssb-keys. Useful for private messages.
 
-## blobFiles
+### blobFiles
 
 The [ssb-blob-files] module.
 
-## SSB: loaded event
+### SSB: loaded event
 
 Because loading wasm is async, an event will be fired when `SSB` is
 ready to use. Example:
