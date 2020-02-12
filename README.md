@@ -15,7 +15,8 @@ Once you load the `bundle-core.js` file in a browser a global SSB
 object will be available.
 
 The api is not meant to be 100% compatible with regular
-ssb-db. Overall there are two major parts: `db` and `net`.
+ssb-db. Overall there are two major parts: [`db`](#db) and
+[`net`](#net).
 
 # config
 
@@ -28,6 +29,31 @@ require('../core.js').init(dir, { blobs: { max: 512 * 1024 } })
 ```
 
 Default config options are defined in `net.js`.
+
+## Runtime configurations
+
+### remoteAddress
+
+The remote server to connect to. Must be web socket.
+
+### validMessageTypes
+
+An
+[array](https://github.com/arj03/ssb-browser-core/blob/master/core.js#L94)
+of message types to store during sync.
+
+By specifying these, only a subset of messages for feeds are
+potentially stored. This means it will not be possible to sync these
+feeds to other nodes.
+
+### privateMessages
+
+A boolean (default: true) to indicate if private messages are to be
+stored during sync.
+
+By specifying this, only a subset of messages for feeds are
+potentially stored. This means it will not be possible to sync these
+feeds to other nodes.
 
 ## db
 
@@ -264,10 +290,6 @@ Validates a message and stores it in the database. See db.add for format.
 
 A convenience method around db.query to get messages of a particular type.
 
-## remoteAddress
-
-The remote server to connect to. Must be web socket.
-
 ## sync
 
 Start a EBT replication with the remote server. This syncs all the
@@ -299,24 +321,6 @@ method from ssb-keys. Useful for private messages.
 ## blobFiles
 
 The [ssb-blob-files] module.
-
-## validMessageTypes
-
-An
-[array](https://github.com/arj03/ssb-browser-core/blob/master/core.js#L94)
-of message types to store during sync.
-
-By specifying these, only a subset of messages for feeds are
-potentially stored. This means it will not be possible to sync these
-feeds to other nodes.
-
-## privateMessages
-
-A boolean to indicate if private messages are to be stored during sync.
-
-By specifying this, only a subset of messages for feeds are
-potentially stored. This means it will not be possible to sync these
-feeds to other nodes.
 
 ## SSB: loaded event
 
