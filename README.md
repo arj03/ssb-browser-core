@@ -49,17 +49,16 @@ feeds to other nodes.
 
 ### privateMessages
 
-A boolean (default: true) to indicate if private messages are to be
-stored during sync.
+Check and store private messages during sync. Default is true.
 
-By specifying this, only a subset of messages for feeds are
+By specifying this to false, only a subset of messages for feeds are
 potentially stored. This means it will not be possible to sync these
 feeds to other nodes.
 
 ### syncOnlyFeedsFollowing
 
 When set, sync will only synchronize feeds you are directly following
-instead of all known feeds. Default to false.
+instead of all known feeds. Default is false.
 
 ## db
 
