@@ -2,6 +2,13 @@
 
 Secure scuttlebutt core (similar to [ssb-server]) in a browser.
 
+This is a full implementation of ssb running in the browser only. The
+key of your feed is stored in the browser together with the log,
+indexes and smaller images. To reduce storage and network
+requirements, partial replication has been implemented. Wasm is used
+for crypto and is around 90% the speed of the C implementation. A
+WebSocket is used to connect to pubs.
+
 # api
 
 Once you load the `bundle-core.js` file in a browser a global SSB
@@ -156,7 +163,7 @@ If blob already exists will callback with err or a url that can be
 used for images for a blob. Otherwise the blob will get requested and
 if size is smaller than the maximum size, the blob will be stored
 locally and used for callback, otherwise the callback will return a
-`remoteURL` link.  
+`remoteURL` link.
 
 ### ooo
 
@@ -197,7 +204,7 @@ pull(
 ### Browser specific
 
 Two modules are special compared to a normal SSB distribution and to
-use this optional functionality the pub needs these plugins:
+use this optional functionality, the pub needs these plugins:
 
 - [ssb-get-thread]
 - [ssb-partial-replication]
@@ -207,11 +214,13 @@ methods are available:
 
 #### getThread.get(msgId, cb)
 
-Will get a message includes all messages linking to the message.
+Will get a message includes all replies to the thread.
 
-#### partialReplication.partialReplication(feedId, seq, keys)
+#### partialReplication.partialReplication({ feedId, seq })
 
-Returns a stream of messages for the given `feedId` starting from `seq`.
+Returns a stream of messages for the given `feedId` starting from
+`seq`. The api is similar to
+[createHistoryStream](https://github.com/ssbc/ssb-db#dbcreatehistorystreamid-feedid-seq-int-live-bool-limit-int-keys-bool-values-bool---pullsource).
 
 ## dir
 
