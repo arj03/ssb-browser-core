@@ -84,27 +84,6 @@ exports.sync = function()
   })
 }
 
-function writeOnboardProfiles(onboard)
-{
-  let cleaned = {}
-  for (var key in onboard) {
-    cleaned[key] = {
-      image: onboard[key].image,
-      name: onboard[key].name,
-      description: onboard[key].description
-    }
-  }
-
-  // merge in user updates
-  for (var author in SSB.profiles) {
-    Object.assign(cleaned[author], SSB.profiles[author])
-  }
-
-  localStorage['profiles.json'] = JSON.stringify(cleaned)
-
-  SSB.profiles = cleaned
-}
-
 exports.saveProfiles = function() {
   localStorage['profiles.json'] = JSON.stringify(SSB.profiles)
 }
@@ -112,86 +91,4 @@ exports.saveProfiles = function() {
 exports.loadProfiles = function() {
   if (localStorage['profiles.json'])
     SSB.profiles = JSON.parse(localStorage['profiles.json'])
-}
-
-exports.initialSync = function(onboard)
-{
-  SSB.isInitialSync = true // for ssb-ebt
-  SSB.net.connect(SSB.remoteAddress, (err, rpc) => {
-    if (err) throw(err)
-
-    var d = new Date()
-    var onemonthsago = d.setMonth(d.getMonth() - 1)
-
-    var totalMessages = 0
-    var totalFilteredMessages = 0
-    var totalPrivateMessages = 0
-    var totalFeeds = 0
-
-    console.time("downloading messages")
-
-    function getMessagesForUser(index)
-    {
-      if (index >= Object.keys(onboard).length) {
-        console.log("feeds", totalFeeds)
-        console.log("messages", totalMessages)
-        console.log("filtered", totalFilteredMessages)
-        console.timeEnd("downloading messages")
-
-        SSB.isInitialSync = false
-        writeOnboardProfiles(onboard)
-
-        return
-      }
-
-      var user = Object.keys(onboard)[index]
-
-      // FIXME: filter out in script
-      if (onboard[user].latestMsg == null) {
-        getMessagesForUser(index+1)
-        return
-      }
-
-      if (onboard[user].latestMsg.timestamp < onemonthsago && user != SSB.net.id) {
-        //console.log("skipping older posts for", onboard[user].name)
-        getMessagesForUser(index+1)
-        return
-      }
-
-      var seqStart = onboard[user].latestMsg.seq - 25
-      if (seqStart < 0)
-        seqStart = 0
-
-      if (user == SSB.net.id) // always all
-        seqStart = 0
-      else
-        SSB.db.last.setPartialLogState(user, true)
-
-      ++totalFeeds
-
-      //console.log(`Downloading messages for: ${onboard[user].name}, seq: ${seqStart}`)
-
-      pull(
-        rpc.partialReplication.partialReplication({ id: user, seq: seqStart, keys: false }),
-        pull.asyncMap((msg, cb) => {
-          ++totalMessages
-          SSB.net.add(msg, (err, res) => {
-            if (res)
-              ++totalFilteredMessages
-
-            cb(err, res)
-          })
-        }),
-        pull.collect((err) => {
-          if (err) throw err
-
-          SSB.state.queue = []
-
-          getMessagesForUser(index+1)
-        })
-      )
-    }
-
-    getMessagesForUser(0)
-  })
 }

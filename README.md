@@ -311,18 +311,6 @@ of removing feeds.
 This uses `validMessageTypes` and `privateMessages` to determine what
 gets stored locally.
 
-### initialSync(onboard)
-
-This will do an initial sync of feeds from the `onboard` dict. Only
-profiles active within the last month and only the latest 25 messages
-are synced.
-
-The format of the onboard dict is: feedId to { latestMsg: { seq,
-timestamp }, imageAbout, image, descriptionAbout, description,
-nameAbout, name }
-
-This requires [ssb-partial-replication] on the pub.
-
 ### box
 
 [box](https://github.com/ssbc/ssb-keys#boxcontent-recipients--boxed)
