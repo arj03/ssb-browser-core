@@ -101,4 +101,31 @@ SSB.events.on('SSB: loaded', function() {
     })
   })
 
+  // we might get some messages from an earlier thread, and then get the latest 25 messages from the user
+  test('Add with holes', t => {
+    const validate = require('ssb-validate')
+    var state = validate.initial()
+    var keys = require('ssb-keys').generate()
+
+    state = validate.appendNew(state, null, keys, { type: 'post', text: 'test1' }, Date.now()) // ooo
+    state = validate.appendNew(state, null, keys, { type: 'post', text: 'test2' }, Date.now()) // missing
+    state = validate.appendNew(state, null, keys, { type: 'post', text: 'test3' }, Date.now()) // start
+
+    SSB.db.validateAndAdd(state.queue[0].value, (err) => {
+      if (err) console.error(err)
+
+      SSB.db.validateAndAdd(state.queue[2].value, (err, msg) => {
+        if (err) console.error(err)
+
+        t.equal(msg.value.content.text, 'test3', 'text correct')
+
+        const last = SSB.db.last.get()[keys.id]
+        t.equal(last.partial, true, 'is partial')
+        t.equal(last.sequence, 3, 'correct seq')
+
+        t.end()
+      })
+    })
+  })
+
 })

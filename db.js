@@ -66,8 +66,9 @@ exports.init = function (dir, ssbId) {
   function validateAndAdd(msg, cb) {
     const knownAuthor = msg.author in SSB.state.feeds
     const earlierMessage = knownAuthor && msg.sequence < SSB.state.feeds[msg.author].sequence
+    const skippingMessages = knownAuthor && msg.sequence > SSB.state.feeds[msg.author].sequence + 1
 
-    if (!knownAuthor || earlierMessage)
+    if (!knownAuthor || earlierMessage || skippingMessages)
       SSB.state = validate.appendOOO(SSB.state, hmac_key, msg)
     else
       SSB.state = validate.append(SSB.state, hmac_key, msg)
@@ -98,7 +99,12 @@ exports.init = function (dir, ssbId) {
 
     if (ok) {
       add(msg, cb)
-    } else {
+
+      if (skippingMessages)
+        store.last.setPartialLogState(msg.author, true)
+    }
+    else
+    {
       if (updateLast)
         store.last.setPartialLogState(msg.author, true)
       cb()
