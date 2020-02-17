@@ -64,16 +64,11 @@ SSB.events.on('SSB: loaded', function() {
     var keys = require('ssb-keys').generate()
 
     state = validate.appendNew(state, null, keys, { type: 'post', text: 'test1' }, Date.now()) // ooo
-    for (var i = 0; i < 100000; ++i); // timestamp must increase ;)
-    state = validate.appendNew(state, null, keys, { type: 'post', text: 'test2' }, Date.now()) // missing
-    for (var i = 0; i < 100000; ++i); // timestamp must increase ;)
-    state = validate.appendNew(state, null, keys, { type: 'post', text: 'test3' }, Date.now()) // start
-    for (var i = 0; i < 100000; ++i); // timestamp must increase ;)
-    state = validate.appendNew(state, null, keys, { type: 'vote', vote: { link: '%something.sha256', value: 1 } }, Date.now())
-    for (var i = 0; i < 100000; ++i); // timestamp must increase ;)
-    state = validate.appendNew(state, null, keys, { type: 'post', text: 'test5' }, Date.now())
-    for (var i = 0; i < 100000; ++i); // timestamp must increase ;)
-    state = validate.appendNew(state, null, keys, { type: 'post', text: 'test6' }, Date.now())
+    state = validate.appendNew(state, null, keys, { type: 'post', text: 'test2' }, Date.now()+1) // missing
+    state = validate.appendNew(state, null, keys, { type: 'post', text: 'test3' }, Date.now()+2) // start
+    state = validate.appendNew(state, null, keys, { type: 'vote', vote: { link: '%something.sha256', value: 1 } }, Date.now()+3)
+    state = validate.appendNew(state, null, keys, { type: 'post', text: 'test5' }, Date.now()+4)
+    state = validate.appendNew(state, null, keys, { type: 'post', text: 'test6' }, Date.now()+5)
 
     SSB.db.validateAndAdd(state.queue[2].value, (err) => {
       if (err) console.error(err)
@@ -113,10 +108,8 @@ SSB.events.on('SSB: loaded', function() {
     var keys = require('ssb-keys').generate()
 
     state = validate.appendNew(state, null, keys, { type: 'post', text: 'test1' }, Date.now()) // ooo
-    for (var i = 0; i < 100000; ++i); // timestamp must increase ;)
-    state = validate.appendNew(state, null, keys, { type: 'post', text: 'test2' }, Date.now()) // missing
-    for (var i = 0; i < 100000; ++i); // timestamp must increase ;)
-    state = validate.appendNew(state, null, keys, { type: 'post', text: 'test3' }, Date.now()) // start
+    state = validate.appendNew(state, null, keys, { type: 'post', text: 'test2' }, Date.now()+1) // missing
+    state = validate.appendNew(state, null, keys, { type: 'post', text: 'test3' }, Date.now()+2) // start
 
     SSB.db.validateAndAdd(state.queue[0].value, (err) => {
       if (err) console.error(err)
@@ -140,8 +133,7 @@ SSB.events.on('SSB: loaded', function() {
     var keys = require('ssb-keys').generate()
 
     state = validate.appendNew(state, null, keys, { type: 'post', text: 'test1' }, Date.now())
-    for (var i = 0; i < 100000; ++i); // timestamp must increase ;)
-    state = validate.appendNew(state, null, keys, { type: 'post', text: 'test2' }, Date.now())
+    state = validate.appendNew(state, null, keys, { type: 'post', text: 'test2' }, Date.now()+1)
 
     SSB.db.validateAndAdd(state.queue[0].value, (err) => {
       if (err) console.error(err)
