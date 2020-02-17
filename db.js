@@ -68,6 +68,10 @@ exports.init = function (dir, ssbId) {
     const earlierMessage = knownAuthor && msg.sequence < SSB.state.feeds[msg.author].sequence
     const skippingMessages = knownAuthor && msg.sequence > SSB.state.feeds[msg.author].sequence + 1
 
+    const alreadyChecked = knownAuthor && msg.sequence == SSB.state.feeds[msg.author].sequence
+    if (alreadyChecked && cb)
+      return cb()
+
     if (!knownAuthor || earlierMessage || skippingMessages)
       SSB.state = validate.appendOOO(SSB.state, hmac_key, msg)
     else
