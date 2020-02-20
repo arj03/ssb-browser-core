@@ -154,4 +154,51 @@ SSB.events.on('SSB: loaded', function() {
     })
   })
 
+  test('Strict order basic case', t => {
+    const validate = require('ssb-validate')
+    var state = validate.initial()
+    var keys = require('ssb-keys').generate()
+
+    state = validate.appendNew(state, null, keys, { type: 'post', text: 'test1' }, Date.now())
+    state = validate.appendNew(state, null, keys, { type: 'post', text: 'test2' }, Date.now()+1)
+
+    SSB.db.validateAndAddStrictOrder(state.queue[0].value, (err) => {
+      if (err) console.error(err)
+
+      SSB.db.validateAndAddStrictOrder(state.queue[1].value, (err) => {
+        if (err) console.error(err)
+
+        const last = SSB.db.last.get()[keys.id]
+        t.equal(last.partial, undefined, 'is not partial')
+        t.equal(last.sequence, 2, 'correct seq')
+
+        t.end()
+      })
+    })
+  })
+
+  test('Strict order fail case', t => {
+    const validate = require('ssb-validate')
+    var state = validate.initial()
+    var keys = require('ssb-keys').generate()
+
+    state = validate.appendNew(state, null, keys, { type: 'post', text: 'test1' }, Date.now())
+    state = validate.appendNew(state, null, keys, { type: 'post', text: 'test2' }, Date.now()+1)
+    state = validate.appendNew(state, null, keys, { type: 'post', text: 'test3' }, Date.now()+2)
+
+    SSB.db.validateAndAddStrictOrder(state.queue[0].value, (err) => {
+      if (err) console.error(err)
+
+      SSB.db.validateAndAddStrictOrder(state.queue[2].value, (err) => {
+        t.ok(err, 'Should fail to add')
+        console.log(err)
+
+        const last = SSB.db.last.get()[keys.id]
+        t.equal(last.partial, undefined, 'is not partial')
+        t.equal(last.sequence, 1, 'correct seq')
+
+        t.end()
+      })
+    })
+  })
 })

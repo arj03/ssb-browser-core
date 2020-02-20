@@ -63,25 +63,7 @@ exports.init = function (dir, ssbId) {
       SSB.profiles[msg.author].image = msg.content.image
   }
 
-  function validateAndAdd(msg, cb) {
-    const knownAuthor = msg.author in SSB.state.feeds
-    const earlierMessage = knownAuthor && msg.sequence < SSB.state.feeds[msg.author].sequence
-    const skippingMessages = knownAuthor && msg.sequence > SSB.state.feeds[msg.author].sequence + 1
-
-    const alreadyChecked = knownAuthor && msg.sequence == SSB.state.feeds[msg.author].sequence
-    if (alreadyChecked && cb)
-      return cb()
-
-    if (!knownAuthor || earlierMessage || skippingMessages)
-      SSB.state = validate.appendOOO(SSB.state, hmac_key, msg)
-    else
-      SSB.state = validate.append(SSB.state, hmac_key, msg)
-
-    if (SSB.state.error)
-      return cb(SSB.state.error)
-
-    const updateLast = !earlierMessage
-
+  function addMsg(updateLast, skippingMessages, msg, cb) {
     if (updateLast)
       store.last.update(msg)
 
@@ -115,6 +97,48 @@ exports.init = function (dir, ssbId) {
     }
   }
 
+  function validateAndAddStrictOrder(msg, cb) {
+    const knownAuthor = msg.author in SSB.state.feeds
+
+    try {
+      if (!knownAuthor)
+        SSB.state = validate.appendOOO(SSB.state, hmac_key, msg)
+      else
+        SSB.state = validate.append(SSB.state, hmac_key, msg)
+
+      if (SSB.state.error)
+        return cb(SSB.state.error)
+
+      addMsg(true, false, msg, cb)
+    }
+    catch (ex)
+    {
+      return cb(ex)
+    }
+  }
+
+  function validateAndAdd(msg, cb) {
+    const knownAuthor = msg.author in SSB.state.feeds
+    const earlierMessage = knownAuthor && msg.sequence < SSB.state.feeds[msg.author].sequence
+    const skippingMessages = knownAuthor && msg.sequence > SSB.state.feeds[msg.author].sequence + 1
+
+    const alreadyChecked = knownAuthor && msg.sequence == SSB.state.feeds[msg.author].sequence
+    if (alreadyChecked && cb)
+      return cb()
+
+    if (!knownAuthor || earlierMessage || skippingMessages)
+      SSB.state = validate.appendOOO(SSB.state, hmac_key, msg)
+    else
+      SSB.state = validate.append(SSB.state, hmac_key, msg)
+
+    if (SSB.state.error)
+      return cb(SSB.state.error)
+
+    const updateLast = !earlierMessage
+
+    addMsg(updateLast, skippingMessages, msg, cb)
+  }
+
   function deleteFeed(feedId, cb) {
     pull(
       store.query.read({
@@ -139,6 +163,7 @@ exports.init = function (dir, ssbId) {
     get,
     add,
     validateAndAdd,
+    validateAndAddStrictOrder,
     del: store.del,
     deleteFeed,
     // indexes

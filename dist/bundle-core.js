@@ -1297,7 +1297,7 @@ const validate=require("ssb-validate"),keys=require("ssb-keys"),pull=require("pu
 exports.init=function(e,i){const r=require("pull-stream"),s=require("events");if(SSB={events:new s},"undefined"==typeof localStorage||null===localStorage){const i=require("path"),r=require("fs");r.existsSync(e)||r.mkdirSync(e);var o=require("node-localstorage").LocalStorage;localStorage=new o(i.join(e,"localstorage"))}require("sodium-browserify").events.on("sodium-browserify:wasm loaded",function(){console.log("wasm loaded");var s=require("./net").init(e,i),o=require("./db").init(e,s.id);console.log("my id: ",s.id);var t=require("./core-helpers"),n=require("ssb-validate"),l=n.initial(),a=o.last.get();for(var d in a)l.feeds[d]={id:a[d].id,timestamp:a[d].timestamp,sequence:a[d].sequence,queue:[]};SSB=Object.assign(SSB,{db:o,net:s,dir:e,validate:n,state:l,connected:t.connected,removeFeedState:function(e){o.last.removeFeed(e),delete SSB.state.feeds[e],delete SSB.profiles[this.feedId],t.saveProfiles()},removeDB:t.removeDB,removeBlobs:t.removeBlobs,initialSync:t.initialSync,sync:t.sync,box:require("ssb-keys").box,blobFiles:require("ssb-blob-files"),rawConnect:require("./raw-connect"),publish:function(e,i){l.queue=[],l=n.appendNew(l,null,s.config.keys,e,Date.now()),console.log(l.queue[0]),o.add(l.queue[0].value,(e,r)=>{o.last.update(r.value),s.post(r.value),i(e,r)})},messagesByType:function(e){return r(o.query.read({reverse:e.reverse,limit:e.limit,query:[{$filter:{value:{content:{type:e.type}}}},{$map:!0}]}))},validMessageTypes:["post","peer-invite/confirm","peer-invite/accept","peer-invite"],privateMessages:!0,syncOnlyFeedsFollowing:!1,remoteAddress:"",saveProfiles:t.saveProfiles,loadProfiles:t.loadProfiles,profiles:{}}),SSB.events.emit("SSB: loaded")})};
 
 },{"./core-helpers":184,"./db":186,"./net":190,"./raw-connect":624,"events":89,"fs":1,"node-localstorage":387,"path":121,"pull-stream":470,"sodium-browserify":556,"ssb-blob-files":568,"ssb-keys":579,"ssb-validate":603}],186:[function(require,module,exports){
-const Store=require("./store"),pull=require("pull-stream"),hash=require("ssb-keys/util").hash,validate=require("ssb-validate"),keys=require("ssb-keys");function getId(e){return"%"+hash(JSON.stringify(e,null,2))}exports.init=function(e,t){const n=Store(e,t);function a(e,t){var a=getId(e);0==n.since.value||SSB.isInitialSync?n.add(a,e,t):n.keys.get(a,(s,r)=>{r?t(null,r.value):n.add(a,e,t)})}const s=null;return{get:function(e,t){n.keys.get(e,(e,n)=>{n?t(null,n.value):t(e)})},add:a,validateAndAdd:function(e,t){const r=e.author in SSB.state.feeds,i=r&&e.sequence<SSB.state.feeds[e.author].sequence,o=r&&e.sequence>SSB.state.feeds[e.author].sequence+1;if(r&&e.sequence==SSB.state.feeds[e.author].sequence&&t)return t();if(SSB.state=!r||i||o?validate.appendOOO(SSB.state,s,e):validate.append(SSB.state,s,e),SSB.state.error)return t(SSB.state.error);const u=!i;u&&n.last.update(e);var l=!0,S="string"==typeof e.content;S&&!SSB.privateMessages?l=!1:S||"about"!=e.content.type||e.content.about!=e.author?S||SSB.validMessageTypes.includes(e.content.type)?S&&(function(e){return keys.unbox(e.content,SSB.net.config.keys.private)}(e)||(l=!1)):l=!1:function(e){SSB.profiles||(SSB.profiles={}),SSB.profiles[e.author]||(SSB.profiles[e.author]={}),e.content.name&&(SSB.profiles[e.author].name=e.content.name),e.content.description&&(SSB.profiles[e.author].description=e.content.description),e.content.image&&"string"==typeof e.content.image.link?SSB.profiles[e.author].image=e.content.image.link:"string"==typeof e.content.image&&(SSB.profiles[e.author].image=e.content.image)}(e);l?(a(e,t),o&&n.last.setPartialLogState(e.author,!0)):(u&&n.last.setPartialLogState(e.author,!0),t())},del:n.del,deleteFeed:function(e,t){pull(n.query.read({query:[{$filter:{value:{author:e}}}]}),pull.asyncMap((e,t)=>{n.del(e.key,n=>{t(n,e.key)})}),pull.collect(t))},backlinks:n.backlinks,query:n.query,last:n.last,clock:n.clock,friends:n.friends,peerInvites:n["peer-invites"],getStatus:n.getStatus}};
+const Store=require("./store"),pull=require("pull-stream"),hash=require("ssb-keys/util").hash,validate=require("ssb-validate"),keys=require("ssb-keys");function getId(e){return"%"+hash(JSON.stringify(e,null,2))}exports.init=function(e,t){const n=Store(e,t);function a(e,t){var a=getId(e);0==n.since.value||SSB.isInitialSync?n.add(a,e,t):n.keys.get(a,(s,r)=>{r?t(null,r.value):n.add(a,e,t)})}const s=null;function r(e,t,s,r){e&&n.last.update(s);var i=!0,o="string"==typeof s.content;if(o&&!SSB.privateMessages)i=!1;else if(o||"about"!=s.content.type||s.content.about!=s.author)if(o||SSB.validMessageTypes.includes(s.content.type)){if(o){(function(e){return keys.unbox(e.content,SSB.net.config.keys.private)})(s)||(i=!1)}}else i=!1;else!function(e){SSB.profiles||(SSB.profiles={}),SSB.profiles[e.author]||(SSB.profiles[e.author]={}),e.content.name&&(SSB.profiles[e.author].name=e.content.name),e.content.description&&(SSB.profiles[e.author].description=e.content.description),e.content.image&&"string"==typeof e.content.image.link?SSB.profiles[e.author].image=e.content.image.link:"string"==typeof e.content.image&&(SSB.profiles[e.author].image=e.content.image)}(s);i?(a(s,r),t&&n.last.setPartialLogState(s.author,!0)):(e&&n.last.setPartialLogState(s.author,!0),r())}return{get:function(e,t){n.keys.get(e,(e,n)=>{n?t(null,n.value):t(e)})},add:a,validateAndAdd:function(e,t){const n=e.author in SSB.state.feeds,a=n&&e.sequence<SSB.state.feeds[e.author].sequence,i=n&&e.sequence>SSB.state.feeds[e.author].sequence+1;return n&&e.sequence==SSB.state.feeds[e.author].sequence&&t?t():(SSB.state=!n||a||i?validate.appendOOO(SSB.state,s,e):validate.append(SSB.state,s,e),SSB.state.error?t(SSB.state.error):void r(!a,i,e,t))},validateAndAddStrictOrder:function(e,t){const n=e.author in SSB.state.feeds;try{if(SSB.state=n?validate.append(SSB.state,s,e):validate.appendOOO(SSB.state,s,e),SSB.state.error)return t(SSB.state.error);r(!0,!1,e,t)}catch(e){return t(e)}},del:n.del,deleteFeed:function(e,t){pull(n.query.read({query:[{$filter:{value:{author:e}}}]}),pull.asyncMap((e,t)=>{n.del(e.key,n=>{t(n,e.key)})}),pull.collect(t))},backlinks:n.backlinks,query:n.query,last:n.last,clock:n.clock,friends:n.friends,peerInvites:n["peer-invites"],getStatus:n.getStatus}};
 
 },{"./store":629,"pull-stream":470,"ssb-keys":579,"ssb-keys/util":583,"ssb-validate":603}],187:[function(require,module,exports){
 const Reduce=require("flumeview-reduce");module.exports=function(){const e=Reduce(2,function(e,n,u){return e||(e={}),e[[n.value.author,n.value.sequence]]=u,e});return function(n,u){const t=e(n,u),o=t.get;return t.get=function(e,u){o(function(t,o){t?u(t):o&&null!=o[e]?n.get(o[e],u):u(new Error("not found:"+e))})},t}};
@@ -1952,9 +1952,11 @@ var compose=require("./compose"),isArray=Array.isArray,multicb=require("multicb"
 var net;try{net=require("net")}catch(e){}var toPull=require("stream-to-pull-stream"),scopes=require("multiserver-scopes"),debug=require("debug")("multiserver:net");const isString=e=>"string"==typeof e,toAddress=(e,n)=>["net",e,n].join(":");function toDuplex(e){var n=toPull.duplex(e);return n.address=toAddress(e.remoteAddress,e.remotePort),n}const getRandomPort=()=>Math.floor(49152+16384*Math.random());module.exports=(({scope:e="device",host:n,port:r,external:t,allowHalfOpen:o,pauseOnConnect:s})=>{return n=n||isString(e)&&scopes.host(e),r=r||getRandomPort(),{name:"net",scope:()=>e,server:function(e,t){debug("Listening on %s:%d",n,r);const l={allowHalfOpen:Boolean(o),pauseOnConnect:s};var u=net.createServer(l,function(n){e(toDuplex(n))});return t&&u.addListener("error",t),u.listen(r,n,t?function(){u.removeListener("error",t),t()}:t),function(e){debug("Closing server on %s:%d",n,r),u.close(function(t){t?console.error(t):debug("No longer listening on %s:%d",n,r),e&&e(t)})}},client:function(e,n){var r=!1,t=net.connect(e).on("connect",function(){r||(r=!0,n(null,toDuplex(t)))}).on("error",function(e){r||(r=!0,n(e))});return function(){r=!0,t.destroy(),n(new Error("multiserver.net: aborted"))}},parse:function(e){if(null==net)return null;var n=e.split(":");if(n.length<3)return null;if("net"!==n.shift())return null;var r=Number(n.pop());return isNaN(r)?null:{name:"net",host:n.join(":")||"localhost",port:r}},stringify:function(o="device"){if(!1===((s=o)===e||Array.isArray(e)&&e.includes(s)))return null;var s;let l="public"===o&&t||n||scopes.host(o);return null==l?null:(l=l.replace(/(\%\w+)$/,""),toAddress(l,r))}}});
 
 },{"debug":230,"multiserver-scopes":371,"net":1,"stream-to-pull-stream":607}],375:[function(require,module,exports){
-var pull=require("pull-stream");module.exports=function(n){return{name:"noauth",create:function(e){return function(e,u){u(null,{remote:n.keys.publicKey,auth:{allow:null,deny:null},source:e.source,sink:e.sink,address:"noauth:"+n.keys.publicKey.toString("base64")})}},parse:function(n){return{}},stringify:function(){return"noauth"}}};
+(function (Buffer){
+module.exports=function(n){var u="";return{name:"noauth",create:function(n){return function(n,t){t(null,{remote:new Buffer(u,"base64"),auth:{allow:null,deny:null},source:n.source,sink:n.sink,address:"noauth:"+u})}},parse:function(n){var t=n.split(":");return"noauth"!==t[0]?null:(u=t[1].substr(0,t[1].length-8),{})},stringify:function(){return"noauth"}}};
 
-},{"pull-stream":470}],376:[function(require,module,exports){
+}).call(this,require("buffer").Buffer)
+},{"buffer":52}],376:[function(require,module,exports){
 (function (Buffer){
 var SHS=require("secret-handshake"),pull=require("pull-stream");function isString(e){return"string"==typeof e}module.exports=function(e){var r=SHS.toKeys(e.keys||e.seed),t=isString(e.appKey)?Buffer.from(e.appKey,"base64"):e.appKey,n=SHS.createServer(r,e.auth||e.authenticate,t,e.timeout),s=SHS.createClient(r,t,e.timeout);return{name:"shs",create:function(e){return function(r,t){function u(e,r){if(e)return e.address="shs:",t(e);r.address="shs:"+r.remote.toString("base64"),t(null,r)}pull(r.source,e&&e.key?s(e.key,e.seed,u):n(u),r.sink)}},parse:function(e){var r=e.split(":");if("shs"!==r[0])return null;var t=void 0;if(r.length>2&&32!==(t=Buffer.from(r[2],"base64")).length)return null;var n=Buffer.from(r[1],"base64");return 32!==n.length?null:{key:n,seed:t}},stringify:function(){if(r)return"shs:"+r.publicKey.toString("base64")},publicKey:r&&r.publicKey}};
 
@@ -2572,10 +2574,10 @@ var deepEqual=require("deep-equal");exports.has=function(r,e){if("string"==typeo
 
 },{"deep-equal":232}],564:[function(require,module,exports){
 module.exports={
-  "_from": "github:ssbc/ssb-backlinks#fix-type-check",
-  "_id": "ssb-backlinks@0.7.3",
+  "_from": "ssb-backlinks@^1.0.0",
+  "_id": "ssb-backlinks@1.0.0",
   "_inBundle": false,
-  "_integrity": "",
+  "_integrity": "sha512-cgBfw+5oQMmFWX5czTHonZboZC9rRgZZlC2TwkSZvOZMWNxZKr98zvb56lRFiO4Et6DcEh3hXsyZyMyo6jN0WA==",
   "_location": "/ssb-backlinks",
   "_phantomChildren": {
     "deep-equal": "1.1.1",
@@ -2587,20 +2589,21 @@ module.exports={
     "pull-stream": "3.6.14"
   },
   "_requested": {
-    "type": "git",
-    "raw": "ssb-backlinks@github:ssbc/ssb-backlinks#fix-type-check",
+    "type": "range",
+    "registry": true,
+    "raw": "ssb-backlinks@^1.0.0",
     "name": "ssb-backlinks",
     "escapedName": "ssb-backlinks",
-    "rawSpec": "github:ssbc/ssb-backlinks#fix-type-check",
-    "saveSpec": "github:ssbc/ssb-backlinks#fix-type-check",
-    "fetchSpec": null,
-    "gitCommittish": "fix-type-check"
+    "rawSpec": "^1.0.0",
+    "saveSpec": null,
+    "fetchSpec": "^1.0.0"
   },
   "_requiredBy": [
     "/"
   ],
-  "_resolved": "github:ssbc/ssb-backlinks#d637e763b69090b83f30d0f2e73f6c7f2e57b55c",
-  "_spec": "ssb-backlinks@github:ssbc/ssb-backlinks#fix-type-check",
+  "_resolved": "https://registry.npmjs.org/ssb-backlinks/-/ssb-backlinks-1.0.0.tgz",
+  "_shasum": "582763785b744ac5c033fcf65c773586eb69dee6",
+  "_spec": "ssb-backlinks@^1.0.0",
   "_where": "/home/chrx/dev/ssb-browser-core",
   "author": {
     "name": "Secure Scuttlebutt Consortium"
@@ -2632,7 +2635,7 @@ module.exports={
   "scripts": {
     "test": "ava"
   },
-  "version": "0.7.3"
+  "version": "1.0.0"
 }
 
 },{}],565:[function(require,module,exports){
@@ -2670,7 +2673,7 @@ module.exports={
 }
 
 },{}],573:[function(require,module,exports){
-"use strict";var pull=require("pull-stream"),EBT=require("epidemic-broadcast-trees"),path=require("path"),toPull=require("push-stream-to-pull-stream"),isFeed=require("ssb-ref").isFeed,Legacy=require("./legacy"),Store=require("lossy-store"),toUrlFriendly=require("base64-url").escape;function isObject(e){return e&&"object"==typeof e}function hook(e,t){"function"==typeof e&&e.hook&&e.hook(t)}function cleanClock(e,t){for(var r in e)isFeed(r)||delete e[r]}exports.name="ebt",exports.version="1.0.0",exports.manifest={replicate:"duplex",request:"sync",block:"sync",peerStatus:"sync"},exports.permissions={anonymous:{allow:["replicate"]}},exports.init=function(e,t){t.replicate=t.replicate||{},t.replicate.fallback=!0;var r=t.path?path.join(t.path,"ebt"):null,n=Store(r,null,toUrlFriendly),i=EBT({logging:t.ebt&&t.ebt.logging,id:e.id,getClock:function(e,t){n.ensure(e,function(){var r=n.get(e)||{};cleanClock(r),t(null,r)})},setClock:function(e,t){cleanClock(t,"non-feed key when saving clock"),n.set(e,t)},getAt:function(t,r){e.getAtSequence([t.id,t.sequence],function(e,t){r(e,t?t.value:null)})},append:function(t,r){e.add(t,function(e,t){r(e&&e.fatal?e:null,t)})},isFeed:isFeed});function o(){e.emit("replicate:finish",i.state.clock)}function c(t,r,n){isObject(t)&&(r=t.to,n=t.blocking,t=t.from),n?i.block(t,r,!0):i.state.blocks[t]&&i.state.blocks[t][r]&&i.block(t,r,!1),n&&e.id==t&&i.state.peers[r]&&e.gossip&&e.gossip.disconnect(r,function(){})}return e.getVectorClock(function(e,t){i.state.clock=t||{},i.update()}),e.post(function(e){i.onAppend(e.value)}),hook(e.replicate.request,function(e,t){var r,n;if(isObject(t[0])?(r=t[0].id,n=t[0].replicate):(r=t[0],n=t[1]),isFeed(r))return i.request(r,n),e.apply(this,t)}),hook(e.progress,function(e){var t=e(),r=i.progress();return r.target&&(t.ebt=r),t}),e.on("rpc:connect",function(e,t){if(console.log("rpc connect in ebt:",e.id),t&&!SSB.isInitialSync){var r={version:3},n=toPull.duplex(i.createStream(e.id,r.version,!0)),c=e.ebt.replicate(r,function(t){t&&(e.removeListener("closed",o),e._emit("fallback:replicate",t))});pull(n,c,n),e.on("closed",o)}}),e.replicate.block?e.replicate.block.hook(function(e,t){return c.apply(this,t),e.apply(this,t)}):Legacy(e,i),{replicate:function(e){if(2!==e.version&&3!=e.version)throw new Error("expected ebt.replicate({version: 3 or 2})");return toPull.duplex(i.createStream(this.id,e.version,!1))},peerStatus:function(t){var r={id:t=t||e.id,seq:i.state.clock[t],peers:{}};for(var n in i.state.peers){var o=i.state.peers[n];if(null!=o.clock[t]||null!=o.replicating[t]){var c=o.replicating&&o.replicating[t];r.peers[n]={seq:o.clock[t],replicating:c}}}return r},block:c}};
+"use strict";var pull=require("pull-stream"),EBT=require("epidemic-broadcast-trees"),path=require("path"),toPull=require("push-stream-to-pull-stream"),isFeed=require("ssb-ref").isFeed,Legacy=require("./legacy"),Store=require("lossy-store"),toUrlFriendly=require("base64-url").escape;function isObject(e){return e&&"object"==typeof e}function hook(e,t){"function"==typeof e&&e.hook&&e.hook(t)}function cleanClock(e,t){for(var r in e)isFeed(r)||delete e[r]}exports.name="ebt",exports.version="1.0.0",exports.manifest={replicate:"duplex",request:"sync",block:"sync",peerStatus:"sync"},exports.permissions={anonymous:{allow:["replicate"]}},exports.init=function(e,t){t.replicate=t.replicate||{},t.replicate.fallback=!0;var r=t.path?path.join(t.path,"ebt"):null,i=Store(r,null,toUrlFriendly),n=EBT({logging:t.ebt&&t.ebt.logging,id:e.id,getClock:function(e,t){i.ensure(e,function(){var r=i.get(e)||{};cleanClock(r),t(null,r)})},setClock:function(e,t){cleanClock(t,"non-feed key when saving clock"),i.set(e,t)},getAt:function(t,r){e.getAtSequence([t.id,t.sequence],function(e,t){r(e,t?t.value:null)})},append:function(t,r){e.add(t,function(e,t){r(e&&e.fatal?e:null,t)})},isFeed:isFeed});function o(){e.emit("replicate:finish",n.state.clock)}function c(t,r,i){isObject(t)&&(r=t.to,i=t.blocking,t=t.from),i?n.block(t,r,!0):n.state.blocks[t]&&n.state.blocks[t][r]&&n.block(t,r,!1),i&&e.id==t&&n.state.peers[r]&&e.gossip&&e.gossip.disconnect(r,function(){})}return e.getVectorClock(function(e,t){n.state.clock=t||{},n.update()}),e.post(function(e){n.onAppend(e.value)}),hook(e.replicate.request,function(e,t){var r,i;if(isObject(t[0])?(r=t[0].id,i=t[0].replicate):(r=t[0],i=t[1]),isFeed(r))return n.request(r,i),e.apply(this,t)}),hook(e.progress,function(e){var t=e(),r=n.progress();return r.target&&(t.ebt=r),t}),e.on("rpc:connect",function(e,t){if(t&&!SSB.isInitialSync){var r={version:3},i=toPull.duplex(n.createStream(e.id,r.version,!0)),c=e.ebt.replicate(r,function(t){t&&(e.removeListener("closed",o),e._emit("fallback:replicate",t))});pull(i,c,i),e.on("closed",o)}}),e.replicate.block?e.replicate.block.hook(function(e,t){return c.apply(this,t),e.apply(this,t)}):Legacy(e,n),{replicate:function(e){if(2!==e.version&&3!=e.version)throw new Error("expected ebt.replicate({version: 3 or 2})");return toPull.duplex(n.createStream(this.id,e.version,!1))},peerStatus:function(t){var r={id:t=t||e.id,seq:n.state.clock[t],peers:{}};for(var i in n.state.peers){var o=n.state.peers[i];if(null!=o.clock[t]||null!=o.replicating[t]){var c=o.replicating&&o.replicating[t];r.peers[i]={seq:o.clock[t],replicating:c}}}return r},block:c}};
 
 },{"./legacy":574,"base64-url":199,"epidemic-broadcast-trees":250,"lossy-store":352,"path":121,"pull-stream":470,"push-stream-to-pull-stream":515,"ssb-ref":595}],574:[function(require,module,exports){
 (function (setImmediate){
@@ -2752,28 +2755,33 @@ var pull=require("pull-stream"),path=require("path"),FlumeQuery=require("flumevi
 
 },{"./help":592,"./package.json":594,"explain-error":259,"flumeview-query":271,"path":121,"pull-stream":470}],594:[function(require,module,exports){
 module.exports={
-  "_from": "ssb-query@^2.4.3",
+  "_args": [
+    [
+      "ssb-query@2.4.3",
+      "/home/chrx/dev/ssb-browser-core"
+    ]
+  ],
+  "_from": "ssb-query@2.4.3",
   "_id": "ssb-query@2.4.3",
   "_inBundle": false,
   "_integrity": "sha512-Ktuk6Bl3s70gueDH7FBXzI8KHsf+h+n82J6Id33NTwP80u5iSDV5vXK2f7/He/cmP3uUVUI5ogJda7ShmrDIug==",
   "_location": "/ssb-query",
   "_phantomChildren": {},
   "_requested": {
-    "type": "range",
+    "type": "version",
     "registry": true,
-    "raw": "ssb-query@^2.4.3",
+    "raw": "ssb-query@2.4.3",
     "name": "ssb-query",
     "escapedName": "ssb-query",
-    "rawSpec": "^2.4.3",
+    "rawSpec": "2.4.3",
     "saveSpec": null,
-    "fetchSpec": "^2.4.3"
+    "fetchSpec": "2.4.3"
   },
   "_requiredBy": [
     "/"
   ],
   "_resolved": "https://registry.npmjs.org/ssb-query/-/ssb-query-2.4.3.tgz",
-  "_shasum": "ac71293aef071d3c53c24e82b754eaad75bf0887",
-  "_spec": "ssb-query@^2.4.3",
+  "_spec": "2.4.3",
   "_where": "/home/chrx/dev/ssb-browser-core",
   "author": {
     "name": "Dominic Tarr",
@@ -2783,13 +2791,11 @@ module.exports={
   "bugs": {
     "url": "https://github.com/dominictarr/ssb-query/issues"
   },
-  "bundleDependencies": false,
   "dependencies": {
     "explain-error": "^1.0.1",
     "flumeview-query": "^7.0.0",
     "pull-stream": "^3.6.2"
   },
-  "deprecated": false,
   "description": "A scuttlebot plugin for querying data. With [map-filter-reduce](https://github.com/dominictarr/map-filter-reduce) you can write pretty flexible queries, similar to SQL, but more javascripty.",
   "devDependencies": {},
   "homepage": "https://github.com/dominictarr/ssb-query",
@@ -2835,28 +2841,33 @@ var isFeed=require("ssb-ref").isFeed,DuplexPair=require("pull-pair/duplex");func
 
 },{"./package.json":602,"pull-pair/duplex":461,"ssb-ref":595}],602:[function(require,module,exports){
 module.exports={
-  "_from": "ssb-tunnel@^1.4.1",
+  "_args": [
+    [
+      "ssb-tunnel@1.4.1",
+      "/home/chrx/dev/ssb-browser-core"
+    ]
+  ],
+  "_from": "ssb-tunnel@1.4.1",
   "_id": "ssb-tunnel@1.4.1",
   "_inBundle": false,
   "_integrity": "sha512-y0rV4a2xAhpe565juBJLwvMvF+hr7Zb4aqysyeBht3VbaX9FKYCMdjK8qAQAquRoXoNmAFZ+brudR75h2VO+BQ==",
   "_location": "/ssb-tunnel",
   "_phantomChildren": {},
   "_requested": {
-    "type": "range",
+    "type": "version",
     "registry": true,
-    "raw": "ssb-tunnel@^1.4.1",
+    "raw": "ssb-tunnel@1.4.1",
     "name": "ssb-tunnel",
     "escapedName": "ssb-tunnel",
-    "rawSpec": "^1.4.1",
+    "rawSpec": "1.4.1",
     "saveSpec": null,
-    "fetchSpec": "^1.4.1"
+    "fetchSpec": "1.4.1"
   },
   "_requiredBy": [
     "/"
   ],
   "_resolved": "https://registry.npmjs.org/ssb-tunnel/-/ssb-tunnel-1.4.1.tgz",
-  "_shasum": "1db7aaa0dad47118fbea54336d4cadb4e05c3d06",
-  "_spec": "ssb-tunnel@^1.4.1",
+  "_spec": "1.4.1",
   "_where": "/home/chrx/dev/ssb-browser-core",
   "author": {
     "name": "Dominic Tarr",
@@ -2866,14 +2877,12 @@ module.exports={
   "bugs": {
     "url": "https://github.com/dominictarr/ssb-tunnel/issues"
   },
-  "bundleDependencies": false,
   "dependencies": {
     "pull-pair": "^1.1.0",
     "ssb-client": "^4.5.7",
     "ssb-device-address": "^1.1.4",
     "ssb-ref": "^2.11.1"
   },
-  "deprecated": false,
   "description": "tunnel multiserver connections through ssb pubs",
   "devDependencies": {
     "ssb-gossip": "^1.0.6",
@@ -2907,28 +2916,33 @@ var WS=require("multiserver/plugins/ws");module.exports=function(r){var e={name:
 
 },{"./package.json":606,"multiserver/plugins/ws":377}],606:[function(require,module,exports){
 module.exports={
-  "_from": "ssb-ws@^6.2.3",
+  "_args": [
+    [
+      "ssb-ws@6.2.3",
+      "/home/chrx/dev/ssb-browser-core"
+    ]
+  ],
+  "_from": "ssb-ws@6.2.3",
   "_id": "ssb-ws@6.2.3",
   "_inBundle": false,
   "_integrity": "sha512-zZ/Q1M+9ZWlrchgh4QauD/MEUFa6eC6H6FYq6T8Of/y82JqsQBLwN6YlzbO09evE7Rx6x0oliXDCnQSjwGwQRA==",
   "_location": "/ssb-ws",
   "_phantomChildren": {},
   "_requested": {
-    "type": "range",
+    "type": "version",
     "registry": true,
-    "raw": "ssb-ws@^6.2.3",
+    "raw": "ssb-ws@6.2.3",
     "name": "ssb-ws",
     "escapedName": "ssb-ws",
-    "rawSpec": "^6.2.3",
+    "rawSpec": "6.2.3",
     "saveSpec": null,
-    "fetchSpec": "^6.2.3"
+    "fetchSpec": "6.2.3"
   },
   "_requiredBy": [
     "/"
   ],
   "_resolved": "https://registry.npmjs.org/ssb-ws/-/ssb-ws-6.2.3.tgz",
-  "_shasum": "80b18c391579c77b7611bbb2ca194635a5cf244c",
-  "_spec": "ssb-ws@^6.2.3",
+  "_spec": "6.2.3",
   "_where": "/home/chrx/dev/ssb-browser-core",
   "author": {
     "name": "'Dominic Tarr'",
@@ -2941,7 +2955,6 @@ module.exports={
   "bugs": {
     "url": "https://github.com/dominictarr/ssb-ws/issues"
   },
-  "bundleDependencies": false,
   "dependencies": {
     "emoji-server": "^1.0.0",
     "multiblob-http": "^1.0.0",
@@ -2951,7 +2964,6 @@ module.exports={
     "ssb-ref": "^2.3.0",
     "stack": "^0.1.0"
   },
-  "deprecated": false,
   "description": "websocket & http server for ssb",
   "devDependencies": {
     "ssb-client": "^4.7.1",
@@ -3047,7 +3059,7 @@ const path=require("path"),raf=require("polyraf"),pull=require("pull-stream"),de
 var pull=require("pull-stream"),GQ=require("gossip-query"),hash=require("ssb-keys/util").hash,isMsg=require("ssb-ref").isMsg,checkInvalidOOO=require("ssb-validate").checkInvalidOOO;function getId(e){return"%"+hash(JSON.stringify(e,null,2))}function isObject(e){return e&&"object"==typeof e}exports.name="ooo",exports.version="1.0.0",exports.manifest={stream:"duplex",get:"async",help:"sync"},exports.permissions={anonymous:{allow:["stream"]}},exports.init=function(e,t){e.id;var n=t.ooo||{},r=GQ({isQuery:isMsg,isRequest:function(e){return Number.isInteger(e)&&e<0},isResponse:function(e){return e&&isObject(e)},check:function(e,t){SSB.db.get(e,t)},isUpdate:function(e,t,n){return null==n&&getId(t)==e},process:function(e,t,n){e!==getId(t)||checkInvalidOOO(t,null)?n():n(null,t)},timeout:n.timeout||3e4});return e.on("rpc:connect",function(e,t){if(t){var n=r.createStream(e.id);pull(n,e.ooo.stream(function(){}),n)}}),{stream:function(){return r.createStream(this.id)},get:function(e,t){var i,o=isMsg(e)?e:e.id,u=null!=e.timeout?e.timeout:null==n.timeout?5e3:n.timeout;u>0&&(i=setTimeout(function(){var e=t;t=null,e(new Error("ooo.get: took more than timeout:"+u))},u)),console.log("doing a query for",o),r.query(o,function(e,n){if(e)return t(e);clearTimeout(i),t&&t(null,n)})}}};
 
 },{"gossip-query":285,"pull-stream":470,"ssb-keys/util":583,"ssb-ref":595,"ssb-validate":603}],627:[function(require,module,exports){
-const pull=require("pull-stream");var Obv=require("obv");exports.manifest={createHistoryStream:"source",partialReplication:{partialReplication:"source",partialReplicationReverse:"source"},gossip:{ping:"duplex"}},exports.permissions={anonymous:{allow:["createHistoryStream"],deny:null}},exports.init=function(e,t){return e.createHistoryStream=function(){return pull.empty()},e.post=Obv(),e.getVectorClock=function(e,t){t||(t=e),SSB.events.on("SSB: loaded",function(){var e=SSB.db.last.get(),n={};for(var r in e)n[r]=e[r].sequence;t(null,n)})},e.getAtSequence=function(e,t){SSB.db.clock.get("string"==typeof e?e.split(":"):e,function(e,n){var r;e?t(e):t(null,((r=n).value=function(e){var t={};for(let n in e)"meta"!==n&&"cyphertext"!==n&&"private"!==n&&"unbox"!==n&&(t[n]=e[n]);if(e.meta&&e.meta.original)for(let n in e.meta.original)t[n]=e.meta.original[n];return t}(r.value),r))})},e.add=function(e,t){SSB.db.validateAndAdd(e,t)},{}};
+const pull=require("pull-stream");var Obv=require("obv");exports.manifest={createHistoryStream:"source",partialReplication:{partialReplication:"source",partialReplicationReverse:"source"},gossip:{ping:"duplex"}},exports.permissions={anonymous:{allow:["createHistoryStream"],deny:null}},exports.init=function(e,t){return e.createHistoryStream=function(){return pull.empty()},e.post=Obv(),e.getVectorClock=function(e,t){t||(t=e),SSB.events.on("SSB: loaded",function(){var e=SSB.db.last.get(),r={};for(var n in e)r[n]=e[n].sequence;t(null,r)})},e.getAtSequence=function(e,t){SSB.db.clock.get("string"==typeof e?e.split(":"):e,function(e,r){var n;e?t(e):t(null,((n=r).value=function(e){var t={};for(let r in e)"meta"!==r&&"cyphertext"!==r&&"private"!==r&&"unbox"!==r&&(t[r]=e[r]);if(e.meta&&e.meta.original)for(let r in e.meta.original)t[r]=e.meta.original[r];return t}(n.value),n))})},e.add=function(e,t){SSB.db.validateAndAddStrictOrder(e,t)},{}};
 
 },{"obv":395,"pull-stream":470}],628:[function(require,module,exports){
 exports.manifest={get:"async"},exports.name="get-thread",exports.permissions={anonymous:{allow:["get"]}},exports.init=function(t,e){return{get:function(t,e){}}};

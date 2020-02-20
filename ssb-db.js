@@ -80,7 +80,7 @@ exports.init = function (sbot, config) {
   }
 
   sbot.add = function(msg, cb) {
-    SSB.db.validateAndAdd(msg, cb)
+    SSB.db.validateAndAddStrictOrder(msg, cb)
   }
 
   return {}

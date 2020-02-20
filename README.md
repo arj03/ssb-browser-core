@@ -75,6 +75,12 @@ adds the message to the database and updates the last index. Callback
 is the stored message (id, timestamp, value = original message) or
 err.
 
+### validateAndAddStrictOrder(msg, cb)
+
+Works the same way as validateAndAdd, except that it doesn't allow
+holes, meaning messages added must follow the correct sequence. The
+first message for a feed can be at any point.
+
 ### add(msg, cb)
 
 Add a raw message (without id and timestamp) to the database. Callback
