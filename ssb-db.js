@@ -9,9 +9,6 @@ exports.manifest =  {
   partialReplication: {
     partialReplication: 'source',
     partialReplicationReverse: 'source',
-  },
-  gossip: {
-    ping: 'duplex'
   }
 }
 
