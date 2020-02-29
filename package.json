@@ -34,6 +34,7 @@
     "ssb-ws": "^6.2.3"
   },
   "devDependencies": {
+    "browserify": "^16.5.0",
     "common-shakeify": "^0.6.2",
     "node-localstorage": "^2.1.5",
     "rimraf": "^3.0.2",
