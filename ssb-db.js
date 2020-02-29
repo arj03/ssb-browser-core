@@ -5,11 +5,7 @@ const pull = require('pull-stream')
 var Obv = require('obv')
 
 exports.manifest =  {
-  createHistoryStream: 'source',
-  partialReplication: {
-    partialReplication: 'source',
-    partialReplicationReverse: 'source',
-  }
+  createHistoryStream: 'source'
 }
 
 exports.permissions = {

@@ -40,7 +40,7 @@ exports.init = function(dir, overwriteConfig) {
 
   var r = SecretStack(config)
   .use(require('./ssb-db'))
-  .use(require('./ssb-get-thread'))
+  .use(require('./ssb-partial-replication'))
   .use(require('./simple-ooo'))
   .use(require('ssb-ws'))
   .use(require('ssb-replicate'))

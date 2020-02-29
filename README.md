@@ -240,24 +240,14 @@ pull(
 
 ### Browser specific methods on net
 
-Two modules are special compared to a normal SSB distribution and to
-use this optional functionality, the pub needs these plugins:
+For partial replication a special plugin has been created, the pub
+needs to have the plugin installed:
 
-- [ssb-get-thread]
 - [ssb-partial-replication]
 
-Once a rpc connection has been established, the following extra
-methods are available:
-
-#### getThread.get(msgId, cb)
-
-Will get a message includes all replies to the thread.
-
-#### partialReplication.partialReplication({ feedId, seq })
-
-Returns a stream of messages for the given `feedId` starting from
-`seq`. The api is similar to
-[createHistoryStream](https://github.com/ssbc/ssb-db#dbcreatehistorystreamid-feedid-seq-int-live-bool-limit-int-keys-bool-values-bool---pullsource).
+Once a rpc connection has been established, a few extra methods are
+available under SSB.net.partialReplication. See plugin for
+documentation.
 
 ## SSB
 
