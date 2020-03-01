@@ -98,7 +98,7 @@ exports.init = function (dir, config) {
       },
 
       // config
-      validMessageTypes: ['post', 'peer-invite/confirm', 'peer-invite/accept', 'peer-invite'],
+      validMessageTypes: ['post', 'peer-invite/confirm', 'peer-invite/accept', 'peer-invite', 'contact'],
       privateMessages: true,
       syncOnlyFeedsFollowing: false,
 
