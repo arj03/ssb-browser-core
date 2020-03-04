@@ -60,6 +60,10 @@ feeds to other nodes.
 When set, sync will only synchronize feeds you are directly following
 instead of all known feeds. Default is false.
 
+### hops
+
+The number of hops from which to receive messages. Default is 1.
+
 ## db
 
 ### get(id, cb)

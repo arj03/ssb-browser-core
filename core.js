@@ -24,7 +24,7 @@ exports.init = function (dir, config) {
     console.log("wasm loaded")
 
     var net = require('./net').init(dir, config)
-    var db = require('./db').init(dir, net.id)
+    var db = require('./db').init(dir, net.id, config)
 
     console.log("my id: ", net.id)
 
@@ -101,6 +101,7 @@ exports.init = function (dir, config) {
       validMessageTypes: ['post', 'peer-invite/confirm', 'peer-invite/accept', 'peer-invite', 'contact'],
       privateMessages: true,
       syncOnlyFeedsFollowing: false,
+      hops: 1,
 
       remoteAddress: '',
 

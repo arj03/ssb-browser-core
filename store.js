@@ -5,15 +5,14 @@ var codec = require('flumecodec/json')
 var keys = require('ssb-keys')
 var path = require('path')
 
-module.exports = function (dir, ssbId) {
+module.exports = function (dir, ssbId, config) {
   console.log("dir:", dir)
+  config = config || {}
 
   var log = OffsetLogCompat(OffsetLog(
     path.join(dir, 'log.offset'),
     {blockSize:1024*64, codec:codec}
   ))
-
-  var config = {}
 
   var store = Flume(log, true, (msg, cb) => {
     if (msg && msg.value && typeof (msg.value.content) === 'string') {

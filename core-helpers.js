@@ -71,13 +71,13 @@ exports.sync = function()
     if (!SSB.state.feeds[SSB.net.id])
       SSB.net.replicate.request(SSB.net.id, true)
 
-    if (SSB.syncOnlyFeedsFollowing) {
-      SSB.db.friends.hops((err, hops) => {
-        for (var feed in hops)
-          if (hops[feed] == 1)
-            SSB.net.replicate.request(feed, true)
-      })
-    } else {
+    SSB.db.friends.hops((err, hops) => {
+      for (var feed in hops)
+        if (hops[feed] <= SSB.hops)
+          SSB.net.replicate.request(feed, true)
+    })
+
+    if (!SSB.syncOnlyFeedsFollowing) {
       for (var feed in SSB.state.feeds)
         SSB.net.replicate.request(feed, true)
     }

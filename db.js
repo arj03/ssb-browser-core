@@ -9,8 +9,8 @@ function getId(msg) {
   return '%'+hash(JSON.stringify(msg, null, 2))
 }
 
-exports.init = function (dir, ssbId) {
-  const store = Store(dir, ssbId)
+exports.init = function (dir, ssbId, config) {
+  const store = Store(dir, ssbId, config)
 
   function get(id, cb) {
     store.keys.get(id, (err, data) => {
