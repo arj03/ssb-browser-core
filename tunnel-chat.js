@@ -13,11 +13,11 @@ exports.name = 'tunnelChat'
 exports.init = function (sbot, config) {
 
   var messages = Notify()
-  var remote
+  var remotes = []
 
   sbot.on('rpc:connect', function (rpc, isClient) {
     if (!isClient)
-      remote = rpc
+      remotes.push(rpc)
   })
   
   return {
@@ -41,20 +41,25 @@ exports.init = function (sbot, config) {
       SSB.net.connect('tunnel:@'+SSB.remoteAddress.split(':')[3]+ ':' + remoteId + '~shs:' + remoteKey, (err, rpc) => {
 	if (err) throw(err)
 
-	remote = rpc
+	remotes.push(rpc)
 	messages({user: '', text: rpc.id + " connected!"})
       })
     },
     sendMessage: function(text) {
-      try {
-	remote.tunnelChat.tunnelMessage(text)
-	messages({user: 'me', text})
-      } catch (e) {
-	messages({user: '', text: 'remote end disconnected'})
-      }
+      var toRemove = []
+      remotes.forEach(remote => {
+        try {
+          remote.tunnelChat.tunnelMessage(text)
+        } catch (e) {
+	  messages({user: '', text: 'remote end disconnected'})
+          toRemove.push(remote)
+        }
+      })
+      remotes = remotes.filter(remote => !toRemove.includes(remote))
+      messages({user: 'me', text})
     },
     tunnelMessage: function(text) {
-      messages({user: 'remote', text})
+      messages({user: this.id, text})
     },
     messages: function() {
       return messages.listen()
