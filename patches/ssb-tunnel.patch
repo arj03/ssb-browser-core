@@ -1,32 +1,6 @@
---- node_modules/ssb-tunnel/index.js~	1985-10-26 09:15:00.000000000 +0100
-+++ node_modules/ssb-tunnel/index.js	2019-08-15 23:05:43.955331141 +0200
-@@ -20,7 +20,7 @@
- function noop () { }
- 
- exports.name = 'tunnel'
--exports.version = '1.0.0'
-+exports.version = require('./package.json').version
- 
- exports.manifest = {
-   announce: 'sync',
-@@ -53,7 +53,7 @@
-         name: parts[0],
-         portal: parts[1],
-         target: parts[2],
--        port: +parts[3] || 0,
-+        instance: +parts[3] || 0,
-       }
-     }
- 
-@@ -61,13 +61,14 @@
-       opts.name === 'tunnel' &&
-       isFeed(opts.portal) &&
-       isFeed(opts.target) &&
--      Number.isInteger(opts.port)
-+      Number.isInteger(opts.instance)
-     )) return
- 
-     return opts
+--- ../ssb-tunnel/index.js	2019-08-13 21:06:00.717253210 +0200
++++ node_modules/ssb-tunnel/index.js	2020-04-03 11:36:45.046235533 +0200
+@@ -68,6 +68,7 @@
    }
  
    var handlers = {}
@@ -101,7 +75,7 @@
              }
              else {
                log('tunnel:connect - portal connected, tunnel to target:'+opts.target)
--              cb(null, rpc.tunnel.connect({target: opts.target, port: opts.port}, noop))
+-              cb(null, rpc.tunnel.connect({target: opts.target, instance: opts.instance}, noop))
 +              cb(null, rpc.tunnel.connect({target: opts.target, instance: opts.instance, origin: sbot.id}, noop))
              }
            })
@@ -123,15 +97,15 @@
          return endpoints[opts.target].tunnel.connect(opts, noop)
        }
        //if this connection is for us
--      else if(opts.target === sbot.id && handlers[opts.port]) {
+-      else if(opts.target === sbot.id && handlers[opts.instance]) {
 -        var streams = DuplexPair()
--        handlers[opts.port](streams[0], this.id)
+-        handlers[opts.instance](streams[0], this.id)
 -        return streams[1]
 +      else if(opts.target === sbot.id) {
 +	function onOk() {
 +          var streams = DuplexPair()
 +          streams[0].address = 'tunnel:@'+SSB.remoteAddress.split(":")[3]+':'+opts.origin
-+	  setupRPC(streams[0])
++          setupRPC(streams[0])
 +          return streams[1]
 +	}
 +
