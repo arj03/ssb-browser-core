@@ -47,7 +47,7 @@ exports.init = function(dir, overwriteConfig) {
   .use(require('ssb-ebt'))
   .use(require('ssb-no-auth'))
   .use(require('ssb-tunnel'))
-  .use(require('./tunnel-chat'))
+  .use(require('./tunnel-message'))
   .use(require("./simple-blobs"))
   ()
 

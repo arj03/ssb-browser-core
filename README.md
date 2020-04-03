@@ -210,34 +210,34 @@ locally and used for callback, otherwise the callback will return a
 
 The [ssb-ooo] module
 
-### tunnelChat
+### tunnelMessage
 
 Uses a modified version of [ssb-tunnel] to send and receive end-to-end
 encrypted ephemeral messages between two peers.
 
-#### acceptMessages
+#### acceptMessages(confirmHandler)
 
-After being called, allow incoming connections on confirmation.
+Tell the pub to allow incoming connections, but call confirmHandler
+with the remote feedId for manual confirmation.
 
 #### connect(feedId)
 
 Connect to a remote feedId. When connected a message will be put in
 `messages`.
 
-#### sendMessage(msg)
+#### sendMessage(type, data)
 
-Send a message to the remote user, adds the message to the `messages`
-stream.
+Send a data message to the remote user, adds the message to the local `messages` stream.
 
 #### messages
 
-A stream of messages. Example usage:
+A stream of messages consisting of type, user and data. Example usage:
 
 ```
 pull(
   messages(),
   pull.drain((msg) => {
-    console.log(msg.user + "> " + msg.text)
+    console.log(msg.user + "> " + msg.data)
   })
 )
 ```
