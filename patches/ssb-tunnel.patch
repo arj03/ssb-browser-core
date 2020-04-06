@@ -1,5 +1,5 @@
 --- ../ssb-tunnel/index.js	2019-08-13 21:06:00.717253210 +0200
-+++ node_modules/ssb-tunnel/index.js	2020-04-03 11:36:45.046235533 +0200
++++ node_modules/ssb-tunnel/index.js	2020-04-06 16:33:36.645332598 +0200
 @@ -68,6 +68,7 @@
    }
  
@@ -8,7 +8,7 @@
  
    sbot.multiserver.transport({
      name: 'tunnel',
-@@ -79,61 +80,7 @@
+@@ -79,60 +80,10 @@
          name: 'tunnel',
          scope: function () { return config.scope },
          server: function (onConnect) {
@@ -58,20 +58,20 @@
 -              })
 -            })
 -          })
--
++          setupRPC = onConnect
+ 
 -          handlers[instance] = function (stream, id) {
 -            stream.address = 'tunnel:'+portal+':'+id
 -            onConnect(stream)
 -          }
 -          //close server
--          return function () {
++          // close server cb
+           return function () {
 -            if(_rpc) _rpc.close()
--          }
-+	  setupRPC = onConnect
+           }
          },
          client: function (addr, cb) {
-           var opts = parse(addr)
-@@ -145,7 +92,7 @@
+@@ -145,7 +96,7 @@
              }
              else {
                log('tunnel:connect - portal connected, tunnel to target:'+opts.target)
@@ -80,7 +80,7 @@
              }
            })
          },
-@@ -158,7 +105,12 @@
+@@ -158,7 +109,12 @@
      }
    })
  
@@ -93,7 +93,7 @@
      announce: function (opts) {
        log('tunnel:portal - received endpoint announcement from:'+this.id)
        endpoints[this.id] = sbot.peers[this.id][0]
-@@ -173,10 +125,22 @@
+@@ -173,10 +129,22 @@
          return endpoints[opts.target].tunnel.connect(opts, noop)
        }
        //if this connection is for us
