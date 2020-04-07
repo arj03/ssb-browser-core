@@ -276,7 +276,8 @@ known feeds.
 
 ### connected(cb)
 
-Will ensure a connection is ready. Cb signature is (err, rpc).
+If not connected, will connect and return. If connected, will just
+return the already present rpc connection. Cb signature is (err, rpc).
 
 ### removeFeedState(feedId)
 
