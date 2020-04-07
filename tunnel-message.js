@@ -45,12 +45,12 @@ exports.init = function (sbot, config) {
         rpc.tunnel.announce()
       })
     },
-    connect: function(remoteId) {
+    connect: function(remoteId, cb) {
       const remoteKey = remoteId.substring(1, remoteId.indexOf('.'))
       const remoteAddr = 'tunnel:@'+SSB.remoteAddress.split(':')[3]+ ':' + remoteId + '~shs:' + remoteKey
       messages({ type: "info", user: remoteId, data: "waiting for accept" })
       SSB.net.connect(remoteAddr, (err, rpc) => {
-        if (err) throw(err)
+        if (err) return cb(err)
 
         remotes.push(rpc)
         messages({ type: "info", user: rpc.id, data: "connected" })
@@ -59,6 +59,8 @@ exports.init = function (sbot, config) {
           remotes = remotes.filter(remote => remote.id != rpc.id)
           messages({ type: "info", user: rpc.id, data: "disconnected" })
         })
+
+        if (cb) cb()
       })
     },
     disconnect: function() {

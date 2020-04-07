@@ -220,10 +220,14 @@ encrypted ephemeral messages between two peers.
 Tell the pub to allow incoming connections, but call confirmHandler
 with the remote feedId for manual confirmation.
 
-#### connect(feedId)
+#### connect(feedId, cb)
 
 Connect to a remote feedId. When connected a message will be put in
-`messages`.
+`messages`. Takes an optional cb.
+
+#### disconnect()
+
+Disconnects all currently active tunnel connections.
 
 #### sendMessage(type, data)
 
