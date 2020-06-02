@@ -29,12 +29,24 @@ exports.init = function (dir, ssbId, config) {
   function add(msg, cb) {
     var id = getId(msg)
 
-    if (msg.author == ssbId)
-      own.add(id, msg, cb)
+    let typeDB = null
+
     if (msg.content.type == 'contact')
-      friends.add(id, msg, cb)
-    if (msg.content.type == 'post')
-      latest.add(id, msg, cb)
+      typeDB = function() { friends.add(id, msg, cb) }
+    else if (msg.content.type == 'post')
+      typeDB = function() { latest.add(id, msg, cb) }
+
+    if (msg.author == '@6CAxOI3f+LUOVrbAl0IemqiS7ATpQvr9Mdw9LC4+Uv0=.ed25519')
+      own.add(id, msg, () => {
+        if (typeDB)
+          typeDB()
+        else
+          cb()
+      })
+    else if (typeDB)
+      typeDB()
+    else
+      cb()
   }
 
   function decryptMessage(msg) {
