@@ -103,12 +103,24 @@ exports.init = function (dir, ssbId, config) {
       //contacts: friends.contacts2.since.value
     }
   }
+
+  function latestMessages(cb) {
+    pull(
+      latest.stream(),
+      pull.collect((err, messages) => {
+        if (err) return cb(err)
+        cb(null, messages.map(x => x.value))
+      })
+    )
+  }
   
   return {
     get,
     add,
     validateAndAdd,
     validateAndAddStrictOrder,
-    getStatus
+    getStatus,
+    latestMessages,
+    // FIXME: contacts index
   }
 }
