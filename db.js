@@ -4,8 +4,8 @@ const hash = require('ssb-keys/util').hash
 const validate = require('ssb-validate')
 const keys = require('ssb-keys')
 
-const Friends = require('./friends')
-const Own = require('./own')
+const Contacts = require('./contacts')
+const Full = require('./full')
 const Latest = require('./latest')
 
 function getId(msg) {
@@ -13,8 +13,8 @@ function getId(msg) {
 }
 
 exports.init = function (dir, ssbId, config) {
-  const friends = Friends(dir, ssbId, config)
-  const own = Own(dir, ssbId, config)
+  const contacts = Contacts(dir, ssbId, config)
+  const full = Full(dir, ssbId, config)
   const latest = Latest(dir, ssbId, config)
 
   function get(id, cb) {
@@ -32,12 +32,12 @@ exports.init = function (dir, ssbId, config) {
     let typeDB = null
 
     if (msg.content.type == 'contact')
-      typeDB = function() { friends.add(id, msg, cb) }
+      typeDB = function() { contacts.add(id, msg, cb) }
     else if (msg.content.type == 'post')
       typeDB = function() { latest.add(id, msg, cb) }
 
     if (msg.author == '@6CAxOI3f+LUOVrbAl0IemqiS7ATpQvr9Mdw9LC4+Uv0=.ed25519')
-      own.add(id, msg, () => {
+      full.add(id, msg, () => {
         if (typeDB)
           typeDB()
         else
@@ -97,9 +97,9 @@ exports.init = function (dir, ssbId, config) {
 
   function getStatus() {
     return {
-      own: own.since.value,
+      full: full.since.value,
       latest: latest.since.value,
-      friends: friends.since.value,
+      contacts: contacts.since.value,
       //contacts: friends.contacts2.since.value
     }
   }

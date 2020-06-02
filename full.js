@@ -7,7 +7,7 @@ module.exports = function (dir, ssbId, config) {
   config = config || {}
     
   var log = OffsetLogCompat(OffsetLog(
-    path.join(dir, 'own.offset'),
+    path.join(dir, 'full.offset'),
     {blockSize:1024*64, codec:codec}
   ))
 
@@ -15,13 +15,13 @@ module.exports = function (dir, ssbId, config) {
 
   log.add = function (id, msg, cb) {
     var data = {
-	key: id,
-	value: msg,
-	timestamp: Date.now()
+      key: id,
+      value: msg,
+      timestamp: Date.now()
     }
     log.append(data, false, function (err) {
-	if(err) cb(err)
-	else cb(null, data)
+      if(err) cb(err)
+      else cb(null, data)
     })
   }
 

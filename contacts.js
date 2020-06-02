@@ -9,7 +9,7 @@ module.exports = function (dir, ssbId, config) {
   config = config || {}
 
   var log = OffsetLogCompat(OffsetLog(
-    path.join(dir, 'friends.offset'),
+    path.join(dir, 'contacts.offset'),
     {blockSize:1024*64, codec:codec}
   ))
 
