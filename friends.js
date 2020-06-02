@@ -12,12 +12,12 @@ module.exports = function (dir, ssbId, config) {
     path.join(dir, 'friends.offset'),
     {blockSize:1024*64, codec:codec}
   ))
-    
+
   console.time("contacts reduce")
-    
+
   var hops = {}
   hops[ssbId] = 0
-    
+
   pull(
     log.stream(),
     pull.drain(logEntry => {
@@ -46,7 +46,7 @@ module.exports = function (dir, ssbId, config) {
       value: msg,
       timestamp: Date.now()
     }
-    log.append(data, function (err) {
+    log.append(data, false, function (err) {
       if(err) cb(err)
       else cb(null, data)
     })
