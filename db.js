@@ -27,7 +27,6 @@ exports.init = function (dir, ssbId, config) {
   }
 
   function add(msg, cb) {
-    return cb(null, msg)
     var id = getId(msg)
 
     if (msg.author == ssbId)

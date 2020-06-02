@@ -2,7 +2,6 @@ var OffsetLog = require('flumelog-aligned-offset')
 var OffsetLogCompat = require('flumelog-aligned-offset/compat')
 var codec = require('flumecodec/json')
 var path = require('path')
-var Reduce = require('flumeview-reduce')
 var isFeed = require('ssb-ref').isFeed
 var pull = require('pull-stream')
 
@@ -14,8 +13,6 @@ module.exports = function (dir, ssbId, config) {
     {blockSize:1024*64, codec:codec}
   ))
     
-  //var store = Flume(log, true)
-
   console.time("contacts reduce")
     
   var hops = {}
@@ -42,28 +39,6 @@ module.exports = function (dir, ssbId, config) {
       console.log(hops)
     })
   )
-
-  /*
-  // contacts
-  var hops = {}
-  hops[ssbId] = 0
-  var index = store.use('contacts2', Reduce(9, function (g, data) {
-    if(!g) g = {}
-
-    var from = data.value.author
-    var to = data.value.content.contact
-    var value =
-	data.value.content.blocking || data.value.content.flagged ? -1 :
-	data.value.content.following === true ? 1
-	: -2
-
-    if(isFeed(from) && isFeed(to)) {
-      g[from] = g[from] || {}
-      g[from][to] = value
-    }
-    return g
-  }))
-*/
 
   log.add = function (id, msg, cb) {
     var data = {

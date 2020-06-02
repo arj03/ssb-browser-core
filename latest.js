@@ -1,4 +1,3 @@
-var Flume = require('flumedb')
 var OffsetLog = require('flumelog-aligned-offset')
 var OffsetLogCompat = require('flumelog-aligned-offset/compat')
 var codec = require('flumecodec/json')
@@ -13,6 +12,7 @@ module.exports = function (dir, ssbId, config) {
     {blockSize:1024*64, codec:codec}
   ))
 
+  /* FIXME
   var store = Flume(log, true, (msg, cb) => {
     if (msg && msg.value && typeof (msg.value.content) === 'string') {
       var decrypted = keys.unbox(msg.value.content, SSB.net.config.keys.private)
@@ -33,6 +33,7 @@ module.exports = function (dir, ssbId, config) {
     } else
       cb(null, msg)
   })
+*/
 
   /*
     FIXME: uses keys index
@@ -46,22 +47,22 @@ module.exports = function (dir, ssbId, config) {
   }
   */
 
-  store.add = function (id, msg, cb) {
+  log.add = function (id, msg, cb) {
     var data = {
       key: id,
       value: msg,
       timestamp: Date.now()
     }
-    store.append(data, function (err) {
+    log.append(data, function (err) {
       if(err) cb(err)
       else cb(null, data)
     })
   }
 
-  // FIXME
-  store.get = (key, cb) => {
+  // FIXME: key index
+  log.get = (key, cb) => {
     cb(new Error("Not implemented"))
   }
   
-  return store
+  return log
 }
