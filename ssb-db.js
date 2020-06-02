@@ -13,28 +13,29 @@ exports.permissions = {
 }
 
 exports.init = function (sbot, config) {
-  // ebt stuff
-
   sbot.createHistoryStream = function() {
     return pull.empty()
   }
 
-  sbot.post = Obv()
+  // all the rest is ebt stuff
 
   sbot.getVectorClock = function (_, cb) {
     if (!cb) cb = _
 
     function getClock()
     {
-      var last = SSB.db.last.get()
-      var clock = {}
-      for (var k in last) {
-        clock[k] = last[k].sequence
-      }
+      // FIXME
+      var clock = {} // id -> sequence
       cb(null, clock)
     }
 
     SSB.events.on('SSB: loaded', getClock)
+  }
+
+  sbot.post = Obv()
+
+  sbot.add = function(msg, cb) {
+    SSB.db.validateAndAddStrictOrder(msg, cb)
   }
 
   function isString (s) {
@@ -70,10 +71,6 @@ exports.init = function (sbot, config) {
       if (err) cb(err)
       else cb(null, originalData(value))
     })
-  }
-
-  sbot.add = function(msg, cb) {
-    SSB.db.validateAndAddStrictOrder(msg, cb)
   }
 
   return {}

@@ -9,7 +9,6 @@ exports.connected = function(cb)
 {
   if (!remote || remote.closed)
   {
-    SSB.isInitialSync = false // for ssb-ebt
     SSB.net.connect(SSB.remoteAddress, (err, rpc) => {
       if (err) throw(err)
 
@@ -20,19 +19,22 @@ exports.connected = function(cb)
     cb(remote)
 }
 
-exports.removeDB = function() {
+function deleteDatabaseFile(filename) {
   const path = require('path')
-
-  const file = raf(path.join(SSB.dir, 'log.offset'))
+  const file = raf(path.join(SSB.dir, filename))
   file.open((err, done) => {
     if (err) return console.error(err)
     file.destroy()
   })
+}
 
+exports.removeDB = function() {
+  deleteDatabaseFile('own.offset')
+  deleteDatabaseFile('friends.offset')
+  deleteDatabaseFile('latest.offset')
+
+  // FIXME:?
   localStorage['last.json'] = JSON.stringify({})
-  localStorage['profiles.json'] = JSON.stringify({})
-
-  console.log("remember to delete indexdb indexes as well!")
 }
 
 exports.removeBlobs = function() {
@@ -68,27 +70,12 @@ exports.removeBlobs = function() {
 exports.sync = function()
 {
   exports.connected((rpc) => {
-    if (!SSB.state.feeds[SSB.net.id])
-      SSB.net.replicate.request(SSB.net.id, true)
+    // FIXME: use friends reduce
 
     SSB.db.friends.hops((err, hops) => {
       for (var feed in hops)
         if (hops[feed] <= SSB.hops)
-          SSB.net.replicate.request(feed, true)
+          SSB.net.ebt.request(feed, true)
     })
-
-    if (!SSB.syncOnlyFeedsFollowing) {
-      for (var feed in SSB.state.feeds)
-        SSB.net.replicate.request(feed, true)
-    }
   })
-}
-
-exports.saveProfiles = function() {
-  localStorage['profiles.json'] = JSON.stringify(SSB.profiles)
-}
-
-exports.loadProfiles = function() {
-  if (localStorage['profiles.json'])
-    SSB.profiles = JSON.parse(localStorage['profiles.json'])
 }

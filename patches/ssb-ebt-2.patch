@@ -1,0 +1,25 @@
+--- node_modules/ssb-ebt/index.js~	2020-06-01 23:43:33.262830200 +0200
++++ node_modules/ssb-ebt/index.js	2020-06-02 11:50:56.649738400 +0200
+@@ -97,22 +97,6 @@
+   }
+ 
+ 
+-  sbot.on('rpc:connect', function (rpc, isClient) {
+-    if(isClient) {
+-      var opts = {version: 3}
+-      var a = toPull.duplex(ebt.createStream(rpc.id, opts.version, true))
+-      var b = rpc.ebt.replicate(opts, function (err) {
+-        if(err) {
+-          rpc.removeListener('closed', onClose)
+-          rpc._emit('fallback:replicate', err)
+-        }
+-      })
+-
+-      pull(a, b, a)
+-      rpc.on('closed', onClose)
+-    }
+-  })
+-
+   function block (from, to, blocking) {
+     if(isObject(from)) {
+       to = from.to

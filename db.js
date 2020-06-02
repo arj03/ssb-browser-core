@@ -1,19 +1,24 @@
-const Store = require('./store')
 const pull = require('pull-stream')
 
 const hash = require('ssb-keys/util').hash
 const validate = require('ssb-validate')
 const keys = require('ssb-keys')
 
+const Friends = require('./friends')
+const Own = require('./own')
+const Latest = require('./latest')
+
 function getId(msg) {
   return '%'+hash(JSON.stringify(msg, null, 2))
 }
 
 exports.init = function (dir, ssbId, config) {
-  const store = Store(dir, ssbId, config)
+  const friends = Friends(dir, ssbId, config)
+  const own = Own(dir, ssbId, config)
+  const latest = Latest(dir, ssbId, config)
 
   function get(id, cb) {
-    store.keys.get(id, (err, data) => {
+    latest.get(id, (err, data) => {
       if (data)
 	cb(null, data.value)
       else
@@ -22,22 +27,15 @@ exports.init = function (dir, ssbId, config) {
   }
 
   function add(msg, cb) {
+    return cb(null, msg)
     var id = getId(msg)
 
-    if (store.since.value == 0 || SSB.isInitialSync)
-    {
-      // empty db, keys.get will block, just add anyways
-      store.add(id, msg, cb)
-    }
-    else
-    {
-      store.keys.get(id, (err, data) => {
-	if (data)
-	  cb(null, data.value)
-	else
-	  store.add(id, msg, cb)
-      })
-    }
+    if (msg.author == ssbId)
+      own.add(id, msg, cb)
+    if (msg.content.type == 'contact')
+      friends.add(id, msg, cb)
+    if (msg.content.type == 'post')
+      latest.add(id, msg, cb)
   }
 
   function decryptMessage(msg) {
@@ -45,57 +43,6 @@ exports.init = function (dir, ssbId, config) {
   }
 
   const hmac_key = null
-
-  function updateProfile(msg) {
-    if (!SSB.profiles)
-      SSB.profiles = {}
-    if (!SSB.profiles[msg.author])
-      SSB.profiles[msg.author] = {}
-
-    if (msg.content.name)
-      SSB.profiles[msg.author].name = msg.content.name
-    if (msg.content.description)
-      SSB.profiles[msg.author].description = msg.content.description
-
-    if (msg.content.image && typeof msg.content.image.link === 'string')
-      SSB.profiles[msg.author].image = msg.content.image.link
-    else if (typeof msg.content.image === 'string')
-      SSB.profiles[msg.author].image = msg.content.image
-  }
-
-  function addMsg(updateLast, skippingMessages, msg, cb) {
-    if (updateLast)
-      store.last.update(msg)
-
-    var ok = true
-
-    var isPrivate = (typeof (msg.content) === 'string')
-
-    if (isPrivate && !SSB.privateMessages) {
-      ok = false
-    } else if (!isPrivate && msg.content.type == 'about' && msg.content.about == msg.author) {
-      updateProfile(msg)
-    } else if (!isPrivate && !SSB.validMessageTypes.includes(msg.content.type)) {
-      ok = false
-    } else if (isPrivate) {
-      var decrypted = decryptMessage(msg)
-      if (!decrypted) // not for us
-        ok = false
-    }
-
-    if (ok) {
-      add(msg, cb)
-
-      if (skippingMessages)
-        store.last.setPartialLogState(msg.author, true)
-    }
-    else
-    {
-      if (updateLast)
-        store.last.setPartialLogState(msg.author, true)
-      cb()
-    }
-  }
 
   function validateAndAddStrictOrder(msg, cb) {
     const knownAuthor = msg.author in SSB.state.feeds
@@ -109,7 +56,7 @@ exports.init = function (dir, ssbId, config) {
       if (SSB.state.error)
         return cb(SSB.state.error)
 
-      addMsg(true, false, msg, cb)
+      add(msg, cb)
     }
     catch (ex)
     {
@@ -134,29 +81,16 @@ exports.init = function (dir, ssbId, config) {
     if (SSB.state.error)
       return cb(SSB.state.error)
 
-    const updateLast = !earlierMessage
-
-    addMsg(updateLast, skippingMessages, msg, cb)
+    add(msg, cb)
   }
 
-  function deleteFeed(feedId, cb) {
-    pull(
-      store.query.read({
-        query: [{
-          $filter: {
-            value: {
-              author: feedId
-            }
-          }
-        }]
-      }),
-      pull.asyncMap((msg, cb) => {
-        store.del(msg.key, (err) => {
-          cb(err, msg.key)
-        })
-      }),
-      pull.collect(cb)
-    )
+  function getStatus() {
+    return {
+      own: own.since.value,
+      latest: latest.since.value,
+      friends: friends.since.value,
+      //contacts: friends.contacts2.since.value
+    }
   }
   
   return {
@@ -164,15 +98,6 @@ exports.init = function (dir, ssbId, config) {
     add,
     validateAndAdd,
     validateAndAddStrictOrder,
-    del: store.del,
-    deleteFeed,
-    // indexes
-    backlinks: store.backlinks,
-    query: store.query,
-    last: store.last,
-    clock: store.clock,
-    friends: store.friends,
-    peerInvites: store['peer-invites'],
-    getStatus: store.getStatus
+    getStatus
   }
 }
