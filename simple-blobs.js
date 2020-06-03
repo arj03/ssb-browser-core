@@ -338,6 +338,26 @@ exports.init = function (sbot, config) {
   })
   // end ssb-blobs
 
+  function localGetHelper(max, id, cb) {
+    const file = raf(sanitizedPath(id))
+    file.stat((err, stat) => {
+      if (stat && stat.size == 0) {
+        httpGet(remoteURL(id), 'blob', (err, data) => {
+          if (err) cb(err)
+          else if (data.size < max)
+            add(id, data, () => { fsURL(id, cb) })
+          else
+            cb(null, remoteURL(id))
+        })
+      }
+      else
+      {
+        //console.log("reading from local filesystem")
+        fsURL(id, cb)
+      }
+    })
+  }
+
   return {
     hash,
     add,
@@ -406,23 +426,11 @@ exports.init = function (sbot, config) {
     },
 
     localGet: function (id, cb) {
-      const file = raf(sanitizedPath(id))
-      file.stat((err, stat) => {
-        if (stat && stat.size == 0) {
-          httpGet(remoteURL(id), 'blob', (err, data) => {
-            if (err) cb(err)
-            else if (data.size < max)
-              add(id, data, () => { fsURL(id, cb) })
-            else
-              cb(null, remoteURL(id))
-          })
-        }
-        else
-        {
-          //console.log("reading from local filesystem")
-          fsURL(id, cb)
-        }
-      })
+      localGetHelper(max, id, cb)
+    },
+
+    localProfileGet: function (id, cb) {
+      localGetHelper(2048*1024, id, cb)
     },
 
     remoteGet: function(id, type, cb) {
