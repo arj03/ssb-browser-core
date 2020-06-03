@@ -31,6 +31,7 @@ function deleteDatabaseFile(filename) {
 exports.removeDB = function() {
   deleteDatabaseFile('full.offset')
   deleteDatabaseFile('contacts.offset')
+  deleteDatabaseFile('profiles.offset')
   deleteDatabaseFile('latest.offset')
 
   // FIXME:?

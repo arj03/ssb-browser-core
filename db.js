@@ -7,6 +7,7 @@ const keys = require('ssb-keys')
 const Contacts = require('./contacts')
 const Full = require('./full')
 const Latest = require('./latest')
+const Profiles = require('./profiles')
 
 function getId(msg) {
   return '%'+hash(JSON.stringify(msg, null, 2))
@@ -16,6 +17,7 @@ exports.init = function (dir, ssbId, config) {
   const contacts = Contacts(dir, ssbId, config)
   const full = Full(dir, ssbId, config)
   const latest = Latest(dir, ssbId, config)
+  const profiles = Profiles(dir, ssbId, config)
 
   function get(id, cb) {
     latest.get(id, (err, data) => {
@@ -35,7 +37,10 @@ exports.init = function (dir, ssbId, config) {
       typeDB = function() { contacts.add(id, msg, cb) }
     else if (msg.content.type == 'post')
       typeDB = function() { latest.add(id, msg, cb) }
+    else if (msg.content.type == 'about' && msg.content.about == msg.author)
+      typeDB = function() { profiles.add(id, msg, cb) }
 
+    // FIXME: hax
     if (msg.author == '@6CAxOI3f+LUOVrbAl0IemqiS7ATpQvr9Mdw9LC4+Uv0=.ed25519')
       full.add(id, msg, () => {
         if (typeDB)
@@ -99,7 +104,8 @@ exports.init = function (dir, ssbId, config) {
     return {
       full: full.since.value,
       latest: latest.since.value,
-      contacts: contacts.since.value
+      contacts: contacts.since.value,
+      profiles: profiles.since.value
     }
   }
 
@@ -120,6 +126,7 @@ exports.init = function (dir, ssbId, config) {
     validateAndAddStrictOrder,
     getStatus,
     latestMessages,
-    getHops: contacts.getHops
+    getHops: contacts.getHops,
+    getProfiles: profiles.getProfiles
   }
 }
