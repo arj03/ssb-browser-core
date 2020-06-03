@@ -34,8 +34,7 @@ exports.removeDB = function() {
   deleteDatabaseFile('profiles.offset')
   deleteDatabaseFile('latest.offset')
 
-  // FIXME:?
-  localStorage['last.json'] = JSON.stringify({})
+  localStorage['feed.json'] = JSON.stringify({})
 }
 
 exports.removeBlobs = function() {
