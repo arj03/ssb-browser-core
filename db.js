@@ -42,8 +42,8 @@ exports.init = function (dir, ssbId, config) {
     else if (msg.content.type == 'about' && msg.content.about == msg.author)
       typeDB = function() { profiles.add(id, msg, cb) }
 
-    // FIXME: hax
-    if (msg.author == '@6CAxOI3f+LUOVrbAl0IemqiS7ATpQvr9Mdw9LC4+Uv0=.ed25519')
+    // FIXME: or hops=1
+    if (msg.author == ssbId)
       full.add(id, msg, () => {
         if (typeDB)
           typeDB()

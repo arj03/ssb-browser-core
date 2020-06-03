@@ -27,6 +27,7 @@ module.exports = function (dir, ssbId, config) {
     console.time("contacts reduce")
 
     let hopsBuild = {}
+    hopsBuild[ssbId] = {}
 
     pull(
       log.stream(),
