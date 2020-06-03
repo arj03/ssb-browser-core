@@ -13,20 +13,26 @@ module.exports = function (dir, ssbId, config) {
     {blockSize:1024*64, codec:codec}
   ))
 
-  console.time("profiles reduce")
-
-  let profiles = {}
-
+  let profiles = null
+  let waiting = []
+  
   log.getProfiles = function(cb) {
-    if (Object.keys(profiles).length > 0)
+    if (profiles == null && waiting.length > 0)
+      return waiting.push(cb)
+    else if (profiles != null)
       return cb(null, profiles)
 
+    waiting.push(cb)
+    console.time("profiles reduce")
+
+    let profilesBuild = {}
+    
     pull(
       log.stream(),
       pull.drain(logEntry => {
         var data = logEntry.value
 
-        let profile = profiles[data.value.author] || {}
+        let profile = profilesBuild[data.value.author] || {}
 
 	content = data.value.content
 
@@ -41,11 +47,16 @@ module.exports = function (dir, ssbId, config) {
         else if (typeof content.image === 'string')
           profile.image = content.image
 
-	profiles[data.value.author] = profile
-	  
+	profilesBuild[data.value.author] = profile
+
       }, (err) => {
         console.timeEnd("profiles reduce")
-        cb(err, profiles)
+
+        profiles = profilesBuild
+        
+        for (var i = 0; i < waiting.length; ++i)
+          waiting[i](err, profiles)
+        waiting = []
       })
     )
   }

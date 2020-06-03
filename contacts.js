@@ -13,15 +13,20 @@ module.exports = function (dir, ssbId, config) {
     {blockSize:1024*64, codec:codec}
   ))
 
-  let hops = {}
+  let hops = null
+  let waiting = []
 
   log.getHops = function(cb) {
-    if (Object.keys(hops).length > 0)
+    if (hops == null && waiting.length > 0)
+      return waiting.push(cb)
+    else if (hops != null)
       return cb(null, hops)
+
+    waiting.push(cb)
 
     console.time("contacts reduce")
 
-    hops[ssbId] = 0
+    let hopsBuild = {}
 
     pull(
       log.stream(),
@@ -36,12 +41,17 @@ module.exports = function (dir, ssbId, config) {
 	    : -2
 
         if(isFeed(from) && isFeed(to)) {
-          hops[from] = hops[from] || {}
-          hops[from][to] = value
+          hopsBuild[from] = hopsBuild[from] || {}
+          hopsBuild[from][to] = value
         }
       }, (err) => {
         console.timeEnd("contacts reduce")
-        cb(err, hops)
+        
+        hops = hopsBuild
+        
+        for (var i = 0; i < waiting.length; ++i)
+          waiting[i](err, hops)
+        waiting = []
       })
     )
   }
