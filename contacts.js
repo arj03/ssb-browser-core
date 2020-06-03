@@ -13,13 +13,13 @@ module.exports = function (dir, ssbId, config) {
     {blockSize:1024*64, codec:codec}
   ))
 
-  console.time("contacts reduce")
-
   let hops = {}
 
   log.getHops = function(cb) {
     if (Object.keys(hops).length > 0)
       return cb(null, hops)
+
+    console.time("contacts reduce")
 
     hops[ssbId] = 0
 

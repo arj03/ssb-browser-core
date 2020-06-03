@@ -8,6 +8,7 @@ const Contacts = require('./contacts')
 const Full = require('./full')
 const Latest = require('./latest')
 const Profiles = require('./profiles')
+const FeedIndex = require('./indexes/feed')
 
 function getId(msg) {
   return '%'+hash(JSON.stringify(msg, null, 2))
@@ -18,7 +19,8 @@ exports.init = function (dir, ssbId, config) {
   const full = Full(dir, ssbId, config)
   const latest = Latest(dir, ssbId, config)
   const profiles = Profiles(dir, ssbId, config)
-
+  const feedIndex = FeedIndex()
+  
   function get(id, cb) {
     latest.get(id, (err, data) => {
       if (data)
@@ -105,7 +107,8 @@ exports.init = function (dir, ssbId, config) {
       full: full.since.value,
       latest: latest.since.value,
       contacts: contacts.since.value,
-      profiles: profiles.since.value
+      profiles: profiles.since.value,
+      feedIndex: feedIndex.get()
     }
   }
 
@@ -118,6 +121,52 @@ exports.init = function (dir, ssbId, config) {
       })
     )
   }
+
+  function syncMissingProfiles() {
+    let feedState = feedIndex.get()
+
+    SSB.connected((rpc) => {
+      contacts.getHops((err, hops) => {
+        let feedsToSync = []
+
+        for (var feedId in hops)
+          for (var relation in hops[feedId])
+            if (hops[feedId][relation] >= 0)
+              if (!feedState[relation] || !feedState[relation].syncedProfile)
+                feedsToSync.push(relation)
+
+        pull(
+          pull.values(feedsToSync),
+          pull.asyncMap((feed, cb) => {
+            console.log("downloading profile for", feed)
+            console.time("syncing profile")
+            pull(
+              rpc.partialReplication.getMessagesOfType({id: feed, type: 'about'}),
+              pull.asyncMap(SSB.db.validateAndAdd),
+              pull.collect((err, msgs) => {
+                if (err) {
+                  console.error(err.message)
+                  return cb(err)
+                }
+
+                console.timeEnd("syncing profile")
+                console.log(msgs.length)
+
+                SSB.db.feedIndex.updateState(feed, {
+                  syncedProfile: true
+                })
+
+                cb()
+              })
+            )
+          }),
+          pull.collect(() => {
+            console.log("done")
+          })
+        )
+      })
+    })
+  }
   
   return {
     get,
@@ -127,6 +176,8 @@ exports.init = function (dir, ssbId, config) {
     getStatus,
     latestMessages,
     getHops: contacts.getHops,
-    getProfiles: profiles.getProfiles
+    getProfiles: profiles.getProfiles,
+    feedIndex,
+    syncMissingProfiles
   }
 }

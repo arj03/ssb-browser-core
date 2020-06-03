@@ -11,7 +11,7 @@ module.exports = function (dir, ssbId, config) {
     {blockSize:1024*64, codec:codec}
   ))
 
-  // FIXME: maybe indexes for replication
+  // FIXME: probably key index for replication + half-insert
 
   log.add = function (id, msg, cb) {
     var data = {
