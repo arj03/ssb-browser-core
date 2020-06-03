@@ -25,18 +25,44 @@ exports.init = function (sbot, config) {
   const privateBlobsDir = path.join(config.path, "private-blobs")
   console.log("blobs dir:", blobsDir)
 
+  const maxConcurrentRequests = 5
+  var waitingGet = [] // {url, responseType, cb}
+
+  var waiting = {} // url -> cb
+
+  function waitingCb(url, err, data) {
+    for (var i = 0; i < waiting[url].length; ++i)
+      waiting[url][i](err, data)
+
+    delete waiting[url]
+
+    if (waitingGet.length > 0) {
+      const wg = waitingGet.shift()
+      httpGet(wg.url, wg.responseType, wg.cb)
+    }
+  }
+
   function httpGet(url, responseType, cb) {
+    if (waiting[url]) return waiting[url].push(cb)
+
+    if (Object.keys(waiting).length > maxConcurrentRequests)
+      return waitingGet.push({ url, responseType, cb })
+
+    waiting[url] = [cb]
+
+    console.log("download: ", url)
+
     var req = new XMLHttpRequest()
     req.timeout = 2000;
     req.onreadystatechange = function() {
       if (req.readyState == 4 && req.status == 200)
-        cb(null, req.response)
+        waitingCb(url, null, req.response)
     }
     req.onerror = function() {
-      cb("Error requesting blob")
+      waitingCb(url, "Error requesting blob")
     }
     req.ontimeout = function () {
-      cb("Timeout requesting blob")
+      waitingCb(url, "Timeout requesting blob")
     }
 
     req.open("GET", url, true)
