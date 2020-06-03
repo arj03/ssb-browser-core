@@ -99,8 +99,7 @@ exports.init = function (dir, ssbId, config) {
     return {
       full: full.since.value,
       latest: latest.since.value,
-      contacts: contacts.since.value,
-      //contacts: friends.contacts2.since.value
+      contacts: contacts.since.value
     }
   }
 
@@ -121,6 +120,6 @@ exports.init = function (dir, ssbId, config) {
     validateAndAddStrictOrder,
     getStatus,
     latestMessages,
-    // FIXME: contacts index
+    getHops: contacts.getHops
   }
 }

@@ -15,32 +15,38 @@ module.exports = function (dir, ssbId, config) {
 
   console.time("contacts reduce")
 
-  var hops = {}
-  hops[ssbId] = 0
+  let hops = {}
 
-  pull(
-    log.stream(),
-    pull.drain(logEntry => {
-      var data = logEntry.value
+  log.getHops = function(cb) {
+    if (Object.keys(hops).length > 0)
+      return cb(null, hops)
 
-      var from = data.value.author
-      var to = data.value.content.contact
-      var value =
-	data.value.content.blocking || data.value.content.flagged ? -1 :
-	data.value.content.following === true ? 1
-	: -2
+    hops[ssbId] = 0
 
-      if(isFeed(from) && isFeed(to)) {
-        hops[from] = hops[from] || {}
-        hops[from][to] = value
-      }
-    }, () => {
-      console.timeEnd("contacts reduce")
-      console.log(hops)
-    })
-  )
+    pull(
+      log.stream(),
+      pull.drain(logEntry => {
+        var data = logEntry.value
 
-  log.add = function (id, msg, cb) {
+        var from = data.value.author
+        var to = data.value.content.contact
+        var value =
+	    data.value.content.blocking || data.value.content.flagged ? -1 :
+	    data.value.content.following === true ? 1
+	    : -2
+
+        if(isFeed(from) && isFeed(to)) {
+          hops[from] = hops[from] || {}
+          hops[from][to] = value
+        }
+      }, (err) => {
+        console.timeEnd("contacts reduce")
+        cb(err, hops)
+      })
+    )
+  }
+
+  log.add = function(id, msg, cb) {
     var data = {
       key: id,
       value: msg,
