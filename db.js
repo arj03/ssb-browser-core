@@ -49,12 +49,12 @@ exports.init = function (dir, ssbId, config) {
         if (typeDB)
           typeDB()
         else
-          cb()
+          cb(null, { value: msg })
       })
     else if (typeDB)
       typeDB()
     else
-      cb()
+      cb(null, { value: msg })
   }
 
   function decryptMessage(msg) {
@@ -90,7 +90,7 @@ exports.init = function (dir, ssbId, config) {
 
     const alreadyChecked = knownAuthor && msg.sequence == SSB.state.feeds[msg.author].sequence
     if (alreadyChecked && cb)
-      return cb()
+      return cb(null, { value: msg })
 
     if (!knownAuthor || earlierMessage || skippingMessages)
       SSB.state = validate.appendOOO(SSB.state, hmac_key, msg)
@@ -118,9 +118,55 @@ exports.init = function (dir, ssbId, config) {
       latest.stream(),
       push.collect((err, messages) => {
         if (err) return cb(err)
+        console.log("total latest messages", messages.length)
         cb(null, messages.map(x => x.value))
       })
     )
+  }
+
+  function syncMissingSequence() {
+    let feedState = feedIndex.get()
+
+    SSB.connected((rpc) => {
+      contacts.getHops((err, hops) => {
+        let feedsToSync = []
+
+        for (var feedId in hops)
+          for (var relation in hops[feedId])
+            if (hops[feedId][relation] >= 0) // FIXME: respect hops
+              if (!feedState[relation] || !feedState[relation].latestSequence)
+                feedsToSync.push(relation)
+
+        pull(
+          pull.values(feedsToSync),
+          pull.asyncMap((feed, cb) => {
+            console.log("downloading messages for", feed)
+            console.time("downloading messages")
+            pull(
+              rpc.partialReplication.getFeedReverse({ id: feed, keys: false, limit: 25 }),
+              pull.asyncMap(SSB.db.validateAndAdd),
+              pull.collect((err, msgs) => {
+                SSB.state.queue = []
+                console.timeEnd("downloading messages")
+
+                if (err)
+                  cb(err)
+                else {
+                  if (msgs.length > 0)
+                    SSB.db.feedIndex.updateState(feed, {
+                      latestSequence: msgs[msgs.length-1].value.sequence
+                    })
+                  cb()
+                }
+              })
+            )
+          }),
+          pull.collect(() => {
+            console.log("done")
+          })
+        )
+      })
+    })
   }
 
   function syncMissingProfiles() {
@@ -179,6 +225,7 @@ exports.init = function (dir, ssbId, config) {
     getHops: contacts.getHops,
     getProfiles: profiles.getProfiles,
     feedIndex,
-    syncMissingProfiles
+    syncMissingProfiles,
+    syncMissingSequence
   }
 }

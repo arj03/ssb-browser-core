@@ -31,8 +31,8 @@ module.exports = function () {
     updateState: function(feedId, updateFeedState) {
       let feedState = state[feedId] || {}
 
-      if (updateFeedState.lastestSequence)
-        feedState.lastestSequence = updateFeedState.lastestSequence
+      if (updateFeedState.latestSequence)
+        feedState.latestSequence = updateFeedState.latestSequence
       if (updateFeedState.syncedProfile)
         feedState.syncedProfile = updateFeedState.syncedProfile
       if (updateFeedState.syncedContacts)
