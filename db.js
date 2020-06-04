@@ -1,3 +1,4 @@
+const push = require('push-stream')
 const pull = require('pull-stream')
 
 const hash = require('ssb-keys/util').hash
@@ -113,9 +114,9 @@ exports.init = function (dir, ssbId, config) {
   }
 
   function latestMessages(cb) {
-    pull(
+    push(
       latest.stream(),
-      pull.collect((err, messages) => {
+      push.collect((err, messages) => {
         if (err) return cb(err)
         cb(null, messages.map(x => x.value))
       })

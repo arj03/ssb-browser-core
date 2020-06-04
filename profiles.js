@@ -1,9 +1,9 @@
 var OffsetLog = require('flumelog-aligned-offset')
-var OffsetLogCompat = require('flumelog-aligned-offset/compat')
+var OffsetLogCompat = require('./offset-log-since')
 var codec = require('flumecodec/json')
 var path = require('path')
 var isFeed = require('ssb-ref').isFeed
-var pull = require('pull-stream')
+var push = require('push-stream')
 
 module.exports = function (dir, ssbId, config) {
   config = config || {}
@@ -27,9 +27,9 @@ module.exports = function (dir, ssbId, config) {
 
     let profilesBuild = {}
     
-    pull(
+    push(
       log.stream(),
-      pull.drain(logEntry => {
+      push.drain(logEntry => {
         var data = logEntry.value
 
         let profile = profilesBuild[data.value.author] || {}

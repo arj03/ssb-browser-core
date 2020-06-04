@@ -9,11 +9,12 @@
   },
   "dependencies": {
     "flumecodec": "0.0.1",
-    "flumelog-aligned-offset": "1.1.1",
+    "flumelog-aligned-offset": "^1.1.2",
     "gossip-query": "^2.0.2",
     "polyraf": "^1.1.0",
     "pull-defer": "^0.2.3",
     "pull-stream": "^3.6.14",
+    "push-stream": "^11.0.0",
     "sanitize-filename": "^1.6.3",
     "secret-stack": "^6.3.1",
     "ssb-blob-files": "^1.2.0",

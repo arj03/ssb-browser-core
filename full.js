@@ -1,5 +1,5 @@
 var OffsetLog = require('flumelog-aligned-offset')
-var OffsetLogCompat = require('flumelog-aligned-offset/compat')
+var OffsetLogCompat = require('./offset-log-since')
 var codec = require('flumecodec/json')
 var path = require('path')
 
