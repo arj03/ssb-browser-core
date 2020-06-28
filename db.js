@@ -7,6 +7,8 @@ const keys = require('ssb-keys')
 
 const Log = require('./log')
 const FullScanIndexes = require('./indexes/full-scan')
+const Contacts = require('./indexes/contacts')
+const Profiles = require('./indexes/profiles')
 
 function getId(msg) {
   return '%'+hash(JSON.stringify(msg, null, 2))
@@ -15,6 +17,8 @@ function getId(msg) {
 exports.init = function (dir, ssbId, config) {
   const log = Log(dir, ssbId, config)
   const fullIndex = FullScanIndexes(log)
+  const contacts = Contacts(log)
+  const profiles = Profiles(log)
 
   function get(id, cb) {
     fullIndex.keysGet(id, (err, data) => {
@@ -237,10 +241,7 @@ exports.init = function (dir, ssbId, config) {
     del,
     validateAndAdd,
     getStatus,
-    last: fullIndex.lastIndex
-
-    // FIXME
-    feedIndex,
+    last: fullIndex.lastIndex,
     getHops: contacts.getHops,
     getProfiles: profiles.getProfiles,
 
