@@ -13,7 +13,7 @@ function getId(msg) {
 
 exports.init = function (dir, ssbId, config) {
   const full = Full(dir, ssbId, config)
-  const keys = ; // FIXME: keys index
+  const keys = require('./indexes/keys')(full)
   
   function get(id, cb) {
     keys.get(id, (err, data) => {
@@ -46,7 +46,7 @@ exports.init = function (dir, ssbId, config) {
 
   const hmac_key = null
 
-  function validateAndAddStrictOrder(msg, cb) {
+  function validateAndAdd(msg, cb) {
     const knownAuthor = msg.author in SSB.state.feeds
 
     try {
@@ -64,26 +64,6 @@ exports.init = function (dir, ssbId, config) {
     {
       return cb(ex)
     }
-  }
-
-  function validateAndAdd(msg, cb) {
-    const knownAuthor = msg.author in SSB.state.feeds
-    const earlierMessage = knownAuthor && msg.sequence < SSB.state.feeds[msg.author].sequence
-    const skippingMessages = knownAuthor && msg.sequence > SSB.state.feeds[msg.author].sequence + 1
-
-    const alreadyChecked = knownAuthor && msg.sequence == SSB.state.feeds[msg.author].sequence
-    if (alreadyChecked && cb)
-      return cb(null, { value: msg })
-
-    if (!knownAuthor || earlierMessage || skippingMessages)
-      SSB.state = validate.appendOOO(SSB.state, hmac_key, msg)
-    else
-      SSB.state = validate.append(SSB.state, hmac_key, msg)
-
-    if (SSB.state.error)
-      return cb(SSB.state.error)
-
-    add(msg, cb)
   }
 
   function getStatus() {
@@ -243,12 +223,11 @@ exports.init = function (dir, ssbId, config) {
     get,
     add,
     validateAndAdd,
-    validateAndAddStrictOrder,
     getStatus,
-    latestMessages,
     getHops: contacts.getHops,
     getProfiles: profiles.getProfiles,
     feedIndex,
+
     syncMissingProfiles,
     syncMissingContacts,
     syncMissingSequence,

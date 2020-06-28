@@ -11,6 +11,7 @@
     "flumecodec": "0.0.1",
     "flumelog-aligned-offset": "^1.1.2",
     "gossip-query": "^2.0.2",
+    "jitdb": "0.0.1",
     "polyraf": "^1.1.0",
     "pull-defer": "^0.2.3",
     "pull-stream": "^3.6.14",
