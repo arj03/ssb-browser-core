@@ -5,18 +5,19 @@ const hash = require('ssb-keys/util').hash
 const validate = require('ssb-validate')
 const keys = require('ssb-keys')
 
-const Full = require('./full')
+const Log = require('./log')
+const FullScanIndexes = require('./indexes/full-scan')
 
 function getId(msg) {
   return '%'+hash(JSON.stringify(msg, null, 2))
 }
 
 exports.init = function (dir, ssbId, config) {
-  const full = Full(dir, ssbId, config)
-  const keys = require('./indexes/keys')(full)
+  const log = Log(dir, ssbId, config)
+  const fullIndex = FullScanIndexes(log)
   
   function get(id, cb) {
-    keys.get(id, (err, data) => {
+    fullIndex.keysGet(id, (err, data) => {
       if (data)
 	cb(null, data.value)
       else
@@ -36,7 +37,7 @@ exports.init = function (dir, ssbId, config) {
       if (data)
 	cb(null, data.value)
       else
-	full.add(id, msg, cb)
+	log.add(id, msg, cb)
     })
   }
 
@@ -68,7 +69,7 @@ exports.init = function (dir, ssbId, config) {
 
   function getStatus() {
     return {
-      full: full.since.value
+      log: log.since.value
     }
   }
 
@@ -224,9 +225,12 @@ exports.init = function (dir, ssbId, config) {
     add,
     validateAndAdd,
     getStatus,
+    last: fullIndex.lastIndex
+
+    // FIXME
+    feedIndex,
     getHops: contacts.getHops,
     getProfiles: profiles.getProfiles,
-    feedIndex,
 
     syncMissingProfiles,
     syncMissingContacts,

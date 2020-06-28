@@ -24,8 +24,11 @@ exports.init = function (sbot, config) {
 
     function getClock()
     {
-      // FIXME
-      var clock = {} // id -> sequence
+      var clock = {}
+      for (var k in SSB.db.last) {
+        clock[k] = last[k].sequence
+      }
+
       cb(null, clock)
     }
 
@@ -35,7 +38,7 @@ exports.init = function (sbot, config) {
   sbot.post = Obv()
 
   sbot.add = function(msg, cb) {
-    SSB.db.validateAndAddStrictOrder(msg, cb)
+    SSB.db.validateAndAdd(msg, cb)
   }
 
   function isString (s) {
