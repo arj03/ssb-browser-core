@@ -41,6 +41,16 @@ exports.init = function (sbot, config) {
     SSB.db.validateAndAdd(msg, cb)
   }
 
+  sbot.getAtSequence = function (seqid, cb) {
+    // will NOT expose private plaintext
+    SSB.db.clock.get(isString(seqid) ? seqid.split(':') : seqid, function (err, value) {
+      if (err) cb(err)
+      else cb(null, originalData(value))
+    })
+  }
+
+  // helpers
+
   function isString (s) {
     return typeof s === 'string'
   }
@@ -66,14 +76,6 @@ exports.init = function (sbot, config) {
   function originalData(data) {
     data.value = originalValue(data.value)
     return data
-  }
-
-  sbot.getAtSequence = function (seqid, cb) {
-    // will NOT expose private plaintext
-    SSB.db.clock.get(isString(seqid) ? seqid.split(':') : seqid, function (err, value) {
-      if (err) cb(err)
-      else cb(null, originalData(value))
-    })
   }
 
   return {}

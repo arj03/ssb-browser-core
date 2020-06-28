@@ -51,6 +51,17 @@ exports.init = function (dir, config) {
       box: require('ssb-keys').box,
       blobFiles: require('ssb-blob-files'),
 
+      // sbot convenience wrappers
+      publish: function(msg, cb) {
+        state.queue = []
+        state = validate.appendNew(state, null, net.config.keys, msg, Date.now())
+        console.log(state.queue[0])
+        db.add(state.queue[0].value, (err, data) => {
+          net.post(data.value) // tell ebt
+          cb(err, data)
+        })
+      },
+
       // config
       hops: 1,
 

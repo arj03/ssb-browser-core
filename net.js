@@ -43,7 +43,7 @@ exports.init = function(dir, overwriteConfig) {
   .use(require('./ssb-partial-replication'))
   .use(require('./simple-ooo'))
   .use(require('ssb-ws'))
-  .use(require('ssb-ebt'))
+  .use(require('./simple-ebt'))
   .use(require('ssb-tunnel'))
   .use(require('./tunnel-message'))
   .use(require("./simple-blobs"))
