@@ -15,7 +15,7 @@ function getId(msg) {
 exports.init = function (dir, ssbId, config) {
   const log = Log(dir, ssbId, config)
   const fullIndex = FullScanIndexes(log)
-  
+
   function get(id, cb) {
     fullIndex.keysGet(id, (err, data) => {
       if (data)
@@ -40,6 +40,17 @@ exports.init = function (dir, ssbId, config) {
 	log.add(id, msg, cb)
     })
   }
+
+  function del(key, cb) => {
+    fullIndex.keysGet(key, (err, val, seq) => {
+      if (err) return cb(err)
+      if (seq == null) return cb(new Error('seq is null!'))
+
+      log.del(seq, cb)
+    })
+  }
+
+  // FIXME: deleteFeed
 
   function decryptMessage(msg) {
     return keys.unbox(msg.content, SSB.net.config.keys.private)
@@ -223,6 +234,7 @@ exports.init = function (dir, ssbId, config) {
   return {
     get,
     add,
+    del,
     validateAndAdd,
     getStatus,
     last: fullIndex.lastIndex

@@ -18,7 +18,7 @@ module.exports = function (dir, ssbId, config) {
       timestamp: Date.now()
     }
     log.append(data, false, function (err) {
-      if(err) cb(err)
+      if (err) cb(err)
       else cb(null, data)
     })
   }
