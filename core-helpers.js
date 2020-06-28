@@ -39,13 +39,13 @@ exports.removeBlobs = function() {
     fs.root.getDirectory(path, {}, function(dirEntry) {
       var dirReader = dirEntry.createReader()
       dirReader.readEntries(function(entries) {
-	for(var i = 0; i < entries.length; i++) {
-	  var entry = entries[i]
-	  if (entry.isDirectory) {
-	    //console.log('Directory: ' + entry.fullPath);
-	    listDir(fs, entry.fullPath)
-	  }
-	  else if (entry.isFile) {
+        for(var i = 0; i < entries.length; i++) {
+          var entry = entries[i]
+          if (entry.isDirectory) {
+            //console.log('Directory: ' + entry.fullPath);
+            listDir(fs, entry.fullPath)
+          }
+          else if (entry.isFile) {
             console.log('deleting file: ' + entry.fullPath)
             const file = raf(entry.fullPath)
             file.open((err, done) => {
@@ -53,7 +53,7 @@ exports.removeBlobs = function() {
               file.destroy()
             })
           }
-	}
+        }
       })
     })
   }

@@ -19,9 +19,9 @@ exports.init = function (dir, ssbId, config) {
   function get(id, cb) {
     fullIndex.keysGet(id, (err, data) => {
       if (data)
-	cb(null, data.value)
+        cb(null, data.value)
       else
-	cb(err)
+        cb(err)
     })
   }
 
@@ -35,9 +35,9 @@ exports.init = function (dir, ssbId, config) {
 
     keys.get(id, (err, data) => {
       if (data)
-	cb(null, data.value)
+        cb(null, data.value)
       else
-	log.add(id, msg, cb)
+        log.add(id, msg, cb)
     })
   }
 
@@ -111,7 +111,7 @@ exports.init = function (dir, ssbId, config) {
       cb(err, [...new Set(feedsToSync)])
     })
   }
-  
+
   function syncMissingSequence() {
     SSB.connected((rpc) => {
       getMissingFeeds('latestSequence', (err, feedsToSync) => {
@@ -190,7 +190,7 @@ exports.init = function (dir, ssbId, config) {
       })
     })
   }
-  
+
   function syncMissingContacts() {
     SSB.connected((rpc) => {
       getMissingFeeds('syncedContacts', (err, feedsToSync) => {
