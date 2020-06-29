@@ -18,7 +18,7 @@ function getId(msg) {
 
 exports.init = function (dir, ssbId, config) {
   const log = Log(dir, ssbId, config)
-  const jitdb = JITDb(log.filename, "./indexes")
+  const jitdb = JITDb(log, "/indexes")
   const contacts = Contacts(jitdb)
   const profiles = Profiles(jitdb)
   const fullIndex = FullScanIndexes(log)

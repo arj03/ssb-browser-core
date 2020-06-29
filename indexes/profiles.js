@@ -27,9 +27,9 @@ module.exports = function (db) {
     db.query(query, false, (err, results) => {
       console.log("about messages", results.length)
       results.forEach(data => {
-        if (data.content.about != msg.author) return
+        if (data.value.content.about != data.value.author) return
 
-        let profile = profilesBuild[data.value.author] || {}
+        let profile = profiles[data.value.author] || {}
 
         content = data.value.content
 
