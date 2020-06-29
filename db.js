@@ -10,6 +10,7 @@ const FullScanIndexes = require('./indexes/full-scan')
 const Contacts = require('./indexes/contacts')
 const Profiles = require('./indexes/profiles')
 const Partial = require('./indexes/partial')
+const JITDb = require('jitdb')
 
 function getId(msg) {
   return '%'+hash(JSON.stringify(msg, null, 2))
@@ -17,9 +18,10 @@ function getId(msg) {
 
 exports.init = function (dir, ssbId, config) {
   const log = Log(dir, ssbId, config)
+  const jitdb = JITDb(log.filename, "./indexes")
+  const contacts = Contacts(jitdb)
+  const profiles = Profiles(jitdb)
   const fullIndex = FullScanIndexes(log)
-  const contacts = Contacts(log)
-  const profiles = Profiles(log)
   const partial = Partial()
 
   function get(id, cb) {
@@ -39,7 +41,7 @@ exports.init = function (dir, ssbId, config) {
     // var decrypted = decryptMessage(msg)
     //  if (!decrypted) // not for us
 
-    keys.get(id, (err, data) => {
+    fullIndex.keysGet(id, (err, data) => {
       if (data)
         cb(null, data.value)
       else
@@ -247,6 +249,7 @@ exports.init = function (dir, ssbId, config) {
     last: fullIndex.lastIndex,
     getHops: contacts.getHops,
     getProfiles: profiles.getProfiles,
+    jitdb,
 
     // partial stuff
     syncMissingProfiles,

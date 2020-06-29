@@ -1,12 +1,11 @@
-const jitdb = require('jitdb')
 const isFeed = require('ssb-ref').isFeed
 
-module.exports = function (log) {
-  const bValue = new Buffer('value')
-  const bContent = new Buffer('content')
+module.exports = function (db) {
+  const bValue = Buffer.from('value')
+  const bContent = Buffer.from('content')
 
-  const bType = new Buffer('type')
-  const bContactValue = new Buffer('contact')
+  const bType = Buffer.from('type')
+  const bContactValue = Buffer.from('contact')
 
   function seekType(buffer) {
     var p = 0 // note you pass in p!
@@ -19,26 +18,28 @@ module.exports = function (log) {
     }
   }
 
-  var db = jitdb(log.filename, "./indexes")
-  const query = { type: 'EQUAL', data: { seek: seekType, value: bContactType, indexName: "type_contact" } }
+  db.onReady(() => {
+    const query = { type: 'EQUAL', data: { seek: seekType, value: bContactValue, indexName: "type_contact" } }
 
-  var hops = {}
+    var hops = {}
 
-  db.query(query, false, (err, results) => {
-    results.forEach(data => {
-      var data = logEntry.value
+    db.query(query, false, (err, results) => {
+      console.log("contact messages", results.length)
+      results.forEach(data => {
+        var data = logEntry.value
 
-      var from = data.value.author
-      var to = data.value.content.contact
-      var value =
-          data.value.content.blocking || data.value.content.flagged ? -1 :
-          data.value.content.following === true ? 1
-          : -2
+        var from = data.value.author
+        var to = data.value.content.contact
+        var value =
+            data.value.content.blocking || data.value.content.flagged ? -1 :
+            data.value.content.following === true ? 1
+            : -2
 
-      if(isFeed(from) && isFeed(to)) {
-        hops[from] = hops[from] || {}
-        hops[from][to] = value
-      }
+        if(isFeed(from) && isFeed(to)) {
+          hops[from] = hops[from] || {}
+          hops[from][to] = value
+        }
+      })
     })
   })
 
