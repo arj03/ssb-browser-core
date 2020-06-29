@@ -9,6 +9,7 @@ const Log = require('./log')
 const FullScanIndexes = require('./indexes/full-scan')
 const Contacts = require('./indexes/contacts')
 const Profiles = require('./indexes/profiles')
+const Partial = require('./indexes/partial')
 
 function getId(msg) {
   return '%'+hash(JSON.stringify(msg, null, 2))
@@ -19,6 +20,7 @@ exports.init = function (dir, ssbId, config) {
   const fullIndex = FullScanIndexes(log)
   const contacts = Contacts(log)
   const profiles = Profiles(log)
+  const partial = Partial()
 
   function get(id, cb) {
     fullIndex.keysGet(id, (err, data) => {
@@ -89,7 +91,7 @@ exports.init = function (dir, ssbId, config) {
   }
 
   function getMissingFeeds(missingAttr, cb) {
-    let feedState = feedIndex.get()
+    let partialState = partial.get()
     contacts.getHops((err, hops) => {
       let feedsToSync = []
 
@@ -105,7 +107,7 @@ exports.init = function (dir, ssbId, config) {
 
         for (var relation in hops[feedId]) {
           if (hops[feedId][relation] >= 0) {
-            if (!feedState[relation] || !feedState[relation][missingAttr]) {
+            if (!partialState[relation] || !partialState[relation][missingAttr]) {
               feedsToSync.push(relation)
             }
           }
@@ -118,7 +120,7 @@ exports.init = function (dir, ssbId, config) {
 
   function syncMissingSequence() {
     SSB.connected((rpc) => {
-      getMissingFeeds('latestSequence', (err, feedsToSync) => {
+      getMissingFeeds('syncedMessages', (err, feedsToSync) => {
         console.log(`syncing messages for ${feedsToSync.length} feeds`)
         console.time("downloading messages")
 
@@ -131,18 +133,19 @@ exports.init = function (dir, ssbId, config) {
               rpc.partialReplication.getFeedReverse({ id: feed, keys: false, limit: 25 }),
               pull.asyncMap(SSB.db.validateAndAdd),
               pull.collect((err, msgs) => {
+                if (err) {
+                  console.error(err.message)
+                  return cb(err)
+                }
+
                 SSB.state.queue = []
                 //console.timeEnd("downloading messages")
 
-                if (err)
-                  cb(err)
-                else {
-                  if (msgs.length > 0)
-                    SSB.db.feedIndex.updateState(feed, {
-                      latestSequence: msgs[msgs.length-1].value.sequence
-                    })
-                  cb()
-                }
+                SSB.db.feedIndex.updateState(feed, {
+                  syncedMessages: true
+                })
+
+                cb()
               })
             )
           }),
@@ -245,9 +248,10 @@ exports.init = function (dir, ssbId, config) {
     getHops: contacts.getHops,
     getProfiles: profiles.getProfiles,
 
+    // partial stuff
     syncMissingProfiles,
     syncMissingContacts,
     syncMissingSequence,
-    getMissingFeeds
+    getMissingFeeds // debugging
   }
 }
