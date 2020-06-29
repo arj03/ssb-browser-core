@@ -5,7 +5,6 @@ const raf = require('polyraf')
 const pull = require('pull-stream')
 const defer = require('pull-defer')
 const BoxStream = require('pull-box-stream')
-const PolyRAF = require('polyraf')
 const sanitize = require('sanitize-filename')
 
 exports.manifest = {
@@ -122,7 +121,7 @@ exports.init = function (sbot, config) {
   }
 
   function privateFsURL(id, cb) {
-    var file = PolyRAF(sanitizedPrivatePath(id))
+    var file = raf(sanitizedPrivatePath(id))
     file.stat((err, file) => {
       cb(null, URL.createObjectURL(file))
     })
@@ -151,7 +150,7 @@ exports.init = function (sbot, config) {
     }
     else
     {
-      var file = PolyRAF(sanitizedPath(id))
+      var file = raf(sanitizedPath(id))
       file.stat((err, file) => {
         cb(null, URL.createObjectURL(file))
       })

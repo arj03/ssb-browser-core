@@ -26,7 +26,7 @@ exports.init = function (sbot, config) {
     {
       var clock = {}
       for (var k in SSB.db.last) {
-        clock[k] = last[k].sequence
+        clock[k] = last[k]
       }
 
       cb(null, clock)

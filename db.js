@@ -47,7 +47,7 @@ exports.init = function (dir, ssbId, config) {
     })
   }
 
-  function del(key, cb) => {
+  function del(key, cb) {
     fullIndex.keysGet(key, (err, val, seq) => {
       if (err) return cb(err)
       if (seq == null) return cb(new Error('seq is null!'))

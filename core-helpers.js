@@ -66,11 +66,10 @@ exports.removeBlobs = function() {
 exports.sync = function()
 {
   exports.connected((rpc) => {
-    // FIXME: use friends reduce
-
-    SSB.db.friends.hops((err, hops) => {
+    SSB.db.getHops((err, hops) => {
+      console.log(hops)
       for (var feed in hops)
-        if (hops[feed] <= SSB.hops)
+        if (hops[feed] <= (SSB.hops + 1))
           SSB.net.ebt.request(feed, true)
     })
   })

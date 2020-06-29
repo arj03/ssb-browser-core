@@ -19,7 +19,7 @@ module.exports = function (log) {
     }
   }
 
-  var db = jitdb(log.path, "./indexes")
+  var db = jitdb(log.filename, "./indexes")
   const query = { type: 'EQUAL', data: { seek: seekType, value: bContactType, indexName: "type_contact" } }
 
   var hops = {}

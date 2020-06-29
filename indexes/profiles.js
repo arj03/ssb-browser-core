@@ -19,14 +19,14 @@ module.exports = function (log) {
     }
   }
 
-  var db = jitdb(log.path, "./indexes")
+  var db = jitdb(log.filename, "./indexes")
   const query = { type: 'EQUAL', data: { seek: seekType, value: bAboutType, indexName: "type_about" } }
 
   var profiles = {}
 
   db.query(query, false, (err, results) => {
     results.forEach(data => {
-      if (data.content.about != msg.author) continue
+      if (data.content.about != msg.author) return
 
       let profile = profilesBuild[data.value.author] || {}
 
