@@ -8,7 +8,7 @@ module.exports = function (dir, ssbId, config) {
     
   var log = OffsetLogCompat(OffsetLog(
     path.join(dir, 'log.bipf'),
-    { blockSize:1024*64, codec: bipf }
+    { blockSize:1024*64 }
   ))
 
   log.add = function (id, msg, cb) {
@@ -17,7 +17,9 @@ module.exports = function (dir, ssbId, config) {
       value: msg,
       timestamp: Date.now()
     }
-    log.append(data, false, function (err) {
+    var b = Buffer.alloc(bipf.encodingLength(data))
+    bipf.encode(data, b, 0)
+    log.append(b, false, function (err) {
       if (err) cb(err)
       else cb(null, data)
     })

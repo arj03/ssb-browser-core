@@ -76,6 +76,7 @@ exports.init = function (sbot, config) {
   }
 
   sbot.on('rpc:connect', function (rpc, isClient) {
+    return // FIXME: initial sync
     if (isClient) {
       var opts = {version: 3}
       var a = toPull.duplex(ebt.createStream(rpc.id, opts.version, true))

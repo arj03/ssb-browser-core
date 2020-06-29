@@ -1,3 +1,4 @@
+const bipf = require('bipf')
 const isFeed = require('ssb-ref').isFeed
 
 module.exports = function (db) {
@@ -19,7 +20,7 @@ module.exports = function (db) {
   }
 
   db.onReady(() => {
-    const query = { type: 'EQUAL', data: { seek: seekType, value: bAboutType, indexName: "type_about" } }
+    const query = { type: 'EQUAL', data: { seek: seekType, value: bAboutValue, indexName: "type_about" } }
 
     var profiles = {}
 

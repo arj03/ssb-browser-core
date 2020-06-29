@@ -1,3 +1,4 @@
+const bipf = require('bipf')
 const isFeed = require('ssb-ref').isFeed
 
 module.exports = function (db) {
@@ -26,8 +27,6 @@ module.exports = function (db) {
     db.query(query, false, (err, results) => {
       console.log("contact messages", results.length)
       results.forEach(data => {
-        var data = logEntry.value
-
         var from = data.value.author
         var to = data.value.content.contact
         var value =

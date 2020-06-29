@@ -1,3 +1,5 @@
+const bipf = require('bipf')
+
 module.exports = function (log) {
   const bKey = new Buffer('key')
   const bValue = new Buffer('value')
