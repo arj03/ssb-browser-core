@@ -1,28 +1,12 @@
-const bipf = require('bipf')
 const isFeed = require('ssb-ref').isFeed
 
 module.exports = function (db) {
-  const bValue = Buffer.from('value')
-  const bContent = Buffer.from('content')
-
-  const bType = Buffer.from('type')
   const bAboutValue = Buffer.from('about')
-
-  function seekType(buffer) {
-    var p = 0 // note you pass in p!
-    p = bipf.seekKey(buffer, p, bValue)
-
-    if (~p) {
-      p = bipf.seekKey(buffer, p, bContent)
-      if (~p)
-        return bipf.seekKey(buffer, p, bType)
-    }
-  }
 
   var profiles = {}
 
   db.onReady(() => {
-    const query = { type: 'EQUAL', data: { seek: seekType, value: bAboutValue, indexName: "type_about" } }
+    const query = { type: 'EQUAL', data: { seek: db.seekType, value: bAboutValue, indexName: "type_about" } }
 
     console.time("profiles")
 
