@@ -24,8 +24,9 @@ module.exports = function (db) {
 
     var hops = {}
 
+    console.time("contacts")
+
     db.query(query, false, (err, results) => {
-      console.log("contact messages", results.length)
       results.forEach(data => {
         var from = data.value.author
         var to = data.value.content.contact
@@ -39,6 +40,8 @@ module.exports = function (db) {
           hops[from][to] = value
         }
       })
+
+      console.timeEnd("contacts")
     })
   })
 

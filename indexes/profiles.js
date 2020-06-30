@@ -24,8 +24,9 @@ module.exports = function (db) {
 
     var profiles = {}
 
+    console.time("profiles")
+
     db.query(query, false, (err, results) => {
-      console.log("about messages", results.length)
       results.forEach(data => {
         if (data.value.content.about != data.value.author) return
 
@@ -46,6 +47,8 @@ module.exports = function (db) {
 
         profiles[data.value.author] = profile
       })
+
+      console.timeEnd("profiles")
     })
   })
 

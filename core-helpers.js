@@ -30,7 +30,31 @@ function deleteDatabaseFile(filename) {
 
 exports.removeDB = function() {
   deleteDatabaseFile('log.bipf')
-  localStorage['feed.json'] = JSON.stringify({})
+  localStorage['partial.json'] = JSON.stringify({})
+
+  function removeIndexes(fs)
+  {
+    fs.root.getDirectory("/indexes", {}, function(dirEntry) {
+      var dirReader = dirEntry.createReader()
+      dirReader.readEntries(function(entries) {
+        for(var i = 0; i < entries.length; i++) {
+          var entry = entries[i]
+          if (entry.isFile) {
+            console.log('deleting indexes: ' + entry.fullPath)
+            const file = raf(entry.fullPath)
+            file.open((err, done) => {
+              if (err) return console.error(err)
+              file.destroy()
+            })
+          }
+        }
+      })
+    })
+  }
+
+  window.webkitRequestFileSystem(window.PERSISTENT, 0, function (fs) {
+    removeIndexes(fs)
+  })
 }
 
 exports.removeBlobs = function() {
