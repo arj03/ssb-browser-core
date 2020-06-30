@@ -44,6 +44,7 @@ exports.init = function (dir, config) {
       connected: helpers.connected,
 
       removeDB: helpers.removeDB,
+      removeIndexes: helpers.removeIndexes,
       removeBlobs: helpers.removeBlobs,
 
       sync: helpers.sync,

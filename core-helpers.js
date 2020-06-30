@@ -28,12 +28,8 @@ function deleteDatabaseFile(filename) {
   })
 }
 
-exports.removeDB = function() {
-  deleteDatabaseFile('log.bipf')
-  localStorage['partial.json'] = JSON.stringify({})
-
-  function removeIndexes(fs)
-  {
+exports.removeIndexes = function removeIndexes(fs) {
+  window.webkitRequestFileSystem(window.PERSISTENT, 0, function (fs) {
     fs.root.getDirectory("/indexes", {}, function(dirEntry) {
       var dirReader = dirEntry.createReader()
       dirReader.readEntries(function(entries) {
@@ -50,11 +46,13 @@ exports.removeDB = function() {
         }
       })
     })
-  }
-
-  window.webkitRequestFileSystem(window.PERSISTENT, 0, function (fs) {
-    removeIndexes(fs)
   })
+}
+
+exports.removeDB = function() {
+  deleteDatabaseFile('log.bipf')
+  localStorage['partial.json'] = JSON.stringify({})
+  exports.removeIndexes()
 }
 
 exports.removeBlobs = function() {
