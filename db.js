@@ -66,8 +66,24 @@ exports.init = function (dir, ssbId, config) {
 
   const hmac_key = null
 
+  function validateAndAddOOO(msg, cb) {
+    try {
+      var state = validate.initial()
+      validate.appendOOO(SSB.state, hmac_key, msg)
+
+      if (SSB.state.error)
+        return cb(SSB.state.error)
+
+      add(msg, cb)
+    }
+    catch (ex)
+    {
+      return cb(ex)
+    }
+  }
+
   function validateAndAdd(msg, cb) {
-    const knownAuthor = msg.author in SSB.state.feeds
+    const knownAuthor = msg.author in SSB.state.feeds // FIXME: incorrect
 
     try {
       if (!knownAuthor)
@@ -143,9 +159,7 @@ exports.init = function (dir, ssbId, config) {
                 SSB.state.queue = []
                 //console.timeEnd("downloading messages")
 
-                SSB.db.feedIndex.updateState(feed, {
-                  syncedMessages: true
-                })
+                partial.updateState(feed, { syncedMessages: true })
 
                 cb()
               })
@@ -173,7 +187,7 @@ exports.init = function (dir, ssbId, config) {
             //console.time("syncing profile")
             pull(
               rpc.partialReplication.getMessagesOfType({id: feed, type: 'about'}),
-              pull.asyncMap(SSB.db.validateAndAdd),
+              pull.asyncMap(SSB.db.validateAndAddOOO),
               pull.collect((err, msgs) => {
                 if (err) {
                   console.error(err.message)
@@ -183,9 +197,7 @@ exports.init = function (dir, ssbId, config) {
                 //console.timeEnd("syncing profile")
                 //console.log(msgs.length)
 
-                SSB.db.feedIndex.updateState(feed, {
-                  syncedProfile: true
-                })
+                partial.updateState(feed, { syncedProfile: true })
 
                 cb()
               })
@@ -213,7 +225,7 @@ exports.init = function (dir, ssbId, config) {
             //console.time("syncing contacts")
             pull(
               rpc.partialReplication.getMessagesOfType({id: feed, type: 'contact'}),
-              pull.asyncMap(SSB.db.validateAndAdd),
+              pull.asyncMap(SSB.db.validateAndAddOOO),
               pull.collect((err, msgs) => {
                 if (err) {
                   console.error(err.message)
@@ -223,9 +235,7 @@ exports.init = function (dir, ssbId, config) {
                 //console.timeEnd("syncing contacts")
                 //console.log(msgs.length)
 
-                SSB.db.feedIndex.updateState(feed, {
-                  syncedContacts: true
-                })
+                partial.updateState(feed, { syncedContacts: true })
 
                 cb()
               })
@@ -245,6 +255,7 @@ exports.init = function (dir, ssbId, config) {
     add,
     del,
     validateAndAdd,
+    validateAndAddOOO,
     getStatus,
     last: fullIndex.lastIndex,
     getHops: contacts.getHops,

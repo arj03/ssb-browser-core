@@ -46,13 +46,13 @@ module.exports = function (log) {
       if (!keyToSeq[key])
         cb('Key not found:' + key)
       else
-        full.get(keyToSeq[key], cb)
+        log.get(keyToSeq[key], cb)
     },
     clockGet: function(key, cb) {
       if (!authorSequenceToSeq[key])
         cb('Key not found:' + key)
       else
-        full.get(authorSequenceToSeq[key], cb)
+        log.get(authorSequenceToSeq[key], cb)
     },
     lastGet: function(feedId, cb) {
       if (!authorLatestSequence[feedId])

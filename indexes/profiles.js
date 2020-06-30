@@ -19,10 +19,10 @@ module.exports = function (db) {
     }
   }
 
+  var profiles = {}
+
   db.onReady(() => {
     const query = { type: 'EQUAL', data: { seek: seekType, value: bAboutValue, indexName: "type_about" } }
-
-    var profiles = {}
 
     console.time("profiles")
 
