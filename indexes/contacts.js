@@ -12,7 +12,7 @@ module.exports = function (db) {
       data: {
         seek: db.seekType,
         value: bContactValue,
-        indexName: "type_contact"
+        indexType: "type"
       }
     }
 

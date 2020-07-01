@@ -12,7 +12,7 @@ module.exports = function (db) {
       data: {
         seek: db.seekType,
         value: bAboutValue,
-        indexName: "type_about" }
+        indexType: "type" }
     }
 
     console.time("profiles")
