@@ -24,7 +24,7 @@ exports.permissions = {
 //there was a bug that caused some peers
 //to request things that weren't feeds.
 //this is fixed, so just ignore anything that isn't a feed.
-function cleanClock (clock, message) {
+function cleanClock(clock, message) {
   for(var k in clock)
     if(!isFeed(k)) {
       delete clock[k]
@@ -59,11 +59,10 @@ exports.init = function (sbot, config) {
 	cb(err && err.fatal ? err : null, msg)
       })
     },
-    isFeed: isFeed,
+    isFeed
   })
 
-  function getClock()
-  {
+  function getClock() {
     SSB.db.getLast((err, last) => {
       var clock = {}
       for (var k in last) {
@@ -77,22 +76,22 @@ exports.init = function (sbot, config) {
 
   SSB.events.on('SSB: loaded', getClock)
 
-  sbot.post(function (msg) {
+  sbot.post(function(msg) {
     ebt.onAppend(msg.value)
   })
 
-  function onClose () {
+  function onClose() {
     sbot.emit('replicate:finish', ebt.state.clock)
   }
 
   return {
-    replicate: function (opts) {
+    replicate: function(opts) {
       if (opts.version !== 2 && opts.version != 3)
 	throw new Error('expected ebt.replicate({version: 3 or 2})')
       return toPull.duplex(ebt.createStream(this.id, opts.version, false))
     },
     //get replication status for feeds for this id.
-    peerStatus: function (id) {
+    peerStatus: function(id) {
       id = id || sbot.id
       var data = {
 	id: id,
