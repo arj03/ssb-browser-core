@@ -1,7 +1,10 @@
 const bipf = require('bipf')
 
 module.exports = function (log) {
-  const queue = require('../waiting-queue')()
+  const queueLatest = require('../waiting-queue')()
+  const queueKey = require('../waiting-queue')()
+  const queueSequence = require('../waiting-queue')()
+
   const bKey = new Buffer('key')
   const bValue = new Buffer('value')
   const bAuthor = new Buffer('author')
@@ -41,31 +44,46 @@ module.exports = function (log) {
     end: () => {
       console.log(`key index full scan time: ${Date.now()-start}ms, total items: ${count}`)
 
-      queue.done(null, authorLatestSequence)
+      queueLatest.done(null, authorLatestSequence)
+      queueKey.done(null, keyToSeq)
+      queueSequence.done(null, authorSequenceToSeq)
     }
   })
 
   return {
     keysGet: function(key, cb) {
-      if (!keyToSeq[key])
-        cb('Key not found:' + key)
-      else
-        log.get(keyToSeq[key], cb)
+      queueKey.get(() => {
+        console.log(log)
+        if (!keyToSeq[key])
+          cb('Key not found:' + key)
+        else
+          log.get(keyToSeq[key], (err, data) => {
+            if (err) return cb(err)
+            cb(null, bipf.decode(data, 0))
+          })
+      })
     },
     clockGet: function(key, cb) {
-      if (!authorSequenceToSeq[key])
-        cb('Key not found:' + key)
-      else
-        log.get(authorSequenceToSeq[key], cb)
+      queueSequence.get(() => {
+        if (!authorSequenceToSeq[key])
+          cb('Key not found:' + key)
+        else
+          log.get(authorSequenceToSeq[key], (err, data) => {
+            if (err) return cb(err)
+            cb(null, bipf.decode(data, 0))
+          })
+      })
     },
     lastGet: function(feedId, cb) {
-      if (!authorLatestSequence[feedId])
-        cb('Author not found:' + feedId)
-      else
-        cb(null, authorLatestSequence[feedId])
+      queueLatest.get(() => {
+        if (!authorLatestSequence[feedId])
+          cb('Author not found:' + feedId)
+        else
+          cb(null, authorLatestSequence[feedId])
+      })
     },
     getLast: function(cb) {
-      queue.get(cb)
+      queueLatest.get(cb)
     }
   }
 }
