@@ -1,16 +1,23 @@
 const isFeed = require('ssb-ref').isFeed
 
 module.exports = function (db) {
+  const queue = require('../waiting-queue')()
   const bAboutValue = Buffer.from('about')
 
   var profiles = {}
 
   db.onReady(() => {
-    const query = { type: 'EQUAL', data: { seek: db.seekType, value: bAboutValue, indexName: "type_about" } }
+    const query = {
+      type: 'EQUAL',
+      data: {
+        seek: db.seekType,
+        value: bAboutValue,
+        indexName: "type_about" }
+    }
 
     console.time("profiles")
 
-    db.query(query, false, (err, results) => {
+    db.query(query, 0, (err, results) => {
       results.forEach(data => {
         if (data.value.content.about != data.value.author) return
 
@@ -33,6 +40,8 @@ module.exports = function (db) {
       })
 
       console.timeEnd("profiles")
+
+      queue.done(null, profiles)
     })
   })
 
@@ -41,7 +50,7 @@ module.exports = function (db) {
 
   return {
     getProfiles: function(cb) {
-      cb(null, profiles)
+      queue.get(cb)
     }
   }
 }

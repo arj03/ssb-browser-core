@@ -1,6 +1,7 @@
 const bipf = require('bipf')
 
 module.exports = function (log) {
+  const queue = require('../waiting-queue')()
   const bKey = new Buffer('key')
   const bValue = new Buffer('value')
   const bAuthor = new Buffer('author')
@@ -12,8 +13,6 @@ module.exports = function (log) {
 
   var count = 0
   const start = Date.now()
-  var waiting = []
-  var isReady = false
 
   // FIXME: persistance
 
@@ -42,12 +41,7 @@ module.exports = function (log) {
     end: () => {
       console.log(`key index full scan time: ${Date.now()-start}ms, total items: ${count}`)
 
-      isReady = true
-
-      for (var i = 0; i< waiting.length; ++i)
-        waiting[i](null, authorLatestSequence)
-
-      waiting = []
+      queue.done(null, authorLatestSequence)
     }
   })
 
@@ -71,10 +65,7 @@ module.exports = function (log) {
         cb(null, authorLatestSequence[feedId])
     },
     getLast: function(cb) {
-      if (isReady)
-        cb(null, authorLatestSequence)
-      else
-        waiting.push(cb)
+      queue.get(cb)
     }
   }
 }

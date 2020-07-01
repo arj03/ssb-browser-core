@@ -1,16 +1,24 @@
 const isFeed = require('ssb-ref').isFeed
 
 module.exports = function (db) {
+  const queue = require('../waiting-queue')()
   const bContactValue = Buffer.from('contact')
 
   var hops = {}
 
   db.onReady(() => {
-    const query = { type: 'EQUAL', data: { seek: db.seekType, value: bContactValue, indexName: "type_contact" } }
+    const query = {
+      type: 'EQUAL',
+      data: {
+        seek: db.seekType,
+        value: bContactValue,
+        indexName: "type_contact"
+      }
+    }
 
     console.time("contacts")
 
-    db.query(query, false, (err, results) => {
+    db.query(query, 0, (err, results) => {
       results.forEach(data => {
         var from = data.value.author
         var to = data.value.content.contact
@@ -26,6 +34,8 @@ module.exports = function (db) {
       })
 
       console.timeEnd("contacts")
+
+      queue.done(null, hops)
     })
   })
 
@@ -34,7 +44,7 @@ module.exports = function (db) {
 
   return {
     getHops: function(cb) {
-      cb(null, hops)
+      queue.get(cb)
     }
   }
 }
