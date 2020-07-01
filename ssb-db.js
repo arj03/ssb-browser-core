@@ -19,22 +19,6 @@ exports.init = function (sbot, config) {
 
   // all the rest is ebt stuff
 
-  sbot.getVectorClock = function (_, cb) {
-    if (!cb) cb = _
-
-    function getClock()
-    {
-      var clock = {}
-      for (var k in SSB.db.last) {
-        clock[k] = last[k]
-      }
-
-      cb(null, clock)
-    }
-
-    SSB.events.on('SSB: loaded', getClock)
-  }
-
   sbot.post = Obv()
 
   sbot.add = function(msg, cb) {

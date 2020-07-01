@@ -257,7 +257,7 @@ exports.init = function (dir, ssbId, config) {
     validateAndAdd,
     validateAndAddOOO,
     getStatus,
-    last: fullIndex.lastIndex,
+    getLast: fullIndex.getLast,
     getHops: contacts.getHops,
     getProfiles: profiles.getProfiles,
     jitdb,

@@ -89,10 +89,16 @@ exports.sync = function()
 {
   exports.connected((rpc) => {
     SSB.db.getHops((err, hops) => {
-      console.log(hops)
-      for (var feed in hops)
-        if (hops[feed] <= (SSB.hops + 1))
-          SSB.net.ebt.request(feed, true)
+      for (var feed1 in hops[SSB.net.id]) {
+        if (hops[SSB.net.id][feed1] == 1) {
+          SSB.net.ebt.request(feed1, true)
+          for (var feed2 in hops[feed1])
+            if (hops[feed1][feed2] == 1)
+              SSB.net.ebt.request(feed2, true)
+        }
+      }
+
+      SSB.net.ebt.startEBT(rpc)
     })
   })
 }

@@ -28,7 +28,7 @@ exports.init = function(dir, overwriteConfig) {
       logging: true
     },
     ebt: {
-      logging: true
+      logging: false
     },
     blobs: {
       sympathy: 0, //sympathy controls whether you'll replicate

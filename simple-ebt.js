@@ -62,10 +62,20 @@ exports.init = function (sbot, config) {
     isFeed: isFeed,
   })
 
-  sbot.getVectorClock(function (err, clock) {
-    ebt.state.clock = clock || {}
-    ebt.update()
-  })
+  function getClock()
+  {
+    SSB.db.getLast((err, last) => {
+      var clock = {}
+      for (var k in last) {
+        clock[k] = last[k]
+      }
+
+      ebt.state.clock = clock || {}
+      ebt.update()
+    })
+  }
+
+  SSB.events.on('SSB: loaded', getClock)
 
   sbot.post(function (msg) {
     ebt.onAppend(msg.value)
@@ -74,23 +84,6 @@ exports.init = function (sbot, config) {
   function onClose () {
     sbot.emit('replicate:finish', ebt.state.clock)
   }
-
-  sbot.on('rpc:connect', function (rpc, isClient) {
-    return // FIXME: initial sync
-    if (isClient) {
-      var opts = {version: 3}
-      var a = toPull.duplex(ebt.createStream(rpc.id, opts.version, true))
-      var b = rpc.ebt.replicate(opts, function (err) {
-	if(err) {
-	  rpc.removeListener('closed', onClose)
-	  rpc._emit('fallback:replicate', err)
-	}
-      })
-
-      pull(a, b, a)
-      rpc.on('closed', onClose)
-    }
-  })
 
   return {
     replicate: function (opts) {
@@ -120,6 +113,19 @@ exports.init = function (sbot, config) {
 
       return data
     },
-    request: ebt.request
+    request: ebt.request,
+    startEBT: function(rpc) {
+      var opts = {version: 3}
+      var a = toPull.duplex(ebt.createStream(rpc.id, opts.version, true))
+      var b = rpc.ebt.replicate(opts, function (err) {
+	if(err) {
+	  rpc.removeListener('closed', onClose)
+	  rpc._emit('fallback:replicate', err)
+	}
+      })
+
+      pull(a, b, a)
+      rpc.on('closed', onClose)
+    }
   }
 }

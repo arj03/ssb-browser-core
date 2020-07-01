@@ -12,6 +12,8 @@ module.exports = function (log) {
 
   var count = 0
   const start = Date.now()
+  var waiting = []
+  var isReady = false
 
   // FIXME: persistance
 
@@ -31,13 +33,21 @@ module.exports = function (log) {
         var p3 = bipf.seekKey(data.value, p, bSequence)
         const sequence = bipf.decode(data.value, p3)
         authorSequenceToSeq[[author, sequence]] = data.seq
-        authorLatestSequence[author] = sequence
+        if (sequence > (authorLatestSequence[author] || 0))
+          authorLatestSequence[author] = sequence
       }
 
       count++
     },
     end: () => {
       console.log(`key index full scan time: ${Date.now()-start}ms, total items: ${count}`)
+
+      isReady = true
+
+      for (var i = 0; i< waiting.length; ++i)
+        waiting[i](null, authorLatestSequence)
+
+      waiting = []
     }
   })
 
@@ -60,6 +70,11 @@ module.exports = function (log) {
       else
         cb(null, authorLatestSequence[feedId])
     },
-    lastIndex: authorLatestSequence
+    getLast: function(cb) {
+      if (isReady)
+        cb(null, authorLatestSequence)
+      else
+        waiting.push(cb)
+    }
   }
 }
