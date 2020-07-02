@@ -53,7 +53,6 @@ module.exports = function (log) {
   return {
     keysGet: function(key, cb) {
       queueKey.get(() => {
-        console.log(log)
         if (!keyToSeq[key])
           cb('Key not found:' + key)
         else
