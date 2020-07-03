@@ -1,4 +1,5 @@
 const bipf = require('bipf')
+const Obv = require('obv')
 
 module.exports = function (log) {
   const queueLatest = require('../waiting-queue')()
@@ -10,7 +11,7 @@ module.exports = function (log) {
   const bAuthor = new Buffer('author')
   const bSequence = new Buffer('sequence')
 
-  var seq = 0
+  var seq = Obv(0)
   var keyToSeq = {}
   var authorSequenceToSeq = {}
   var authorLatestSequence = {}
@@ -23,7 +24,7 @@ module.exports = function (log) {
     const start = Date.now()
 
     if (!err) {
-      seq = file.seq
+      seq.set(file.seq)
       keyToSeq = file.data['keyToSeq']
       authorSequenceToSeq = file.data['authorSequenceToSeq']
       authorLatestSequence = file.data['authorLatestSequence']
@@ -55,19 +56,19 @@ module.exports = function (log) {
           authorLatestSequence[author] = sequence
       }
 
-      seq = data.seq
+      seq.set(data.seq)
       count++
 
-      indexWriter.save(filename, seq, getDataBuffer)
+      indexWriter.save(filename, seq.value, getDataBuffer)
     }
 
-    log.stream({ gt: seq }).pipe({
+    log.stream({ gt: seq.value }).pipe({
       paused: false,
       write: handleData,
       end: () => {
         console.log(`key index full scan time: ${Date.now()-start}ms, total items: ${count}`)
 
-        log.stream({ gt: seq, live: true }).pipe({
+        log.stream({ gt: seq.value, live: true }).pipe({
           paused: false,
           write: handleData
         })
@@ -112,6 +113,7 @@ module.exports = function (log) {
     },
     getLast: function(cb) {
       queueLatest.get(cb)
-    }
+    },
+    seq
   }
 }
