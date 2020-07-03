@@ -1,56 +1,72 @@
 const isFeed = require('ssb-ref').isFeed
+const Obv = require('obv')
 
 module.exports = function (db) {
   const queue = require('../waiting-queue')()
   const bAboutValue = Buffer.from('about')
 
+  var seq = Obv()
+  seq.set(0)
+
   var profiles = {}
+  const query = {
+    type: 'EQUAL',
+    data: {
+      seek: db.seekType,
+      value: bAboutValue,
+      indexType: "type" }
+  }
+
+  function updateData(data) {
+    if (data.value.content.about != data.value.author) return
+
+    let profile = profiles[data.value.author] || {}
+
+    content = data.value.content
+
+    if (content.name)
+      profile.name = content.name
+
+    if (content.description)
+      profile.description = content.description
+
+    if (content.image && typeof content.image.link === 'string')
+      profile.image = content.image.link
+    else if (typeof content.image === 'string')
+      profile.image = content.image
+
+    profiles[data.value.author] = profile
+  }
 
   db.onReady(() => {
-    const query = {
-      type: 'EQUAL',
-      data: {
-        seek: db.seekType,
-        value: bAboutValue,
-        indexType: "type" }
-    }
+    const filename = "/indexes/profiles.json"
+    const indexWriter = require('./index-persistance')()
+    indexWriter.load(filename, (err, file) => {
+      if (!err) {
+        seq.set(file.seq)
+        profiles = file.data
+        queue.done(null, profiles)
+      } else {
+        console.time("profiles")
 
-    console.time("profiles")
+        db.query(query, 0, (err, results) => {
+          results.forEach(updateData)
 
-    db.query(query, 0, (err, results) => {
-      results.forEach(data => {
-        if (data.value.content.about != data.value.author) return
+          console.timeEnd("profiles")
 
-        let profile = profiles[data.value.author] || {}
+          indexWriter.save(filename, seq.value,
+                           () => Buffer.from(JSON.stringify(profiles)))
 
-        content = data.value.content
-
-        if (content.name)
-          profile.name = content.name
-
-        if (content.description)
-          profile.description = content.description
-
-        if (content.image && typeof content.image.link === 'string')
-          profile.image = content.image.link
-        else if (typeof content.image === 'string')
-          profile.image = content.image
-
-        profiles[data.value.author] = profile
-      })
-
-      console.timeEnd("profiles")
-
-      queue.done(null, profiles)
+          queue.done(null, profiles)
+        })
+      }
     })
   })
-
-  // FIXME: persistance
-  // FIXME: changes
 
   return {
     getProfiles: function(cb) {
       queue.get(cb)
-    }
+    },
+    seq
   }
 }

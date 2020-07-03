@@ -105,7 +105,9 @@ exports.init = function (dir, ssbId, config) {
   function getStatus() {
     return {
       log: log.since.value,
-      full: fullIndex.seq.value
+      full: fullIndex.seq.value,
+      contacts: contacts.seq.value,
+      profiles: profiles.seq.value
     }
   }
 
