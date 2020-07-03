@@ -10,8 +10,8 @@ module.exports = function () {
       isReady = true
       errResult = err
       dataResult = data
-      
-      for (var i = 0; i< waiting.length; ++i)
+
+      for (var i = 0; i < waiting.length; ++i)
         waiting[i](err, data)
 
       waiting = []

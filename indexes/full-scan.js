@@ -10,18 +10,34 @@ module.exports = function (log) {
   const bAuthor = new Buffer('author')
   const bSequence = new Buffer('sequence')
 
+  var seq = 0
   var keyToSeq = {}
   var authorSequenceToSeq = {}
   var authorLatestSequence = {}
 
-  var count = 0
-  const start = Date.now()
+  const filename = "/indexes/full.json"
 
-  // FIXME: persistance
+  const indexWriter = require('./index-persistance')()
+  indexWriter.load(filename, (err, file) => {
+    var count = 0
+    const start = Date.now()
 
-  log.stream({}).pipe({
-    paused: false,
-    write: function (data) {
+    if (!err) {
+      seq = file.seq
+      keyToSeq = file.data['keyToSeq']
+      authorSequenceToSeq = file.data['authorSequenceToSeq']
+      authorLatestSequence = file.data['authorLatestSequence']
+    }
+
+    function getDataBuffer() {
+      return Buffer.from(JSON.stringify({
+        keyToSeq,
+        authorSequenceToSeq,
+        authorLatestSequence
+      }))
+    }
+
+    function handleData(data) {
       var p = 0 // note you pass in p!
       p = bipf.seekKey(data.value, p, bKey)
       const key = bipf.decode(data.value, p)
@@ -39,15 +55,28 @@ module.exports = function (log) {
           authorLatestSequence[author] = sequence
       }
 
+      seq = data.seq
       count++
-    },
-    end: () => {
-      console.log(`key index full scan time: ${Date.now()-start}ms, total items: ${count}`)
 
-      queueLatest.done(null, authorLatestSequence)
-      queueKey.done(null, keyToSeq)
-      queueSequence.done(null, authorSequenceToSeq)
+      indexWriter.save(filename, seq, getDataBuffer)
     }
+
+    log.stream({ gt: seq }).pipe({
+      paused: false,
+      write: handleData,
+      end: () => {
+        console.log(`key index full scan time: ${Date.now()-start}ms, total items: ${count}`)
+
+        log.stream({ gt: seq, live: true }).pipe({
+          paused: false,
+          write: handleData
+        })
+
+        queueLatest.done(null, authorLatestSequence)
+        queueKey.done(null, keyToSeq)
+        queueSequence.done(null, authorSequenceToSeq)
+      }
+    })
   })
 
   return {

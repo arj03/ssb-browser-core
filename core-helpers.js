@@ -51,6 +51,7 @@ exports.removeIndexes = function removeIndexes(fs) {
 
 exports.removeDB = function() {
   deleteDatabaseFile('log.bipf')
+  deleteDatabaseFile('/indexes/full.json')
   localStorage['partial.json'] = JSON.stringify({})
   exports.removeIndexes()
 }

@@ -14,6 +14,7 @@
     "flumelog-aligned-offset": "^1.1.2",
     "gossip-query": "^2.0.2",
     "jitdb": "0.0.1",
+    "lodash.debounce": "^4.0.8",
     "lossy-store": "^1.2.4",
     "polyraf": "^1.1.0",
     "pull-defer": "^0.2.3",
