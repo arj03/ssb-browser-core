@@ -11,7 +11,8 @@ module.exports = function (log) {
   const bAuthor = new Buffer('author')
   const bSequence = new Buffer('sequence')
 
-  var seq = Obv(0)
+  var seq = Obv()
+  seq.set(0)
   var keyToSeq = {}
   var authorSequenceToSeq = {}
   var authorLatestSequence = {}
