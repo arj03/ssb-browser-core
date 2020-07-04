@@ -17,7 +17,7 @@ module.exports = function (db) {
     }
   }
 
-  function updateDate(data) {
+  function updateData(data) {
     var from = data.value.author
     var to = data.value.content.contact
     var value =
@@ -45,7 +45,7 @@ module.exports = function (db) {
         console.time("contacts")
 
         db.query(query, 0, (err, results) => {
-          results.forEach(updateDate)
+          results.forEach(updateData)
           seq.set(db.getSeq(query))
 
           console.timeEnd("contacts")
@@ -58,7 +58,7 @@ module.exports = function (db) {
       }
 
       db.liveQuerySingleIndex(query, (err, results) => {
-        results.forEach(updateDate)
+        results.forEach(updateData)
         seq.set(db.getSeq(query))
         indexWriter.save(filename, seq.value,
                          () => Buffer.from(JSON.stringify(hops)))
