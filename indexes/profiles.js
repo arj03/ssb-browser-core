@@ -51,6 +51,7 @@ module.exports = function (db) {
 
         db.query(query, 0, (err, results) => {
           results.forEach(updateData)
+          seq.set(db.getSeq(query))
 
           console.timeEnd("profiles")
 
@@ -60,6 +61,13 @@ module.exports = function (db) {
           queue.done(null, profiles)
         })
       }
+
+      db.liveQuerySingleIndex(query, (err, results) => {
+        results.forEach(updateDate)
+        seq.set(db.getSeq(query))
+        indexWriter.save(filename, seq.value,
+                         () => Buffer.from(JSON.stringify(profiles)))
+      })
     })
   })
 

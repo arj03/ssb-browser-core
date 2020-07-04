@@ -46,6 +46,7 @@ module.exports = function (db) {
 
         db.query(query, 0, (err, results) => {
           results.forEach(updateDate)
+          seq.set(db.getSeq(query))
 
           console.timeEnd("contacts")
 
@@ -58,6 +59,9 @@ module.exports = function (db) {
 
       db.liveQuerySingleIndex(query, (err, results) => {
         results.forEach(updateDate)
+        seq.set(db.getSeq(query))
+        indexWriter.save(filename, seq.value,
+                         () => Buffer.from(JSON.stringify(hops)))
       })
     })
   })
