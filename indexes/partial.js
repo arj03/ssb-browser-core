@@ -7,24 +7,22 @@
  }
 */
 
+const AtomicFile = require('atomic-file')
+
 module.exports = function () {
   var state = {}
 
-  // FIXME: refactor this into module
-  var writer = null;
-  const filename = 'partial.json'
+  var f = AtomicFile("indexes/partial.json")
+
   function load() {
-    if (localStorage[filename])
-      state = JSON.parse(localStorage[filename])
+    f.get((err, data) => {
+      if (data)
+        state = data.state
+    })
   }
 
   function save() {
-    if (!writer) {
-      writer = setTimeout(() => {
-	writer = null
-	localStorage[filename] = JSON.stringify(state)
-      }, 1000)
-    }
+    f.set({ state }, () => {})
   }
 
   return {

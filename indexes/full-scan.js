@@ -1,5 +1,7 @@
 const bipf = require('bipf')
 const Obv = require('obv')
+const AtomicFile = require('atomic-file')
+const debounce = require('lodash.debounce')
 
 module.exports = function (log) {
   const queueLatest = require('../waiting-queue')()
@@ -17,26 +19,28 @@ module.exports = function (log) {
   var authorSequenceToSeq = {}
   var authorLatestSequence = {}
 
-  const filename = "/indexes/full.json"
+  var f = AtomicFile("indexes/full.json")
 
-  const indexWriter = require('./index-persistance')()
-  indexWriter.load(filename, (err, file) => {
+  function atomicSave()
+  {
+    f.set({
+      seq: seq.value,
+      keyToSeq,
+      authorSequenceToSeq,
+      authorLatestSequence
+    }, () => {})
+  }
+  var save = debounce(atomicSave, 250)
+
+  f.get((err, data) => {
     var count = 0
     const start = Date.now()
 
     if (!err) {
-      seq.set(file.seq)
-      keyToSeq = file.data['keyToSeq']
-      authorSequenceToSeq = file.data['authorSequenceToSeq']
-      authorLatestSequence = file.data['authorLatestSequence']
-    }
-
-    function getDataBuffer() {
-      return Buffer.from(JSON.stringify({
-        keyToSeq,
-        authorSequenceToSeq,
-        authorLatestSequence
-      }))
+      seq.set(data.seq)
+      keyToSeq = data.keyToSeq
+      authorSequenceToSeq = data.authorSequenceToSeq
+      authorLatestSequence = data.authorLatestSequence
     }
 
     function handleData(data) {
@@ -60,7 +64,7 @@ module.exports = function (log) {
       seq.set(data.seq)
       count++
 
-      indexWriter.save(filename, seq.value, getDataBuffer)
+      save()
     }
 
     log.stream({ gt: seq.value }).pipe({

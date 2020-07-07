@@ -1,5 +1,7 @@
 const isFeed = require('ssb-ref').isFeed
 const Obv = require('obv')
+const AtomicFile = require('atomic-file')
+const debounce = require('lodash.debounce')
 
 module.exports = function (db) {
   const queue = require('../waiting-queue')()
@@ -31,15 +33,21 @@ module.exports = function (db) {
     }
   }
 
+  var f = AtomicFile("indexes/contacts.json")
+
+  function atomicSave()
+  {
+    f.set({seq: seq.value, hops}, () => {})
+  }
+  var save = debounce(atomicSave, 250)
+
   var hops = {}
 
   db.onReady(() => {
-    const filename = "/indexes/contacts.json"
-    const indexWriter = require('./index-persistance')()
-    indexWriter.load(filename, (err, file) => {
+    f.get((err, data) => {
       if (!err) {
-        seq.set(file.seq)
-        hops = file.data
+        seq.set(data.seq)
+        hops = data.hops
         queue.done(null, hops)
       } else {
         console.time("contacts")
@@ -50,8 +58,7 @@ module.exports = function (db) {
 
           console.timeEnd("contacts")
 
-          indexWriter.save(filename, seq.value,
-                           () => Buffer.from(JSON.stringify(hops)))
+          save()
 
           queue.done(null, hops)
         })
@@ -60,8 +67,7 @@ module.exports = function (db) {
       db.liveQuerySingleIndex(query, (err, results) => {
         results.forEach(updateData)
         seq.set(db.getSeq(query))
-        indexWriter.save(filename, seq.value,
-                         () => Buffer.from(JSON.stringify(hops)))
+        save()
       })
     })
   })
