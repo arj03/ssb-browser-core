@@ -76,6 +76,9 @@ module.exports = function (db) {
     getHops: function(cb) {
       queue.get(cb)
     },
-    seq
+    seq,
+    remove: function(cb) {
+      f.destroy(cb)
+    }
   }
 }

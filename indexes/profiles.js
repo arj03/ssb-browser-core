@@ -82,6 +82,9 @@ module.exports = function (db) {
     getProfiles: function(cb) {
       queue.get(cb)
     },
-    seq
+    seq,
+    remove: function(cb) {
+      f.destroy(cb)
+    }
   }
 }

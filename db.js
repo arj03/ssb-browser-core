@@ -253,6 +253,13 @@ exports.init = function (dir, ssbId, config) {
     })
   }
 
+  function clearIndexes() {
+    contacts.remove(() => {})
+    profiles.remove(() => {})
+    fullIndex.remove(() => {})
+    partial.remove(() => {})
+  }
+
   return {
     get,
     add,
@@ -264,6 +271,7 @@ exports.init = function (dir, ssbId, config) {
     getHops: contacts.getHops,
     getProfiles: profiles.getProfiles,
     jitdb,
+    clearIndexes,
 
     // partial stuff
     syncMissingProfiles,

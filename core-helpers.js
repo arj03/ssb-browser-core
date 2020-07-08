@@ -29,6 +29,8 @@ function deleteDatabaseFile(filename) {
 }
 
 exports.removeIndexes = function removeIndexes(fs) {
+  SSB.db.clearIndexes()
+
   window.webkitRequestFileSystem(window.PERSISTENT, 0, function (fs) {
     fs.root.getDirectory("/indexes", {}, function(dirEntry) {
       var dirReader = dirEntry.createReader()
@@ -51,10 +53,6 @@ exports.removeIndexes = function removeIndexes(fs) {
 
 exports.removeDB = function() {
   deleteDatabaseFile('log.bipf')
-  deleteDatabaseFile('/indexes/full.json')
-  deleteDatabaseFile('/indexes/contacts.json')
-  deleteDatabaseFile('/indexes/profiles.json')
-  localStorage['partial.json'] = JSON.stringify({})
   exports.removeIndexes()
 }
 

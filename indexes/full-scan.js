@@ -119,6 +119,9 @@ module.exports = function (log) {
     getLast: function(cb) {
       queueLatest.get(cb)
     },
-    seq
+    seq,
+    remove: function(cb) {
+      f.destroy(cb)
+    }
   }
 }

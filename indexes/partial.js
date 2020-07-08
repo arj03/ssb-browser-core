@@ -52,6 +52,9 @@ module.exports = function () {
       return state
     },
 
-    load
+    load,
+    remove: function(cb) {
+      f.destroy(cb)
+    }
   }
 }
