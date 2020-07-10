@@ -33,6 +33,20 @@ exports.init = function (dir, config) {
     var validate = require('ssb-validate')
     var state = validate.initial()
 
+    // restore current state
+    db.getLast((err, last) => {
+      // copy to so we avoid weirdness, because this object
+      // tracks the state coming in to the database.
+      for (var k in last) {
+        state.feeds[k] = {
+          id: last[k].id,
+          timestamp: last[k].timestamp,
+          sequence: last[k].sequence,
+          queue: []
+        }
+      }
+    })
+
     SSB = Object.assign(SSB, {
       db,
       net,

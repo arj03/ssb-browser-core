@@ -83,7 +83,7 @@ exports.init = function (dir, ssbId, config) {
   }
 
   function validateAndAdd(msg, cb) {
-    const knownAuthor = msg.author in SSB.state.feeds // FIXME: incorrect
+    const knownAuthor = msg.author in SSB.state.feeds
 
     try {
       if (!knownAuthor)

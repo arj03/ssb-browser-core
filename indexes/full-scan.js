@@ -12,12 +12,13 @@ module.exports = function (log) {
   const bValue = new Buffer('value')
   const bAuthor = new Buffer('author')
   const bSequence = new Buffer('sequence')
+  const bTimestamp = new Buffer('timestamp')
 
   var seq = Obv()
   seq.set(0)
   var keyToSeq = {}
   var authorSequenceToSeq = {}
-  var authorLatestSequence = {}
+  var authorLatest = {}
 
   var f = AtomicFile("indexes/full.json")
 
@@ -27,7 +28,7 @@ module.exports = function (log) {
       seq: seq.value,
       keyToSeq,
       authorSequenceToSeq,
-      authorLatestSequence
+      authorLatest
     }, () => {})
   }
   var save = debounce(atomicSave, 250)
@@ -40,7 +41,7 @@ module.exports = function (log) {
       seq.set(data.seq)
       keyToSeq = data.keyToSeq
       authorSequenceToSeq = data.authorSequenceToSeq
-      authorLatestSequence = data.authorLatestSequence
+      authorLatest = data.authorLatest
     }
 
     function handleData(data) {
@@ -56,9 +57,19 @@ module.exports = function (log) {
         const author = bipf.decode(data.value, p2)
         var p3 = bipf.seekKey(data.value, p, bSequence)
         const sequence = bipf.decode(data.value, p3)
+        var p4 = bipf.seekKey(data.value, p, bTimestamp)
+        const timestamp = bipf.decode(data.value, p4)
         authorSequenceToSeq[[author, sequence]] = data.seq
-        if (sequence > (authorLatestSequence[author] || 0))
-          authorLatestSequence[author] = sequence
+        var latestSequence = 0
+        if (authorLatest[author])
+          latestSequence = authorLatest[author].sequence
+        if (sequence > latestSequence) {
+          authorLatest[author] = {
+            id: key,
+            sequence,
+            timestamp
+          }
+        }
       }
 
       seq.set(data.seq)
@@ -78,7 +89,7 @@ module.exports = function (log) {
           write: handleData
         })
 
-        queueLatest.done(null, authorLatestSequence)
+        queueLatest.done(null, authorLatest)
         queueKey.done(null, keyToSeq)
         queueSequence.done(null, authorSequenceToSeq)
       }
@@ -110,10 +121,10 @@ module.exports = function (log) {
     },
     lastGet: function(feedId, cb) {
       queueLatest.get(() => {
-        if (!authorLatestSequence[feedId])
+        if (!authorLatest[feedId])
           cb('Author not found:' + feedId)
         else
-          cb(null, authorLatestSequence[feedId])
+          cb(null, authorLatest[feedId])
       })
     },
     getLast: function(cb) {
