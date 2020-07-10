@@ -40,9 +40,9 @@ exports.init = function (sbot, config) {
     id: sbot.id,
     getClock: function (id, cb) {
       store.ensure(id, function () {
-	var clock = store.get(id) || {}
-	cleanClock(clock)
-	cb(null, clock)
+        var clock = store.get(id) || {}
+        cleanClock(clock)
+        cb(null, clock)
       })
     },
     setClock: function (id, clock) {
@@ -51,12 +51,12 @@ exports.init = function (sbot, config) {
     },
     getAt: function (pair, cb) {
       sbot.getAtSequence([pair.id, pair.sequence], function (err, data) {
-	cb(err, data ? data.value : null)
+        cb(err, data ? data.value : null)
       })
     },
     append: function (msg, cb) {
       sbot.add(msg, function (err, msg) {
-	cb(err && err.fatal ? err : null, msg)
+        cb(err && err.fatal ? err : null, msg)
       })
     },
     isFeed
@@ -87,27 +87,27 @@ exports.init = function (sbot, config) {
   return {
     replicate: function(opts) {
       if (opts.version !== 2 && opts.version != 3)
-	throw new Error('expected ebt.replicate({version: 3 or 2})')
+        throw new Error('expected ebt.replicate({version: 3 or 2})')
       return toPull.duplex(ebt.createStream(this.id, opts.version, false))
     },
     //get replication status for feeds for this id.
     peerStatus: function(id) {
       id = id || sbot.id
       var data = {
-	id: id,
-	seq: ebt.state.clock[id],
-	peers: {},
+        id: id,
+        seq: ebt.state.clock[id],
+        peers: {},
       }
 
       for (var k in ebt.state.peers) {
-	var peer = ebt.state.peers[k]
-	if(peer.clock[id] != null || peer.replicating[id] != null) {
-	  var rep = peer.replicating && peer.replicating[id]
-	  data.peers[k] = {
-	    seq: peer.clock[id],
-	    replicating: rep
-	  }
-	}
+        var peer = ebt.state.peers[k]
+        if(peer.clock[id] != null || peer.replicating[id] != null) {
+          var rep = peer.replicating && peer.replicating[id]
+          data.peers[k] = {
+            seq: peer.clock[id],
+            replicating: rep
+          }
+        }
       }
 
       return data
@@ -117,10 +117,10 @@ exports.init = function (sbot, config) {
       var opts = {version: 3}
       var a = toPull.duplex(ebt.createStream(rpc.id, opts.version, true))
       var b = rpc.ebt.replicate(opts, function (err) {
-	if(err) {
-	  rpc.removeListener('closed', onClose)
-	  rpc._emit('fallback:replicate', err)
-	}
+        if(err) {
+          rpc.removeListener('closed', onClose)
+          rpc._emit('fallback:replicate', err)
+        }
       })
 
       pull(a, b, a)
