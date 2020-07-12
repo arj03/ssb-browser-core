@@ -36,16 +36,29 @@ exports.init = function (dir, ssbId, config) {
   function add(msg, cb) {
     var id = getId(msg)
 
-    // FIXME: figure out private
-    // var isPrivate = (typeof (msg.content) === 'string')
-    // var decrypted = decryptMessage(msg)
-    //  if (!decrypted) // not for us
-
     fullIndex.keysGet(id, (err, data) => {
       if (data)
         cb(null, data.value)
-      else
+      else {
+        // store encrypted messages for us unencrypted for views
+        // ebt will turn messages into encrypted ones before sending
+        if (typeof (msg.content) === 'string') {
+          const decrypted = keys.unbox(msg.content, SSB.net.config.keys.private)
+          if (decrypted) {
+            const cyphertext = msg.content
+
+            msg.content = decrypted
+            msg.meta = {
+	      private: "true",
+	      original: {
+	        content: cyphertext
+	      }
+            }
+          }
+        }
+
         log.add(id, msg, cb)
+      }
     })
   }
 

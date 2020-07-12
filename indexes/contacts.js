@@ -54,10 +54,9 @@ module.exports = function (db) {
 
         db.query(query, 0, (err, results) => {
           results.forEach(updateData)
-          seq.set(db.getSeq(query))
-
           console.timeEnd("contacts")
 
+          seq.set(db.getSeq(query))
           save()
 
           queue.done(null, hops)
