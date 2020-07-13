@@ -8,14 +8,9 @@ module.exports = function (log) {
   const queueKey = require('../waiting-queue')()
   const queueSequence = require('../waiting-queue')()
 
-  const bKey = new Buffer('key')
-  const bValue = new Buffer('value')
-  const bAuthor = new Buffer('author')
-  const bSequence = new Buffer('sequence')
-  const bTimestamp = new Buffer('timestamp')
-
   var seq = Obv()
   seq.set(0)
+
   var keyToSeq = {}
   var authorSequenceToSeq = {}
   var authorLatest = {}
@@ -46,18 +41,18 @@ module.exports = function (log) {
 
     function handleData(data) {
       var p = 0 // note you pass in p!
-      p = bipf.seekKey(data.value, p, bKey)
+      p = bipf.seekKey(data.value, p, new Buffer('key'))
       const key = bipf.decode(data.value, p)
       keyToSeq[key] = data.seq
 
       p = 0
-      p = bipf.seekKey(data.value, p, bValue)
+      p = bipf.seekKey(data.value, p, new Buffer('value'))
       if (~p) {
-        var p2 = bipf.seekKey(data.value, p, bAuthor)
+        var p2 = bipf.seekKey(data.value, p, new Buffer('author'))
         const author = bipf.decode(data.value, p2)
-        var p3 = bipf.seekKey(data.value, p, bSequence)
+        var p3 = bipf.seekKey(data.value, p, new Buffer('sequence'))
         const sequence = bipf.decode(data.value, p3)
-        var p4 = bipf.seekKey(data.value, p, bTimestamp)
+        var p4 = bipf.seekKey(data.value, p, new Buffer('timestamp'))
         const timestamp = bipf.decode(data.value, p4)
         authorSequenceToSeq[[author, sequence]] = data.seq
         var latestSequence = 0

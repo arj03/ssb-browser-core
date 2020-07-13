@@ -5,7 +5,6 @@ const debounce = require('lodash.debounce')
 
 module.exports = function (db) {
   const queue = require('../waiting-queue')()
-  const bContactValue = Buffer.from('contact')
 
   var seq = Obv()
   seq.set(0)
@@ -14,7 +13,7 @@ module.exports = function (db) {
     type: 'EQUAL',
     data: {
       seek: db.seekType,
-      value: bContactValue,
+      value: Buffer.from('contact'),
       indexType: "type"
     }
   }
