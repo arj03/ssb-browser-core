@@ -74,6 +74,10 @@ module.exports = function (db) {
     getHops: function(cb) {
       queue.get(cb)
     },
+    // might return empty when hops is not loaded yet
+    getHopsSync: function() {
+      return hops
+    },
     seq,
     remove: function(cb) {
       f.destroy(cb)

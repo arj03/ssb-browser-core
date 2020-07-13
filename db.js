@@ -116,11 +116,54 @@ exports.init = function (dir, ssbId, config) {
   }
 
   function getStatus() {
+    const partialState = partial.get()
+    const hops = contacts.getHopsSync()
+
+    let profilesSynced = 0
+    let contactsSynced = 0
+    let messagesSynced = 0
+    let total = 0
+
+    var following = []
+    for (var relation in hops[ssbId])
+      if (hops[ssbId][relation] >= 0)
+        following.push(relation)
+
+    for (var feedId in hops) {
+      if (feedId === ssbId)
+        continue
+
+      if (!following.includes(feedId))
+        continue
+
+      for (var relation in hops[feedId]) {
+        if (hops[feedId][relation] >= 0) {
+          if (feedId === relation)
+            continue
+
+          if (partialState[relation] && partialState[relation]['syncedProfile'])
+            profilesSynced += 1
+          if (partialState[relation] && partialState[relation]['syncedContacts'])
+            contactsSynced += 1
+          if (partialState[relation] && partialState[relation]['syncedMessages'])
+            messagesSynced += 1
+
+          total += 1
+        }
+      }
+    }
+
     return {
       log: log.since.value,
       full: fullIndex.seq.value,
       contacts: contacts.seq.value,
-      profiles: profiles.seq.value
+      profiles: profiles.seq.value,
+      partial: {
+        total,
+        profilesSynced,
+        contactsSynced,
+        messagesSynced
+      }
     }
   }
 
@@ -141,9 +184,11 @@ exports.init = function (dir, ssbId, config) {
 
         for (var relation in hops[feedId]) {
           if (hops[feedId][relation] >= 0) {
-            if (!partialState[relation] || !partialState[relation][missingAttr]) {
+            if (relation === ssbId)
+              continue
+
+            if (!partialState[relation] || !partialState[relation][missingAttr])
               feedsToSync.push(relation)
-            }
           }
         }
       }
@@ -287,6 +332,7 @@ exports.init = function (dir, ssbId, config) {
     clearIndexes,
 
     // partial stuff
+    partial,
     syncMissingProfiles,
     syncMissingContacts,
     syncMissingSequence,
