@@ -33,8 +33,8 @@ module.exports = function () {
 	feedState.syncedProfile = updateFeedState.syncedProfile
       if (updateFeedState.syncedContacts)
 	feedState.syncedContacts = updateFeedState.syncedContacts
-      if (updateFeedState.syncedMesssages)
-	feedState.syncedMesssages = updateFeedState.syncedMesssages
+      if (updateFeedState.syncedMessages)
+	feedState.syncedMessages = updateFeedState.syncedMessages
 
       state[feedId] = feedState
 

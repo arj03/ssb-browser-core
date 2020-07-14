@@ -197,7 +197,7 @@ exports.init = function (dir, ssbId, config) {
     })
   }
 
-  function syncMissingSequence() {
+  function syncMissingMessages() {
     SSB.connected((rpc) => {
       getMissingFeeds('syncedMessages', (err, feedsToSync) => {
         console.log(`syncing messages for ${feedsToSync.length} feeds`)
@@ -210,7 +210,7 @@ exports.init = function (dir, ssbId, config) {
             //console.time("downloading messages")
             pull(
               rpc.partialReplication.getFeedReverse({ id: feed, keys: false, limit: 25 }),
-              pull.asyncMap(SSB.db.validateAndAdd),
+              pull.asyncMap(SSB.db.validateAndAddOOO),
               pull.collect((err, msgs) => {
                 if (err) {
                   console.error(err.message)
@@ -335,7 +335,7 @@ exports.init = function (dir, ssbId, config) {
     partial,
     syncMissingProfiles,
     syncMissingContacts,
-    syncMissingSequence,
+    syncMissingMessages,
     getMissingFeeds // debugging
   }
 }
