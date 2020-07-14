@@ -49,10 +49,10 @@ module.exports = function (db) {
   var profiles = {}
 
   db.onReady(() => {
-    f.get((err, file) => {
-      if (!err) {
-        seq.set(file.seq)
-        profiles = file.profiles
+    f.get((err, data) => {
+      if (!err && data.seq >= SSB.db.getStatus().log) {
+        seq.set(data.seq)
+        profiles = data.profiles
         queue.done(null, profiles)
       } else {
         console.time("profiles")
@@ -63,7 +63,7 @@ module.exports = function (db) {
 
           seq.set(db.getSeq(query))
           save()
-
+          
           queue.done(null, profiles)
         })
       }

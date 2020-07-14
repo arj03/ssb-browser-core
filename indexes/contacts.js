@@ -44,7 +44,7 @@ module.exports = function (db) {
 
   db.onReady(() => {
     f.get((err, data) => {
-      if (!err) {
+      if (!err && data.seq >= SSB.db.getStatus().log) {
         seq.set(data.seq)
         hops = data.hops
         queue.done(null, hops)
