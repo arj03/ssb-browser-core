@@ -5,8 +5,6 @@ const debounce = require('lodash.debounce')
 const push = require('push-stream')
 const sort = require('ssb-sort')
 
-// 4.5sek full scan, 81k messages
-
 module.exports = function (log) {
   const queueMentions = require('../waiting-queue')()
   const queueRoots = require('../waiting-queue')()
@@ -93,38 +91,30 @@ module.exports = function (log) {
     // FIXME: live?
   })
 
+  function queueGet(queue, key, cb)
+  {
+    queue.get((err, data) => {
+      if (data && data[key]) {
+        push(
+          push.values(data[key]),
+          push.asyncMap(log.get),
+          push.collect((err, results) => {
+            const msgs = results.map(x => bipf.decode(x, 0))
+            sort(msgs)
+            msgs.reverse()
+            cb(null, msgs)
+          })
+        )
+      }
+    })
+  }
+
   return {
     getMessagesByMention: function(key, cb) {
-      queueMentions.get((err, data) => {
-        if (data && data[key]) {
-          push(
-            push.values(data[key]),
-            push.asyncMap(log.get),
-            push.collect((err, results) => {
-              const msgs = results.map(x => bipf.decode(x, 0))
-              sort(msgs)
-              msgs.reverse()
-              cb(null, msgs)
-            })
-          )
-        }
-      })
+      queueGet(queueMentions, key, cb)
     },
     getMessagesByRoot: function(rootId, cb) {
-      queueRoots.get((err, data) => {
-        if (data && data[rootId]) {
-          push(
-            push.values(data[rootId]),
-            push.asyncMap(log.get),
-            push.collect((err, results) => {
-              const msgs = results.map(x => bipf.decode(x, 0))
-              sort(msgs)
-              msgs.reverse()
-              cb(null, msgs)
-            })
-          )
-        }
-      })
+      queueGet(queueRoots, rootId, cb)
     },
     seq,
     remove: function(cb) {
