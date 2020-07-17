@@ -10,6 +10,7 @@ const FullScanIndexes = require('./indexes/full-scan')
 const Contacts = require('./indexes/contacts')
 const Profiles = require('./indexes/profiles')
 const Partial = require('./indexes/partial')
+const Mentions = require('./indexes/mentions')
 const JITDb = require('jitdb')
 
 function getId(msg) {
@@ -23,6 +24,7 @@ exports.init = function (dir, ssbId, config) {
   const profiles = Profiles(jitdb)
   const fullIndex = FullScanIndexes(log)
   const partial = Partial()
+  const mentions = Mentions(log)
 
   function get(id, cb) {
     fullIndex.keysGet(id, (err, data) => {
@@ -158,6 +160,7 @@ exports.init = function (dir, ssbId, config) {
       full: fullIndex.seq.value,
       contacts: contacts.seq.value,
       profiles: profiles.seq.value,
+      mentions: mentions.seq.value,
       partial: {
         total,
         profilesSynced,
@@ -327,6 +330,8 @@ exports.init = function (dir, ssbId, config) {
     getStatus,
     getLast: fullIndex.getLast,
     getHops: contacts.getHops,
+    getMessagesByRoot: mentions.getMessagesByRoot,
+    getMessagesByMention: mentions.getMessagesByMention,
     getProfiles: profiles.getProfiles,
     jitdb,
     clearIndexes,
