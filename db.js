@@ -317,6 +317,7 @@ exports.init = function (dir, ssbId, config) {
   function clearIndexes() {
     contacts.remove(() => {})
     profiles.remove(() => {})
+    mentions.remove(() => {})
     fullIndex.remove(() => {})
     partial.remove(() => {})
   }
