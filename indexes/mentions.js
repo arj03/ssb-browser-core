@@ -47,6 +47,7 @@ module.exports = function (log) {
     }
 
     seq.set(data.seq)
+    save()
   }
 
   var f = AtomicFile("indexes/mentions.json")
@@ -81,14 +82,15 @@ module.exports = function (log) {
       end: () => {
         console.timeEnd("mentions")
 
-        save()
+        log.stream({ gt: seq.value, live: true }).pipe({
+          paused: false,
+          write: handleData
+        })
 
         queueMentions.done(null, mentions)
         queueRoots.done(null, roots)
       }
     })
-
-    // FIXME: live?
   })
 
   function queueGet(queue, key, cb)
