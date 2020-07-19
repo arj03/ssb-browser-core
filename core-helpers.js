@@ -31,24 +31,9 @@ function deleteDatabaseFile(filename) {
 exports.removeIndexes = function removeIndexes(fs) {
   SSB.db.clearIndexes()
 
-  window.webkitRequestFileSystem(window.PERSISTENT, 0, function (fs) {
-    fs.root.getDirectory("/indexes", {}, function(dirEntry) {
-      var dirReader = dirEntry.createReader()
-      dirReader.readEntries(function(entries) {
-        for(var i = 0; i < entries.length; i++) {
-          var entry = entries[i]
-          if (entry.isFile) {
-            console.log('deleting indexes: ' + entry.fullPath)
-            const file = raf(entry.fullPath)
-            file.open((err, done) => {
-              if (err) return console.error(err)
-              file.destroy()
-            })
-          }
-        }
-      })
-    })
-  })
+  const IdbKvStore = require('idb-kv-store')
+  const store = new IdbKvStore("/indexes")
+  store.clear()
 }
 
 exports.removeDB = function() {
