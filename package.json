@@ -14,7 +14,7 @@
     "epidemic-broadcast-trees": "^7.0.0",
     "flumelog-aligned-offset": "^1.1.2",
     "gossip-query": "^2.0.2",
-    "jitdb": "0.0.1",
+    "jitdb": "^0.3.0",
     "lodash.debounce": "^4.0.8",
     "lossy-store": "^1.2.4",
     "polyraf": "^1.1.0",
