@@ -70,8 +70,6 @@ module.exports = function (db) {
 
       db.liveQuerySingleIndex(query, (err, results) => {
         results.forEach(updateData)
-        seq.set(db.getSeq(query))
-        save()
       })
     })
   })
