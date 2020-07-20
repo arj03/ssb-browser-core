@@ -30,11 +30,11 @@ module.exports = function () {
       let feedState = state[feedId] || {}
 
       if (updateFeedState.syncedProfile)
-	feedState.syncedProfile = updateFeedState.syncedProfile
+        feedState.syncedProfile = updateFeedState.syncedProfile
       if (updateFeedState.syncedContacts)
-	feedState.syncedContacts = updateFeedState.syncedContacts
+        feedState.syncedContacts = updateFeedState.syncedContacts
       if (updateFeedState.syncedMessages)
-	feedState.syncedMessages = updateFeedState.syncedMessages
+        feedState.syncedMessages = updateFeedState.syncedMessages
 
       state[feedId] = feedState
 
@@ -48,7 +48,7 @@ module.exports = function () {
 
     get: function() {
       if (Object.keys(state).length == 0)
-	load()
+        load()
       return state
     },
 
