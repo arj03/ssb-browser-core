@@ -65,7 +65,7 @@ exports.init = function (dir, ssbId, config) {
   }
 
   function del(key, cb) {
-    fullIndex.keysGet(key, (err, val, seq) => {
+    fullIndex.keyToSeq(key, (err, seq) => {
       if (err) return cb(err)
       if (seq == null) return cb(new Error('seq is null!'))
 
@@ -73,7 +73,32 @@ exports.init = function (dir, ssbId, config) {
     })
   }
 
-  // FIXME: deleteFeed
+  function deleteFeed(feedId, cb) {
+    SSB.db.jitdb.onReady(() => {
+      SSB.db.jitdb.query({
+        type: 'EQUAL',
+        data: {
+          seek: SSB.db.jitdb.seekAuthor,
+          value: Buffer.from(feedId),
+          indexType: "author"
+        }
+      }, 0, (err, results) => {
+        push(
+          push.values(results),
+          push.asyncMap((msg, cb) => {
+            del(msg.key, cb)
+          }),
+          push.collect((err) => {
+            if (!err) {
+              delete SSB.state.feeds[feedId]
+              fullIndex.removeFeedFromLatest(feedId)
+            }
+            cb(err)
+          })
+        )
+      })
+    })
+  }
 
   function decryptMessage(msg) {
     return keys.unbox(msg.content, SSB.net.config.keys.private)
@@ -326,6 +351,7 @@ exports.init = function (dir, ssbId, config) {
     get,
     add,
     del,
+    deleteFeed,
     validateAndAdd,
     validateAndAddOOO,
     getStatus,

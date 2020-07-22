@@ -126,6 +126,17 @@ module.exports = function (log) {
       queueLatest.get(cb)
     },
     seq,
+    keyToSeq(key, cb) {
+      queueKey.get(() => {
+        if (!keyToSeq[key])
+          cb('Key not found:' + key)
+        else
+          cb(null, keyToSeq[key])
+      })
+    },
+    removeFeedFromLatest: function(feedId) {
+      delete authorLatest[feedId]
+    },
     remove: function(cb) {
       f.destroy(cb)
     }
