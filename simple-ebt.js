@@ -66,7 +66,7 @@ exports.init = function (sbot, config) {
     SSB.db.getLast((err, last) => {
       var clock = {}
       for (var k in last) {
-        clock[k] = last[k]
+        clock[k] = last[k].sequence
       }
 
       ebt.state.clock = clock || {}

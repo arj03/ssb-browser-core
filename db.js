@@ -356,6 +356,7 @@ exports.init = function (dir, ssbId, config) {
     validateAndAddOOO,
     getStatus,
     getLast: fullIndex.getLast,
+    clockGet: fullIndex.clockGet,
     getHops: contacts.getHops,
     getMessagesByRoot: mentions.getMessagesByRoot,
     getMessagesByMention: mentions.getMessagesByMention,
