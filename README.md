@@ -37,32 +37,13 @@ Default config options are defined in `net.js`.
 
 The remote server to connect to. Must be web socket.
 
-### validMessageTypes
-
-An
-[array](https://github.com/arj03/ssb-browser-core/blob/master/core.js#L94)
-of message types to store during sync.
-
-By specifying these, only a subset of messages for feeds are
-potentially stored. This means it will not be possible to sync these
-feeds to other nodes.
-
-### privateMessages
-
-Check and store private messages during sync. Default is true.
-
-By specifying this to false, only a subset of messages for feeds are
-potentially stored. This means it will not be possible to sync these
-feeds to other nodes.
-
-### syncOnlyFeedsFollowing
-
-When set, sync will only synchronize feeds you are directly following
-instead of all known feeds. Default is false.
-
 ### hops
 
-The number of hops from which to receive messages. Default is 1.
+The number of hops from which to store feeds in full. Hops + 1 will be
+stored in partial state, meaning profiles, contacts and latest
+messages will be stored.
+
+Default is 1.
 
 ## db
 
@@ -73,17 +54,16 @@ found an err will be returned.
 
 ### validateAndAdd(msg, cb)
 
-Validate a raw message (without id and timestamp), checks if the
-message is of a known type. Will update profile if applicable. Finally
-adds the message to the database and updates the last index. Callback
-is the stored message (id, timestamp, value = original message) or
-err.
+Validate a raw message (without id and timestamp), meaning if its the
+first message from the feed, validate it without the previous pointer
+otherwise it has to be the next message for the feed. Callback is the
+stored message (id, timestamp, value = original message) or err.
 
-### validateAndAddStrictOrder(msg, cb)
+### validateAndAddOOO(msg, cb)
 
-Works the same way as validateAndAdd, except that it doesn't allow
-holes, meaning messages added must follow the correct sequence. The
-first message for a feed can be at any point.
+Works the same way as validateAndAdd, expect that it will always do
+validate without the previous pointer, meaning it can be used to
+insert out of order messages from the feed.
 
 ### add(msg, cb)
 
@@ -91,48 +71,57 @@ Add a raw message (without id and timestamp) to the database. Callback
 is the stored message (id, timestamp, value = original message) or
 err.
 
-### del(id, cb)
+### get(key, cb)
 
-Remove a message from the database. Please note that if you remove a
-message for a feed where you store all the messages in the log this
-will mean that you won't be able to replicate this feed with other
-peers.
+Get a message based on the key. Callback is the stored message (id,
+timestamp, value = original message) or err.
+
+### del(key, cb)
+
+Remove a message from the database. Please note that this can create
+problems with replication, in that a remote peer that does not have
+this message will not be able to get this messages and any message
+that comes afterwards.
 
 ### deleteFeed(feedId, cb)
 
-Delete all messages for a particular feed.
-
-Be sure to also call `removeFeedState` to clean up any other state
-stored about the feed.
-
-### query
-
-The query index
-
-### last
-
-The last index
-
-### clock
-
-The clock index
-
-### friends
-
-The [ssb-friends] module
-
-### peerInvites
-
-The [ssb-peer-invites] module
-
-### backlinks
-
-The [ssb-backlinks] module
+Delete all messages for a particular feed and removes any state
+associated with the feed.
 
 ### getStatus
 
 Gets the current db status, same functionality as
 [db.status](https://github.com/ssbc/ssb-db#dbstatus) in ssb-db.
+
+### jitdb
+
+Returns a [jitdb] instance of the database useful for queries.
+
+### getLast
+
+Returns the last index.
+
+### clockGet
+
+Internal method for EBT.
+
+### getHops
+
+Returns the hops index, meaning the friends graph.
+
+### getProfiles
+
+Returns the profiles index.
+
+### getMessagesByRoot(key, (err, messages))
+
+Returns all the messages for a particular root in sorted order.
+
+### getMessagesByMention (key, (err, messages))
+
+Returns a sorted array messages that has a particular key in the
+mentions array. This is useful for notifications for a particular
+feed.
 
 ## net
 
@@ -142,11 +131,6 @@ loaded. [ssb-ws] is used to create web socket connections to pubs.
 ### id
 
 The public key of the current user
-
-### add(msg, cb)
-
-For historical reasons (see ssb-ebt) we have add here. This just calls
-`SSB.db.validateAndAdd`.
 
 ### rpc:connect event
 
@@ -279,42 +263,14 @@ known feeds.
 If not connected, will connect and return. If connected, will just
 return the already present rpc connection. Cb signature is (err, rpc).
 
-### removeFeedState(feedId)
-
-Remove any state related to feed. This complements `db.deleteFeed`
-that removes the users messages from the local database.
-
-### profiles
-
-A dict from feedId to { name, description, image }
-
-#### loadProfiles()
-
-Populates profiles dict from localStorage
-
-#### saveProfiles
-
-Save the profiles dict in localStorage
-
 ### publish(msg, cb)
 
 Validates a message and stores it in the database. See db.add for format.
 
-### messagesByType
-
-A convenience method around db.query to get messages of a particular type.
-
 ### sync()
 
 Start a EBT replication with the remote server. This syncs all the
-feeds known in `SSB.state.feeds`, unless `syncOnlyFeedsFollowing` is
-set, in which case only feeds you are following directly are
-synced. Compared to a normal SSB distribution this corresponds to hops
-1. There is currently no concept of blocked feeds. There is the option
-of removing feeds.
-
-This uses `validMessageTypes` and `privateMessages` to determine what
-gets stored locally.
+feeds known in `SSB.state.feeds`.
 
 ### box
 
@@ -353,15 +309,8 @@ using safari.
 
 The following patches (patch -p0 < x.patch) from the patches folder
 are needed:
- - epidemic-broadcast-fix-replicate-multiple.patch
- - ssb-ebt.patch
- - ssb-friends.patch
  - ssb-tunnel.patch
- - ssb-peer-invites.patch
  - ssb-blob-files.patch
-
-The following branches are references directly until patches are merged and pushed:
- - https://github.com/ssbc/ssb-validate/pull/16
 
 For a smaller bundle file, you can also apply
 patches/sodium-browserify.patch
@@ -370,9 +319,6 @@ patches/sodium-browserify.patch
 [ssb-browser-demo]: https://github.com/arj03/ssb-browser-demo
 [secret-stack]: https://github.com/ssbc/secret-stack
 [ssb-ws]: https://github.com/ssbc/ssb-ws
-[ssb-friends]: https://github.com/ssbc/ssb-friends
-[ssb-peer-invites]: https://github.com/ssbc/ssb-peer-invites
-[ssb-backlinks]: https://github.com/ssbc/ssb-backlinks
 [ssb-validate]: https://github.com/ssbc/ssb-validate
 [ssb-blob-files]: https://github.com/ssbc/ssb-blob-files
 [ssb-ooo]: https://github.com/ssbc/ssb-ooo
@@ -380,3 +326,4 @@ patches/sodium-browserify.patch
 
 [ssb-get-thread]: https://github.com/arj03/ssb-get-thread
 [ssb-partial-replication]: https://github.com/arj03/ssb-partial-replication
+[jitdb]: https://github.com/arj03/jitdb
