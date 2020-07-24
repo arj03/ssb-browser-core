@@ -88,7 +88,7 @@ that comes afterwards.
 Delete all messages for a particular feed and removes any state
 associated with the feed.
 
-### getStatus
+### getStatus()
 
 Gets the current db status, same functionality as
 [db.status](https://github.com/ssbc/ssb-db#dbstatus) in ssb-db.
@@ -97,27 +97,27 @@ Gets the current db status, same functionality as
 
 Returns a [jitdb] instance of the database useful for queries.
 
-### getLast
+### getLast(cb)
 
 Returns the last index.
 
-### clockGet
+### clockGet(err)
 
 Internal method for EBT.
 
-### getHops
+### getHops(cb)
 
 Returns the hops index, meaning the friends graph.
 
-### getProfiles
+### getProfiles(cb)
 
 Returns the profiles index.
 
-### getMessagesByRoot(key, (err, messages))
+### getMessagesByRoot(key, cb)
 
 Returns all the messages for a particular root in sorted order.
 
-### getMessagesByMention (key, (err, messages))
+### getMessagesByMention (key, cb)
 
 Returns a sorted array messages that has a particular key in the
 mentions array. This is useful for notifications for a particular
