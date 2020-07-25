@@ -1,5 +1,4 @@
 const push = require('push-stream')
-const pull = require('pull-stream')
 
 const hash = require('ssb-keys/util').hash
 const validate = require('ssb-validate')
@@ -12,6 +11,7 @@ const Profiles = require('./indexes/profiles')
 const Partial = require('./indexes/partial')
 const Mentions = require('./indexes/mentions')
 const JITDb = require('jitdb')
+const FeedSyncer = require('./feed-syncer')
 
 function getId(msg) {
   return '%'+hash(JSON.stringify(msg, null, 2))
@@ -25,6 +25,7 @@ exports.init = function (dir, ssbId, config) {
   const fullIndex = FullScanIndexes(log)
   const partial = Partial()
   const mentions = Mentions(log)
+  const feedSyncer = FeedSyncer(log, partial, contacts)
 
   function get(id, cb) {
     fullIndex.keysGet(id, (err, data) => {
@@ -195,150 +196,6 @@ exports.init = function (dir, ssbId, config) {
     }
   }
 
-  function getMissingFeeds(missingAttr, cb) {
-    let partialState = partial.get()
-    contacts.getHops((err, hops) => {
-      let feedsToSync = []
-
-      // FIXME: respect hops (https://github.com/ssbc/layered-graph)
-      var following = [ssbId]
-      for (var relation in hops[ssbId])
-        if (hops[ssbId][relation] >= 0)
-          following.push(relation)
-
-      for (var feedId in hops) {
-        if (!following.includes(feedId))
-          continue
-
-        for (var relation in hops[feedId]) {
-          if (hops[feedId][relation] >= 0) {
-            if (relation === ssbId)
-              continue
-
-            if (!partialState[relation] || !partialState[relation][missingAttr])
-              feedsToSync.push(relation)
-          }
-        }
-      }
-
-      cb(err, [...new Set(feedsToSync)])
-    })
-  }
-
-  function syncMissingMessages() {
-    SSB.connected((rpc) => {
-      getMissingFeeds('syncedMessages', (err, feedsToSync) => {
-        console.log(`syncing messages for ${feedsToSync.length} feeds`)
-        console.time("downloading messages")
-
-        pull(
-          pull.values(feedsToSync),
-          pull.asyncMap((feed, cb) => {
-            //console.log("downloading messages for", feed)
-            //console.time("downloading messages")
-            pull(
-              rpc.partialReplication.getFeedReverse({ id: feed, keys: false, limit: 25 }),
-              pull.asyncMap(SSB.db.validateAndAddOOO),
-              pull.collect((err, msgs) => {
-                if (err) {
-                  console.error(err.message)
-                  return cb(err)
-                }
-
-                SSB.state.queue = []
-                //console.timeEnd("downloading messages")
-
-                partial.updateState(feed, { syncedMessages: true })
-
-                cb()
-              })
-            )
-          }),
-          pull.collect(() => {
-            console.log("done")
-            console.timeEnd("downloading messages")
-          })
-        )
-      })
-    })
-  }
-
-  function syncMissingProfiles() {
-    SSB.connected((rpc) => {
-      getMissingFeeds('syncedProfile', (err, feedsToSync) => {
-        console.log(`syncing profiles for ${feedsToSync.length} feeds`)
-        console.time("downloading profiles")
-
-        pull(
-          pull.values(feedsToSync),
-          pull.asyncMap((feed, cb) => {
-            //console.log("downloading profile for", feed)
-            //console.time("syncing profile")
-            pull(
-              rpc.partialReplication.getMessagesOfType({id: feed, type: 'about'}),
-              pull.asyncMap(SSB.db.validateAndAddOOO),
-              pull.collect((err, msgs) => {
-                if (err) {
-                  console.error(err.message)
-                  return cb(err)
-                }
-
-                //console.timeEnd("syncing profile")
-                //console.log(msgs.length)
-
-                partial.updateState(feed, { syncedProfile: true })
-
-                cb()
-              })
-            )
-          }),
-          pull.collect(() => {
-            console.log("done")
-            console.timeEnd("downloading profiles")
-          })
-        )
-      })
-    })
-  }
-
-  function syncMissingContacts() {
-    SSB.connected((rpc) => {
-      getMissingFeeds('syncedContacts', (err, feedsToSync) => {
-        console.log(`syncing contacts for ${feedsToSync.length} feeds`)
-        console.time("downloading contacts")
-
-        pull(
-          pull.values(feedsToSync),
-          pull.asyncMap((feed, cb) => {
-            //console.log("downloading contacts for", feed)
-            //console.time("syncing contacts")
-            pull(
-              rpc.partialReplication.getMessagesOfType({id: feed, type: 'contact'}),
-              pull.asyncMap(SSB.db.validateAndAddOOO),
-              pull.collect((err, msgs) => {
-                if (err) {
-                  console.error(err.message)
-                  return cb(err)
-                }
-
-                //console.timeEnd("syncing contacts")
-                //console.log(msgs.length)
-
-                partial.updateState(feed, { syncedContacts: true })
-
-                cb()
-              })
-            )
-          }),
-          pull.collect(() => {
-            console.log("done")
-            console.timeEnd("downloading contacts")
-          })
-        )
-      })
-    })
-  }
-
   function clearIndexes() {
     contacts.remove(() => {})
     profiles.remove(() => {})
@@ -366,9 +223,6 @@ exports.init = function (dir, ssbId, config) {
 
     // partial stuff
     partial,
-    syncMissingProfiles,
-    syncMissingContacts,
-    syncMissingMessages,
-    getMissingFeeds // debugging
+    feedSyncer
   }
 }

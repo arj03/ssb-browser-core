@@ -1,6 +1,7 @@
 /*
  format:
  id => {
+   full,
    syncedProfile,
    syncedContacts,
    syncedMessages,
@@ -28,16 +29,7 @@ module.exports = function () {
   return {
     updateState: function(feedId, updateFeedState) {
       let feedState = state[feedId] || {}
-
-      if (updateFeedState.syncedProfile)
-        feedState.syncedProfile = updateFeedState.syncedProfile
-      if (updateFeedState.syncedContacts)
-        feedState.syncedContacts = updateFeedState.syncedContacts
-      if (updateFeedState.syncedMessages)
-        feedState.syncedMessages = updateFeedState.syncedMessages
-
-      state[feedId] = feedState
-
+      state[feedId] = Object.assign(feedState, updateFeedState)
       save()
     },
 
