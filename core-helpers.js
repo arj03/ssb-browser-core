@@ -77,7 +77,7 @@ exports.sync = function()
     SSB.db.getHops((err, hops) => {
       var blocking = []
       for (var feed in hops[SSB.net.id])
-        if (hops[SSB.net.id][feed] < 0)
+        if (hops[SSB.net.id][feed] === -1)
           blocking.push(feed)
 
       SSB.net.ebt.request(SSB.net.id, true)
