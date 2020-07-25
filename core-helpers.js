@@ -75,12 +75,17 @@ exports.sync = function()
 {
   exports.connected((rpc) => {
     SSB.db.getHops((err, hops) => {
+      var blocking = []
+      for (var feed in hops[SSB.net.id])
+        if (hops[SSB.net.id][feed] < 0)
+          blocking.push(feed)
+
       SSB.net.ebt.request(SSB.net.id, true)
       for (var feed1 in hops[SSB.net.id]) {
         if (hops[SSB.net.id][feed1] == 1) {
           SSB.net.ebt.request(feed1, true)
           for (var feed2 in hops[feed1])
-            if (hops[feed1][feed2] == 1)
+            if (hops[feed1][feed2] == 1 && !blocking.includes(feed2))
               SSB.net.ebt.request(feed2, true)
         }
       }
