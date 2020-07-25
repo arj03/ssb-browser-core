@@ -19,6 +19,9 @@ module.exports = function (log, partial, contacts) {
         if (feedId === ssbId)
           continue
 
+        if (!fullFeeds.includes(feedId))
+          continue
+
         for (var relation in hops[feedId]) {
           if (hops[feedId][relation] === 1) {
             if (relation === ssbId)

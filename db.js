@@ -154,7 +154,7 @@ exports.init = function (dir, ssbId, config) {
 
     var following = []
     for (var relation in hops[ssbId])
-      if (hops[ssbId][relation] >= 0)
+      if (hops[ssbId][relation] === 1)
         following.push(relation)
 
     for (var feedId in hops) {
@@ -165,7 +165,7 @@ exports.init = function (dir, ssbId, config) {
         continue
 
       for (var relation in hops[feedId]) {
-        if (hops[feedId][relation] >= 0) {
+        if (hops[feedId][relation] === 1) {
           if (feedId === relation)
             continue
 
