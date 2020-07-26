@@ -25,10 +25,10 @@ module.exports = function (log, partial, contacts) {
   
   function syncFeeds(cb) {
     let partialState = partial.get()
-    contacts.getNetworkForFeed(SSB.net.id, (err, feeds) => {
+    contacts.getGraphForFeed(SSB.net.id, (err, graph) => {
       SSB.connected((rpc) => {
         pull(
-          pull.values(feeds.following),
+          pull.values(graph.following),
           pull.asyncMap((feed, cb) => {
             if (!partialState[feed] || !partialState[feed]['full']) {
               pull(
@@ -47,7 +47,7 @@ module.exports = function (log, partial, contacts) {
           }),
           pull.collect(() => {
             pull(
-              pull.values(feeds.extended),
+              pull.values(graph.extended),
               pull.asyncMap((feed, cb) => {
                 syncMessages(feed, 'syncedMessages',
                              rpc.partialReplication.getFeedReverse({ id: feed, keys: false, limit: 25 }),
@@ -64,7 +64,7 @@ module.exports = function (log, partial, contacts) {
                              partialState, cb)
               }),
               pull.collect(() => {
-                console.log("done")
+                console.log("feeds in sync")
                 if (cb) cb()
               })
             )

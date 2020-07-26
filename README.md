@@ -126,6 +126,12 @@ Returns a sorted array messages that has a particular key in the
 mentions array. This is useful for notifications for a particular
 feed.
 
+### feedSyncer.syncFeeds(cb)
+
+Calling this will ensure that the feeds you follow are synced in full
+and that feeds followed by someone you follow are synced partially,
+meaning the latest 25 messages, contacts & profile information.
+
 ## net
 
 This is the [secret-stack] module with a few extra modules
