@@ -5,7 +5,6 @@ const raf = require('polyraf')
 const pull = require('pull-stream')
 const defer = require('pull-defer')
 const BoxStream = require('pull-box-stream')
-const PolyRAF = require('polyraf')
 const sanitize = require('sanitize-filename')
 
 exports.manifest = {
@@ -25,18 +24,44 @@ exports.init = function (sbot, config) {
   const privateBlobsDir = path.join(config.path, "private-blobs")
   console.log("blobs dir:", blobsDir)
 
+  const maxConcurrentRequests = 5
+  var waitingGet = [] // {url, responseType, cb}
+
+  var waiting = {} // url -> cb
+
+  function waitingCb(url, err, data) {
+    for (var i = 0; i < waiting[url].length; ++i)
+      waiting[url][i](err, data)
+
+    delete waiting[url]
+
+    if (waitingGet.length > 0) {
+      const wg = waitingGet.shift()
+      httpGet(wg.url, wg.responseType, wg.cb)
+    }
+  }
+
   function httpGet(url, responseType, cb) {
+    if (waiting[url]) return waiting[url].push(cb)
+
+    if (Object.keys(waiting).length > maxConcurrentRequests)
+      return waitingGet.push({ url, responseType, cb })
+
+    waiting[url] = [cb]
+
+    console.log("download: ", url)
+
     var req = new XMLHttpRequest()
     req.timeout = 2000;
     req.onreadystatechange = function() {
       if (req.readyState == 4 && req.status == 200)
-        cb(null, req.response)
+        waitingCb(url, null, req.response)
     }
     req.onerror = function() {
-      cb("Error requesting blob")
+      waitingCb(url, "Error requesting blob")
     }
     req.ontimeout = function () {
-      cb("Timeout requesting blob")
+      waitingCb(url, "Timeout requesting blob")
     }
 
     req.open("GET", url, true)
@@ -96,7 +121,7 @@ exports.init = function (sbot, config) {
   }
 
   function privateFsURL(id, cb) {
-    var file = PolyRAF(sanitizedPrivatePath(id))
+    var file = raf(sanitizedPrivatePath(id))
     file.stat((err, file) => {
       cb(null, URL.createObjectURL(file))
     })
@@ -125,7 +150,7 @@ exports.init = function (sbot, config) {
     }
     else
     {
-      var file = PolyRAF(sanitizedPath(id))
+      var file = raf(sanitizedPath(id))
       file.stat((err, file) => {
         cb(null, URL.createObjectURL(file))
       })
@@ -312,6 +337,26 @@ exports.init = function (sbot, config) {
   })
   // end ssb-blobs
 
+  function localGetHelper(max, id, cb) {
+    const file = raf(sanitizedPath(id))
+    file.stat((err, stat) => {
+      if (stat && stat.size == 0) {
+        httpGet(remoteURL(id), 'blob', (err, data) => {
+          if (err) cb(err)
+          else if (data.size < max)
+            add(id, data, () => { fsURL(id, cb) })
+          else
+            cb(null, remoteURL(id))
+        })
+      }
+      else
+      {
+        //console.log("reading from local filesystem")
+        fsURL(id, cb)
+      }
+    })
+  }
+
   return {
     hash,
     add,
@@ -380,23 +425,11 @@ exports.init = function (sbot, config) {
     },
 
     localGet: function (id, cb) {
-      const file = raf(sanitizedPath(id))
-      file.stat((err, stat) => {
-        if (stat && stat.size == 0) {
-          httpGet(remoteURL(id), 'blob', (err, data) => {
-            if (err) cb(err)
-            else if (data.size < max)
-              add(id, data, () => { fsURL(id, cb) })
-            else
-              cb(null, remoteURL(id))
-          })
-        }
-        else
-        {
-          //console.log("reading from local filesystem")
-          fsURL(id, cb)
-        }
-      })
+      localGetHelper(max, id, cb)
+    },
+
+    localProfileGet: function (id, cb) {
+      localGetHelper(2048*1024, id, cb)
     },
 
     remoteGet: function(id, type, cb) {

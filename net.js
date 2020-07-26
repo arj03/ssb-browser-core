@@ -16,7 +16,7 @@ exports.init = function(dir, overwriteConfig) {
       },
       outgoing: {
 	net: [{ transform: 'shs' }],
-	ws: [{ transform: 'shs' }, { transform: 'noauth' }],
+	ws: [{ transform: 'shs' }],
 	tunnel: [{ transform: 'shs' }]
       }
     },
@@ -27,8 +27,8 @@ exports.init = function(dir, overwriteConfig) {
     tunnel: {
       logging: true
     },
-    replicate: {
-      legacy: false
+    ebt: {
+      logging: false
     },
     blobs: {
       sympathy: 0, //sympathy controls whether you'll replicate
@@ -43,9 +43,7 @@ exports.init = function(dir, overwriteConfig) {
   .use(require('./ssb-partial-replication'))
   .use(require('./simple-ooo'))
   .use(require('ssb-ws'))
-  .use(require('ssb-replicate'))
-  .use(require('ssb-ebt'))
-  .use(require('ssb-no-auth'))
+  .use(require('./simple-ebt'))
   .use(require('ssb-tunnel'))
   .use(require('./tunnel-message'))
   .use(require("./simple-blobs"))

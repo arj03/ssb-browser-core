@@ -13,8 +13,7 @@ SSB.events.on('SSB: loaded', function() {
     const post = { type: 'post', text: 'Testing!' }
     
     SSB.publish(post, (err, postMsg) => {
-      if (err) console.error(err)
-
+      t.error(err, 'no err')
       t.equal(postMsg.value.content.text, post.text, 'text correct')
       t.end()
     })
@@ -24,37 +23,15 @@ SSB.events.on('SSB: loaded', function() {
     const post = { type: 'post', text: 'Testing!' }
 
     SSB.publish(post, (err, postMsg) => {
-      if (err) console.error(err)
+      t.error(err, 'no err')
 
       const post2 = { type: 'post', text: 'Testing 2!' }
 
       SSB.publish(post2, (err, postMsg2) => {
-        if (err) console.error(err)
+        t.error(err, 'no err')
         t.equal(postMsg2.value.content.text, post2.text, 'text correct')
-        const last = SSB.db.last.get()[SSB.net.id]
-        t.notEqual(last.partiel, true, 'not partial')
-        t.equal(last.sequence, 3, 'seq ok')
         t.end()
       })
-    })
-  })
-
-  test('Raw new feed', t => {
-    const msg = {
-      previous: '%GJEQNFyW41AEg4jTX+X0NfUmIA1Bzp4YsTVkPI05vWk=.sha256',
-      sequence: 9,
-      author: '@8RB4LVewufL7oFdvcbetA/4yfXoDVNfLema8zQ0kz1s=.ed25519',
-      timestamp: 1581277469636,
-      hash: 'sha256',
-      content: { type: 'post', text: 'Testing 2!' },
-      signature: 'uUyG7Wc9obJE/mq94R/nAclA2Hcei35TafIKeoVd48yNcSshs/gKVH7TtcuKvdWcIrnadirUHdO9IGJL5dPcCg==.sig.ed25519'
-    }
-
-    SSB.db.validateAndAdd(msg, (err, postMsg) => {
-      if (err) console.error(err)
-
-      t.equal(postMsg.value.content.text, msg.content.text, 'text correct')
-      t.end()
     })
   })
 
@@ -71,27 +48,20 @@ SSB.events.on('SSB: loaded', function() {
     state = validate.appendNew(state, null, keys, { type: 'post', text: 'test6' }, Date.now()+5)
 
     SSB.db.validateAndAdd(state.queue[2].value, (err) => {
-      if (err) console.error(err)
+      t.error(err, 'no err')
 
       SSB.db.validateAndAdd(state.queue[3].value, (err) => {
-        if (err) console.error(err)
-
-        t.equal(SSB.db.last.get()[keys.id].partial, true, 'is partial')
+        t.error(err, 'no err')
 
         SSB.db.validateAndAdd(state.queue[4].value, (err) => {
-          if (err) console.error(err)
+          t.error(err, 'no err')
 
           SSB.db.validateAndAdd(state.queue[5].value, (err) => {
-            if (err) console.error(err)
+            t.error(err, 'no err')
 
-            SSB.db.validateAndAdd(state.queue[0].value, (err, oooMsg) => {
-              if (err) console.error(err)
-
+            SSB.db.validateAndAddOOO(state.queue[0].value, (err, oooMsg) => {
+              t.error(err, 'no err')
               t.equal(oooMsg.value.content.text, 'test1', 'text correct')
-
-              const last = SSB.db.last.get()[keys.id]
-              t.equal(last.partial, true, 'is partial still')
-              t.equal(last.sequence, 6, 'correct seq')
 
               t.end()
             })
@@ -112,16 +82,11 @@ SSB.events.on('SSB: loaded', function() {
     state = validate.appendNew(state, null, keys, { type: 'post', text: 'test3' }, Date.now()+2) // start
 
     SSB.db.validateAndAdd(state.queue[0].value, (err) => {
-      if (err) console.error(err)
+      t.error(err, 'no err')
 
-      SSB.db.validateAndAdd(state.queue[2].value, (err, msg) => {
-	if (err) console.error(err)
-
+      SSB.db.validateAndAddOOO(state.queue[2].value, (err, msg) => {
+        t.error(err, 'no err')
 	t.equal(msg.value.content.text, 'test3', 'text correct')
-
-	const last = SSB.db.last.get()[keys.id]
-	t.equal(last.partial, true, 'is partial')
-	t.equal(last.sequence, 3, 'correct seq')
 	t.end()
       })
     })
@@ -136,18 +101,13 @@ SSB.events.on('SSB: loaded', function() {
     state = validate.appendNew(state, null, keys, { type: 'post', text: 'test2' }, Date.now()+1)
 
     SSB.db.validateAndAdd(state.queue[0].value, (err) => {
-      if (err) console.error(err)
+      t.error(err, 'no err')
 
       SSB.db.validateAndAdd(state.queue[1].value, (err) => {
-        if (err) console.error(err)
+        t.error(err, 'no err')
 
         SSB.db.validateAndAdd(state.queue[1].value, (err) => {
-          if (err) console.error(err)
-
-          const last = SSB.db.last.get()[keys.id]
-          t.equal(last.partial, undefined, 'is not partial')
-          t.equal(last.sequence, 2, 'correct seq')
-
+          t.ok(err, 'Should fail to add')
           t.end()
         })
       })
@@ -162,16 +122,11 @@ SSB.events.on('SSB: loaded', function() {
     state = validate.appendNew(state, null, keys, { type: 'post', text: 'test1' }, Date.now())
     state = validate.appendNew(state, null, keys, { type: 'post', text: 'test2' }, Date.now()+1)
 
-    SSB.db.validateAndAddStrictOrder(state.queue[0].value, (err) => {
-      if (err) console.error(err)
+    SSB.db.validateAndAdd(state.queue[0].value, (err) => {
+      t.error(err, 'no err')
 
-      SSB.db.validateAndAddStrictOrder(state.queue[1].value, (err) => {
-        if (err) console.error(err)
-
-        const last = SSB.db.last.get()[keys.id]
-        t.equal(last.partial, undefined, 'is not partial')
-        t.equal(last.sequence, 2, 'correct seq')
-
+      SSB.db.validateAndAdd(state.queue[1].value, (err) => {
+        t.error(err, 'no err')
         t.end()
       })
     })
@@ -186,16 +141,11 @@ SSB.events.on('SSB: loaded', function() {
     state = validate.appendNew(state, null, keys, { type: 'post', text: 'test2' }, Date.now()+1)
     state = validate.appendNew(state, null, keys, { type: 'post', text: 'test3' }, Date.now()+2)
 
-    SSB.db.validateAndAddStrictOrder(state.queue[0].value, (err) => {
-      if (err) console.error(err)
+    SSB.db.validateAndAdd(state.queue[0].value, (err) => {
+      t.error(err, 'no err')
 
-      SSB.db.validateAndAddStrictOrder(state.queue[2].value, (err) => {
+      SSB.db.validateAndAdd(state.queue[2].value, (err) => {
         t.ok(err, 'Should fail to add')
-        console.log(err)
-
-        const last = SSB.db.last.get()[keys.id]
-        t.equal(last.partial, undefined, 'is not partial')
-        t.equal(last.sequence, 1, 'correct seq')
 
         t.end()
       })

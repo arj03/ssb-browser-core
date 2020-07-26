@@ -1,43 +1,104 @@
-const Store = require('./store')
-const pull = require('pull-stream')
+const push = require('push-stream')
 
 const hash = require('ssb-keys/util').hash
 const validate = require('ssb-validate')
 const keys = require('ssb-keys')
+
+const Log = require('./log')
+const FullScanIndexes = require('./indexes/full-scan')
+const Contacts = require('./indexes/contacts')
+const Profiles = require('./indexes/profiles')
+const Partial = require('./indexes/partial')
+const Mentions = require('./indexes/mentions')
+const JITDb = require('jitdb')
+const FeedSyncer = require('./feed-syncer')
 
 function getId(msg) {
   return '%'+hash(JSON.stringify(msg, null, 2))
 }
 
 exports.init = function (dir, ssbId, config) {
-  const store = Store(dir, ssbId, config)
+  const log = Log(dir, ssbId, config)
+  const jitdb = JITDb(log, "indexes")
+  const contacts = Contacts(jitdb)
+  const profiles = Profiles(jitdb)
+  const fullIndex = FullScanIndexes(log)
+  const partial = Partial()
+  const mentions = Mentions(log)
+  const feedSyncer = FeedSyncer(log, partial, contacts)
 
   function get(id, cb) {
-    store.keys.get(id, (err, data) => {
+    fullIndex.keysGet(id, (err, data) => {
       if (data)
-	cb(null, data.value)
+        cb(null, data.value)
       else
-	cb(err)
+        cb(err)
     })
   }
 
   function add(msg, cb) {
     var id = getId(msg)
 
-    if (store.since.value == 0 || SSB.isInitialSync)
-    {
-      // empty db, keys.get will block, just add anyways
-      store.add(id, msg, cb)
-    }
-    else
-    {
-      store.keys.get(id, (err, data) => {
-	if (data)
-	  cb(null, data.value)
-	else
-	  store.add(id, msg, cb)
+    fullIndex.keysGet(id, (err, data) => {
+      if (data)
+        cb(null, data.value)
+      else {
+        // store encrypted messages for us unencrypted for views
+        // ebt will turn messages into encrypted ones before sending
+        if (typeof (msg.content) === 'string') {
+          const decrypted = keys.unbox(msg.content, SSB.net.config.keys.private)
+          if (decrypted) {
+            const cyphertext = msg.content
+
+            msg.content = decrypted
+            msg.meta = {
+	      private: "true",
+	      original: {
+	        content: cyphertext
+	      }
+            }
+          }
+        }
+
+        log.add(id, msg, cb)
+      }
+    })
+  }
+
+  function del(key, cb) {
+    fullIndex.keyToSeq(key, (err, seq) => {
+      if (err) return cb(err)
+      if (seq == null) return cb(new Error('seq is null!'))
+
+      log.del(seq, cb)
+    })
+  }
+
+  function deleteFeed(feedId, cb) {
+    SSB.db.jitdb.onReady(() => {
+      SSB.db.jitdb.query({
+        type: 'EQUAL',
+        data: {
+          seek: SSB.db.jitdb.seekAuthor,
+          value: Buffer.from(feedId),
+          indexType: "author"
+        }
+      }, 0, (err, results) => {
+        push(
+          push.values(results),
+          push.asyncMap((msg, cb) => {
+            del(msg.key, cb)
+          }),
+          push.collect((err) => {
+            if (!err) {
+              delete SSB.state.feeds[feedId]
+              fullIndex.removeFeedFromLatest(feedId)
+            }
+            cb(err)
+          })
+        )
       })
-    }
+    })
   }
 
   function decryptMessage(msg) {
@@ -46,58 +107,23 @@ exports.init = function (dir, ssbId, config) {
 
   const hmac_key = null
 
-  function updateProfile(msg) {
-    if (!SSB.profiles)
-      SSB.profiles = {}
-    if (!SSB.profiles[msg.author])
-      SSB.profiles[msg.author] = {}
+  function validateAndAddOOO(msg, cb) {
+    try {
+      var state = validate.initial()
+      validate.appendOOO(SSB.state, hmac_key, msg)
 
-    if (msg.content.name)
-      SSB.profiles[msg.author].name = msg.content.name
-    if (msg.content.description)
-      SSB.profiles[msg.author].description = msg.content.description
+      if (SSB.state.error)
+        return cb(SSB.state.error)
 
-    if (msg.content.image && typeof msg.content.image.link === 'string')
-      SSB.profiles[msg.author].image = msg.content.image.link
-    else if (typeof msg.content.image === 'string')
-      SSB.profiles[msg.author].image = msg.content.image
-  }
-
-  function addMsg(updateLast, skippingMessages, msg, cb) {
-    if (updateLast)
-      store.last.update(msg)
-
-    var ok = true
-
-    var isPrivate = (typeof (msg.content) === 'string')
-
-    if (isPrivate && !SSB.privateMessages) {
-      ok = false
-    } else if (!isPrivate && msg.content.type == 'about' && msg.content.about == msg.author) {
-      updateProfile(msg)
-    } else if (!isPrivate && !SSB.validMessageTypes.includes(msg.content.type)) {
-      ok = false
-    } else if (isPrivate) {
-      var decrypted = decryptMessage(msg)
-      if (!decrypted) // not for us
-        ok = false
-    }
-
-    if (ok) {
       add(msg, cb)
-
-      if (skippingMessages)
-        store.last.setPartialLogState(msg.author, true)
     }
-    else
+    catch (ex)
     {
-      if (updateLast)
-        store.last.setPartialLogState(msg.author, true)
-      cb()
+      return cb(ex)
     }
   }
 
-  function validateAndAddStrictOrder(msg, cb) {
+  function validateAndAdd(msg, cb) {
     const knownAuthor = msg.author in SSB.state.feeds
 
     try {
@@ -109,7 +135,7 @@ exports.init = function (dir, ssbId, config) {
       if (SSB.state.error)
         return cb(SSB.state.error)
 
-      addMsg(true, false, msg, cb)
+      add(msg, cb)
     }
     catch (ex)
     {
@@ -117,62 +143,68 @@ exports.init = function (dir, ssbId, config) {
     }
   }
 
-  function validateAndAdd(msg, cb) {
-    const knownAuthor = msg.author in SSB.state.feeds
-    const earlierMessage = knownAuthor && msg.sequence < SSB.state.feeds[msg.author].sequence
-    const skippingMessages = knownAuthor && msg.sequence > SSB.state.feeds[msg.author].sequence + 1
+  function getStatus() {
+    const partialState = partial.get()
+    const graph = contacts.getGraphForFeedSync(SSB.net.id)
 
-    const alreadyChecked = knownAuthor && msg.sequence == SSB.state.feeds[msg.author].sequence
-    if (alreadyChecked && cb)
-      return cb()
+    let profilesSynced = 0
+    let contactsSynced = 0
+    let messagesSynced = 0
+    let total = 0
 
-    if (!knownAuthor || earlierMessage || skippingMessages)
-      SSB.state = validate.appendOOO(SSB.state, hmac_key, msg)
-    else
-      SSB.state = validate.append(SSB.state, hmac_key, msg)
+    graph.extended.forEach(relation => {
+      if (partialState[relation] && partialState[relation]['syncedProfile'])
+        profilesSynced += 1
+      if (partialState[relation] && partialState[relation]['syncedContacts'])
+        contactsSynced += 1
+      if (partialState[relation] && partialState[relation]['syncedMessages'])
+        messagesSynced += 1
 
-    if (SSB.state.error)
-      return cb(SSB.state.error)
+      total += 1
+    })
 
-    const updateLast = !earlierMessage
-
-    addMsg(updateLast, skippingMessages, msg, cb)
+    return {
+      log: log.since.value,
+      full: fullIndex.seq.value,
+      contacts: contacts.seq.value,
+      profiles: profiles.seq.value,
+      mentions: mentions.seq.value,
+      partial: {
+        total,
+        profilesSynced,
+        contactsSynced,
+        messagesSynced
+      }
+    }
   }
 
-  function deleteFeed(feedId, cb) {
-    pull(
-      store.query.read({
-        query: [{
-          $filter: {
-            value: {
-              author: feedId
-            }
-          }
-        }]
-      }),
-      pull.asyncMap((msg, cb) => {
-        store.del(msg.key, (err) => {
-          cb(err, msg.key)
-        })
-      }),
-      pull.collect(cb)
-    )
+  function clearIndexes() {
+    contacts.remove(() => {})
+    profiles.remove(() => {})
+    mentions.remove(() => {})
+    fullIndex.remove(() => {})
+    partial.remove(() => {})
   }
-  
+
   return {
     get,
     add,
-    validateAndAdd,
-    validateAndAddStrictOrder,
-    del: store.del,
+    del,
     deleteFeed,
-    // indexes
-    backlinks: store.backlinks,
-    query: store.query,
-    last: store.last,
-    clock: store.clock,
-    friends: store.friends,
-    peerInvites: store['peer-invites'],
-    getStatus: store.getStatus
+    validateAndAdd,
+    validateAndAddOOO,
+    getStatus,
+    getLast: fullIndex.getLast,
+    getClock: fullIndex.clockGet,
+    contacts,
+    profiles,
+    getMessagesByRoot: mentions.getMessagesByRoot,
+    getMessagesByMention: mentions.getMessagesByMention,
+    jitdb,
+    clearIndexes,
+
+    // partial stuff
+    partial,
+    feedSyncer
   }
 }

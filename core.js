@@ -33,17 +33,19 @@ exports.init = function (dir, config) {
     var validate = require('ssb-validate')
     var state = validate.initial()
 
-    var last = db.last.get()
-    // copy to so we avoid weirdness, because this object
-    // tracks the state coming in to the database.
-    for (var k in last) {
-      state.feeds[k] = {
-        id: last[k].id,
-        timestamp: last[k].timestamp,
-        sequence: last[k].sequence,
-        queue: []
+    // restore current state
+    db.getLast((err, last) => {
+      // copy to so we avoid weirdness, because this object
+      // tracks the state coming in to the database.
+      for (var k in last) {
+        state.feeds[k] = {
+          id: last[k].id,
+          timestamp: last[k].timestamp,
+          sequence: last[k].sequence,
+          queue: []
+        }
       }
-    }
+    })
 
     SSB = Object.assign(SSB, {
       db,
@@ -55,26 +57,14 @@ exports.init = function (dir, config) {
 
       connected: helpers.connected,
 
-      removeFeedState: function(feedId) {
-        db.last.removeFeed(feedId)
-
-        delete SSB.state.feeds[feedId]
-
-        delete SSB.profiles[this.feedId]
-        helpers.saveProfiles()
-      },
-
       removeDB: helpers.removeDB,
+      removeIndexes: helpers.removeIndexes,
       removeBlobs: helpers.removeBlobs,
 
-      initialSync: helpers.initialSync,
       sync: helpers.sync,
 
       box: require('ssb-keys').box,
       blobFiles: require('ssb-blob-files'),
-
-      // peer invites
-      rawConnect: require('./raw-connect'),
 
       // sbot convenience wrappers
       publish: function(msg, cb) {
@@ -82,32 +72,15 @@ exports.init = function (dir, config) {
         state = validate.appendNew(state, null, net.config.keys, msg, Date.now())
         console.log(state.queue[0])
         db.add(state.queue[0].value, (err, data) => {
-          db.last.update(data.value)
-          net.post(data.value) // ebt
+          net.post(data.value) // tell ebt
           cb(err, data)
         })
       },
-      messagesByType: function(opts) {
-        return pull(
-          db.query.read({
-            reverse: opts.reverse,
-            limit: opts.limit,
-            query: [{$filter: {value: { content: {type: opts.type}}}}, {$map: true}]
-          })
-        )
-      },
 
       // config
-      validMessageTypes: ['post', 'peer-invite/confirm', 'peer-invite/accept', 'peer-invite', 'contact'],
-      privateMessages: true,
-      syncOnlyFeedsFollowing: false,
-      hops: 1,
+      hops: 1, // this means download full log for hops and partial logs for hops + 1
 
       remoteAddress: '',
-
-      saveProfiles: helpers.saveProfiles,
-      loadProfiles: helpers.loadProfiles,
-      profiles: {}
     })
 
     SSB.events.emit("SSB: loaded")

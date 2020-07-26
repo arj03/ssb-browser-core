@@ -13,29 +13,27 @@ exports.permissions = {
 }
 
 exports.init = function (sbot, config) {
-  // ebt stuff
-
   sbot.createHistoryStream = function() {
     return pull.empty()
   }
 
+  // all the rest is ebt stuff
+
   sbot.post = Obv()
 
-  sbot.getVectorClock = function (_, cb) {
-    if (!cb) cb = _
-
-    function getClock()
-    {
-      var last = SSB.db.last.get()
-      var clock = {}
-      for (var k in last) {
-        clock[k] = last[k].sequence
-      }
-      cb(null, clock)
-    }
-
-    SSB.events.on('SSB: loaded', getClock)
+  sbot.add = function(msg, cb) {
+    SSB.db.validateAndAdd(msg, cb)
   }
+
+  sbot.getAtSequence = function (seqid, cb) {
+    // will NOT expose private plaintext
+    SSB.db.clockGet(isString(seqid) ? seqid.split(':') : seqid, function (err, value) {
+      if (err) cb(err)
+      else cb(null, originalData(value))
+    })
+  }
+
+  // helpers
 
   function isString (s) {
     return typeof s === 'string'
@@ -62,18 +60,6 @@ exports.init = function (sbot, config) {
   function originalData(data) {
     data.value = originalValue(data.value)
     return data
-  }
-
-  sbot.getAtSequence = function (seqid, cb) {
-    // will NOT expose private plaintext
-    SSB.db.clock.get(isString(seqid) ? seqid.split(':') : seqid, function (err, value) {
-      if (err) cb(err)
-      else cb(null, originalData(value))
-    })
-  }
-
-  sbot.add = function(msg, cb) {
-    SSB.db.validateAndAddStrictOrder(msg, cb)
   }
 
   return {}

@@ -9,7 +9,6 @@ exports.connected = function(cb)
 {
   if (!remote || remote.closed)
   {
-    SSB.isInitialSync = false // for ssb-ebt
     SSB.net.connect(SSB.remoteAddress, (err, rpc) => {
       if (err) throw(err)
 
@@ -20,19 +19,26 @@ exports.connected = function(cb)
     cb(remote)
 }
 
-exports.removeDB = function() {
+function deleteDatabaseFile(filename) {
   const path = require('path')
-
-  const file = raf(path.join(SSB.dir, 'log.offset'))
+  const file = raf(path.join(SSB.dir, filename))
   file.open((err, done) => {
     if (err) return console.error(err)
     file.destroy()
   })
+}
 
-  localStorage['last.json'] = JSON.stringify({})
-  localStorage['profiles.json'] = JSON.stringify({})
+exports.removeIndexes = function removeIndexes(fs) {
+  SSB.db.clearIndexes()
 
-  console.log("remember to delete indexdb indexes as well!")
+  const IdbKvStore = require('idb-kv-store')
+  const store = new IdbKvStore("/indexes")
+  store.clear()
+}
+
+exports.removeDB = function() {
+  deleteDatabaseFile('log.bipf')
+  exports.removeIndexes()
 }
 
 exports.removeBlobs = function() {
@@ -41,13 +47,13 @@ exports.removeBlobs = function() {
     fs.root.getDirectory(path, {}, function(dirEntry) {
       var dirReader = dirEntry.createReader()
       dirReader.readEntries(function(entries) {
-	for(var i = 0; i < entries.length; i++) {
-	  var entry = entries[i]
-	  if (entry.isDirectory) {
-	    //console.log('Directory: ' + entry.fullPath);
-	    listDir(fs, entry.fullPath)
-	  }
-	  else if (entry.isFile) {
+        for(var i = 0; i < entries.length; i++) {
+          var entry = entries[i]
+          if (entry.isDirectory) {
+            //console.log('Directory: ' + entry.fullPath);
+            listDir(fs, entry.fullPath)
+          }
+          else if (entry.isFile) {
             console.log('deleting file: ' + entry.fullPath)
             const file = raf(entry.fullPath)
             file.open((err, done) => {
@@ -55,7 +61,7 @@ exports.removeBlobs = function() {
               file.destroy()
             })
           }
-	}
+        }
       })
     })
   }
@@ -68,27 +74,12 @@ exports.removeBlobs = function() {
 exports.sync = function()
 {
   exports.connected((rpc) => {
-    if (!SSB.state.feeds[SSB.net.id])
-      SSB.net.replicate.request(SSB.net.id, true)
+    SSB.db.contacts.getGraphForFeed(SSB.net.id, (err, graph) => {
+      SSB.net.ebt.request(SSB.net.id, true)
+      graph.following.forEach(feed => SSB.net.ebt.request(feed, true))
+      graph.extended.forEach(feed => SSB.net.ebt.request(feed, true))
 
-    SSB.db.friends.hops((err, hops) => {
-      for (var feed in hops)
-        if (hops[feed] <= SSB.hops)
-          SSB.net.replicate.request(feed, true)
+      SSB.net.ebt.startEBT(rpc)
     })
-
-    if (!SSB.syncOnlyFeedsFollowing) {
-      for (var feed in SSB.state.feeds)
-        SSB.net.replicate.request(feed, true)
-    }
   })
-}
-
-exports.saveProfiles = function() {
-  localStorage['profiles.json'] = JSON.stringify(SSB.profiles)
-}
-
-exports.loadProfiles = function() {
-  if (localStorage['profiles.json'])
-    SSB.profiles = JSON.parse(localStorage['profiles.json'])
 }
