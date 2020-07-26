@@ -145,41 +145,23 @@ exports.init = function (dir, ssbId, config) {
 
   function getStatus() {
     const partialState = partial.get()
-    const hops = contacts.getHopsSync()
+    const graph = contacts.getGraphForFeedSync(SSB.net.id)
 
     let profilesSynced = 0
     let contactsSynced = 0
     let messagesSynced = 0
     let total = 0
 
-    var following = []
-    for (var relation in hops[ssbId])
-      if (hops[ssbId][relation] === 1)
-        following.push(relation)
+    graph.extended.forEach(relation => {
+      if (partialState[relation] && partialState[relation]['syncedProfile'])
+        profilesSynced += 1
+      if (partialState[relation] && partialState[relation]['syncedContacts'])
+        contactsSynced += 1
+      if (partialState[relation] && partialState[relation]['syncedMessages'])
+        messagesSynced += 1
 
-    for (var feedId in hops) {
-      if (feedId === ssbId)
-        continue
-
-      if (!following.includes(feedId))
-        continue
-
-      for (var relation in hops[feedId]) {
-        if (hops[feedId][relation] === 1) {
-          if (feedId === relation)
-            continue
-
-          if (partialState[relation] && partialState[relation]['syncedProfile'])
-            profilesSynced += 1
-          if (partialState[relation] && partialState[relation]['syncedContacts'])
-            contactsSynced += 1
-          if (partialState[relation] && partialState[relation]['syncedMessages'])
-            messagesSynced += 1
-
-          total += 1
-        }
-      }
-    }
+      total += 1
+    })
 
     return {
       log: log.since.value,
@@ -213,11 +195,11 @@ exports.init = function (dir, ssbId, config) {
     validateAndAddOOO,
     getStatus,
     getLast: fullIndex.getLast,
-    clockGet: fullIndex.clockGet,
-    getHops: contacts.getHops,
+    getClock: fullIndex.clockGet,
+    contacts,
+    profiles,
     getMessagesByRoot: mentions.getMessagesByRoot,
     getMessagesByMention: mentions.getMessagesByMention,
-    getProfiles: profiles.getProfiles,
     jitdb,
     clearIndexes,
 

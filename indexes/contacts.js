@@ -68,13 +68,59 @@ module.exports = function (db) {
     })
   })
 
-  return {
-    getHops: function(cb) {
-      queue.get(cb)
+  return self = {
+    isFollowing: function(source, dest) {
+      return hops[source][dest] === 1
+    },
+    isBlocking: function(source, dest) {
+      return hops[source][dest] === -1
+    },
+    getGraphForFeed: function(feed, cb) {
+      queue.get((err, hops) => {
+        cb(err, self.getGraphForFeedSync(feed))
+      })
     },
     // might return empty when hops is not loaded yet
-    getHopsSync: function() {
-      return hops
+    getGraphForFeedSync: function(feed) {
+      let following = []
+      let blocking = []
+      let extended = []
+
+      for (var relation in hops[feed]) {
+        if (self.isFollowing(feed, relation))
+          following.push(relation)
+        else if (self.isBlocking(feed, relation))
+          blocking.push(relation)
+      }
+
+      for (var feedId in hops) {
+        if (feedId === feed)
+          continue
+
+        if (!following.includes(feedId))
+          continue
+
+        for (var relation in hops[feedId]) {
+          if (self.isFollowing(feedId, relation)) {
+            if (relation === feed)
+              continue
+
+            if (following.includes(relation))
+              continue
+
+            if (blocking.includes(relation))
+              continue
+
+            extended.push(relation)
+          }
+        }
+      }
+
+      return {
+        following,
+        blocking,
+        extended: [...new Set(extended)]
+      }
     },
     seq,
     remove: function(cb) {

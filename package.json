@@ -14,7 +14,7 @@
     "epidemic-broadcast-trees": "^7.0.0",
     "flumelog-aligned-offset": "^1.1.3",
     "gossip-query": "^2.0.2",
-    "jitdb": "^0.5.1",
+    "jitdb": "^0.5.4",
     "lodash.debounce": "^4.0.8",
     "lossy-store": "^1.2.4",
     "polyraf": "^1.1.0",
@@ -45,7 +45,7 @@
   "scripts": {
     "build": "mkdir -p dist && browserify --full-paths browser.js > dist/bundle-core.js",
     "release": "mkdir -p dist && browserify -g uglifyify -p common-shakeify browser.js > dist/bundle-core.js",
-    "test": "tape tests/*.js | tap-spec"
+    "test": "tape test/*.js | tap-spec"
   },
   "author": "arj",
   "license": "beerware"

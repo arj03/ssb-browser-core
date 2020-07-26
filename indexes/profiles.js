@@ -75,7 +75,7 @@ module.exports = function (db) {
   })
 
   return {
-    getProfiles: function(cb) {
+    get: function(cb) {
       queue.get(cb)
     },
     seq,

@@ -8,7 +8,7 @@ indexes and smaller images. To reduce storage and network
 requirements, partial replication has been implemented. Wasm is used
 for crypto and is around 90% the speed of the C implementation. A
 WebSocket is used to connect to pubs. The `bundle-core.js` file in
-dist/ is roughly 1.5mb.
+dist/ is roughly 1.8mb.
 
 # api
 
@@ -101,15 +101,18 @@ Returns a [jitdb] instance of the database useful for queries.
 
 Returns the last index.
 
-### clockGet(err)
+### getClock(err)
 
 Internal method for EBT.
 
-### getHops(cb)
+### contacts
 
-Returns the hops index, meaning the friends graph.
+The contacts index for the friends graph.
 
-### getProfiles(cb)
+Contains the method `getGraphForFeed(feed, cb)` that will return an
+object of: following, blocking and extended given the feed.
+
+### profiles.get(cb)
 
 Returns the profiles index.
 
