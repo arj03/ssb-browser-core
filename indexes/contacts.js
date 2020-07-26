@@ -51,8 +51,10 @@ module.exports = function (db) {
       } else {
         console.time("contacts")
 
-        db.query(query, 0, (err, results) => {
+        db.querySeq(query, data.seq, (err, results) => {
+          hops = data.hops
           results.forEach(updateData)
+
           console.timeEnd("contacts")
 
           seq.set(db.getSeq(query))

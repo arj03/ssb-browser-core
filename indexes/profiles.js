@@ -57,8 +57,10 @@ module.exports = function (db) {
       } else {
         console.time("profiles")
 
-        db.query(query, 0, (err, results) => {
+        db.querySeq(query, data.seq, (err, results) => {
+          profiles = data.profiles
           results.forEach(updateData)
+
           console.timeEnd("profiles")
 
           seq.set(db.getSeq(query))
