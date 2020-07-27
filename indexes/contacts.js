@@ -51,7 +51,7 @@ module.exports = function (db) {
       } else {
         console.time("contacts")
 
-        hops = !err ? data.hops : []
+        hops = !err ? data.hops : {}
 
         db.querySeq(query, !err ? data.seq : 0, (err, results) => {
           results.forEach(updateData)
