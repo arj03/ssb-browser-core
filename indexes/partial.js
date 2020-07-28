@@ -9,11 +9,12 @@
 */
 
 const AtomicFile = require('atomic-file')
+const path = require('path')
 
-module.exports = function () {
+module.exports = function (dir) {
   var state = {}
 
-  var f = AtomicFile("indexes/partial.json")
+  var f = AtomicFile(path.join(dir, "indexes/partial.json"))
 
   function load() {
     f.get((err, data) => {

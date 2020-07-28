@@ -3,6 +3,7 @@ const push = require('push-stream')
 const hash = require('ssb-keys/util').hash
 const validate = require('ssb-validate')
 const keys = require('ssb-keys')
+const path = require('path')
 
 const Log = require('./log')
 const FullScanIndexes = require('./indexes/full-scan')
@@ -19,12 +20,12 @@ function getId(msg) {
 
 exports.init = function (dir, ssbId, config) {
   const log = Log(dir, ssbId, config)
-  const jitdb = JITDb(log, "indexes")
-  const contacts = Contacts(jitdb)
-  const profiles = Profiles(jitdb)
-  const fullIndex = FullScanIndexes(log)
-  const partial = Partial()
-  const mentions = Mentions(log)
+  const jitdb = JITDb(log, path.join(dir, "indexes"))
+  const contacts = Contacts(jitdb, dir)
+  const profiles = Profiles(jitdb, dir)
+  const fullIndex = FullScanIndexes(log, dir)
+  const partial = Partial(dir)
+  const mentions = Mentions(log, dir)
   const feedSyncer = FeedSyncer(log, partial, contacts)
 
   function get(id, cb) {

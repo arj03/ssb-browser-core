@@ -2,8 +2,9 @@ const isFeed = require('ssb-ref').isFeed
 const Obv = require('obv')
 const AtomicFile = require('atomic-file')
 const debounce = require('lodash.debounce')
+const path = require('path')
 
-module.exports = function (db) {
+module.exports = function (db, dir) {
   const queue = require('../waiting-queue')()
 
   var seq = Obv()
@@ -38,7 +39,7 @@ module.exports = function (db) {
     profiles[data.value.author] = profile
   }
 
-  var f = AtomicFile("indexes/profiles.json")
+  var f = AtomicFile(path.join(dir, "indexes/profiles.json"))
 
   function atomicSave()
   {

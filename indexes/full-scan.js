@@ -2,8 +2,9 @@ const bipf = require('bipf')
 const Obv = require('obv')
 const AtomicFile = require('atomic-file')
 const debounce = require('lodash.debounce')
+const path = require('path')
 
-module.exports = function (log) {
+module.exports = function (log, dir) {
   const queueLatest = require('../waiting-queue')()
   const queueKey = require('../waiting-queue')()
   const queueSequence = require('../waiting-queue')()
@@ -15,7 +16,7 @@ module.exports = function (log) {
   var authorSequenceToSeq = {}
   var authorLatest = {}
 
-  var f = AtomicFile("indexes/full.json")
+  var f = AtomicFile(path.join(dir, "indexes/full.json"))
 
   function atomicSave()
   {

@@ -4,8 +4,9 @@ const AtomicFile = require('atomic-file')
 const debounce = require('lodash.debounce')
 const push = require('push-stream')
 const sort = require('ssb-sort')
+const path = require('path')
 
-module.exports = function (log) {
+module.exports = function (log, dir) {
   const queueMentions = require('../waiting-queue')()
   const queueRoots = require('../waiting-queue')()
 
@@ -50,7 +51,7 @@ module.exports = function (log) {
     save()
   }
 
-  var f = AtomicFile("indexes/mentions.json")
+  var f = AtomicFile(path.join(dir, "indexes/mentions.json"))
 
   function atomicSave()
   {
