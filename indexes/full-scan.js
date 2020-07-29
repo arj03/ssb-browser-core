@@ -27,7 +27,7 @@ module.exports = function (log, dir) {
       authorLatest
     }, () => {})
   }
-  var save = debounce(atomicSave, 250)
+  var save = debounce(atomicSave, 1000)
 
   f.get((err, data) => {
     var count = 0

@@ -66,7 +66,7 @@ module.exports = function (log, dir) {
       roots
     }, () => {})
   }
-  var save = debounce(atomicSave, 250)
+  var save = debounce(atomicSave, 1000)
 
   var mentions = {}
   var roots = {}
