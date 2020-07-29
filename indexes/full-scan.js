@@ -40,20 +40,26 @@ module.exports = function (log, dir) {
       authorLatest = data.authorLatest
     }
 
+    const bValue = Buffer.from('value')
+    const bKey = Buffer.from('key')
+    const bAuthor = Buffer.from('author')
+    const bSequence = Buffer.from('sequence')
+    const bTimestamp = Buffer.from('timestamp')
+
     function handleData(data) {
       var p = 0 // note you pass in p!
-      p = bipf.seekKey(data.value, p, new Buffer('key'))
+      p = bipf.seekKey(data.value, p, bKey)
       const key = bipf.decode(data.value, p)
       keyToSeq[key] = data.seq
 
       p = 0
-      p = bipf.seekKey(data.value, p, new Buffer('value'))
+      p = bipf.seekKey(data.value, p, bValue)
       if (~p) {
-        var p2 = bipf.seekKey(data.value, p, new Buffer('author'))
+        var p2 = bipf.seekKey(data.value, p, bAuthor)
         const author = bipf.decode(data.value, p2)
-        var p3 = bipf.seekKey(data.value, p, new Buffer('sequence'))
+        var p3 = bipf.seekKey(data.value, p, bSequence)
         const sequence = bipf.decode(data.value, p3)
-        var p4 = bipf.seekKey(data.value, p, new Buffer('timestamp'))
+        var p4 = bipf.seekKey(data.value, p, bTimestamp)
         const timestamp = bipf.decode(data.value, p4)
         authorSequenceToSeq[[author, sequence]] = data.seq
         var latestSequence = 0

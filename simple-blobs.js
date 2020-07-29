@@ -164,12 +164,12 @@ exports.init = function (sbot, config) {
       return SSB.remoteAddress.split("~")[0].replace("ws:", "http://") + '/blobs/get/' + id
   }
 
-  var zeros = new Buffer(24); zeros.fill(0)
+  var zeros = Buffer.alloc(24); zeros.fill(0)
 
   function unboxBlob(unbox) {
-    var key = new Buffer(unbox.replace(/\s/g, '+'), 'base64')
+    var key = Buffer.from(unbox.replace(/\s/g, '+'), 'base64')
     return BoxStream.createUnboxStream(
-      new Buffer(key, 'base64'),
+      Buffer.from(key, 'base64'),
       zeros
     )
   }

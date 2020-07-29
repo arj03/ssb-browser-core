@@ -13,13 +13,18 @@ module.exports = function (log, dir) {
   var seq = Obv()
   seq.set(0)
 
+  const bValue = Buffer.from('value')
+  const bContent = Buffer.from('content')
+  const bRoot = Buffer.from('root')
+  const bMentions = Buffer.from('mentions')
+
   function handleData(data) {
     var p = 0 // note you pass in p!
-    p = bipf.seekKey(data.value, p, new Buffer('value'))
+    p = bipf.seekKey(data.value, p, bValue)
     if (~p) {
-      var p2 = bipf.seekKey(data.value, p, new Buffer('content'))
+      var p2 = bipf.seekKey(data.value, p, bContent)
       if (~p2) {
-        var pContent = bipf.seekKey(data.value, p2, new Buffer('root'))
+        var pContent = bipf.seekKey(data.value, p2, bRoot)
         if (~pContent) {
           const root = bipf.decode(data.value, pContent)
           if (root) {
@@ -29,7 +34,7 @@ module.exports = function (log, dir) {
           }
         }
           
-        var p3 = bipf.seekKey(data.value, p2, new Buffer('mentions'))
+        var p3 = bipf.seekKey(data.value, p2, bMentions)
         if (~p3) {
           const mentionsData = bipf.decode(data.value, p3)
           if (Array.isArray(mentionsData)) {
