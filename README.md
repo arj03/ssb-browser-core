@@ -10,6 +10,11 @@ for crypto and is around 90% the speed of the C implementation. A
 WebSocket is used to connect to pubs. The `bundle-core.js` file in
 dist/ is roughly 1.8mb.
 
+Replication in the browser is quite a bit slower than in node, around
+4-5x. There doesn't seem to be a single cause, it appears to be all
+the diferrent layers that are [slower]: end-to-end encryption,
+database write etc.
+
 # api
 
 Once you load the `bundle-core.js` file in a browser a global SSB
@@ -336,3 +341,5 @@ patches/sodium-browserify.patch
 [ssb-get-thread]: https://github.com/arj03/ssb-get-thread
 [ssb-partial-replication]: https://github.com/arj03/ssb-partial-replication
 [jitdb]: https://github.com/arj03/jitdb
+
+[slower]: https://github.com/arj03/ssb-browser-core/blob/master/scripts/sync.js#L17
