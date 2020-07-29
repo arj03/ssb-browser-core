@@ -40,6 +40,15 @@ exports.init = function (dir, ssbId, config) {
   function add(msg, cb) {
     var id = getId(msg)
 
+    /*
+      Beware:
+
+      There is a race condition here if you add the same message quickly
+      after another because fullIndex is lazy. The default js SSB
+      implementation adds messages in order, so it doesn't really have
+      this problem.
+    */
+
     fullIndex.keysGet(id, (err, data) => {
       if (data)
         cb(null, data.value)
