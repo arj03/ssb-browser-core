@@ -9,16 +9,16 @@ const push = require('push-stream')
 const isFeed = require('ssb-ref').isFeed
 
 module.exports = function (log, dir) {
+  var seq = Obv()
+  seq.set(-1)
+
   const queueLatest = require('../waiting-queue')()
   const queueKey = require('../waiting-queue')()
   const queueSequence = require('../waiting-queue')()
-  const queueMentions = require('../waiting-queue')()
-  const queueRoots = require('../waiting-queue')()
-  const queueContacts = require('../waiting-queue')()
-  const queueProfiles = require('../waiting-queue')()
-
-  var seq = Obv()
-  seq.set(0)
+  const queueMentions = require('../waiting-queue')(log, seq)
+  const queueRoots = require('../waiting-queue')(log, seq)
+  const queueContacts = require('../waiting-queue')(log, seq)
+  const queueProfiles = require('../waiting-queue')(log, seq)
 
   var keyToSeq = {}
   var authorSequenceToSeq = {}

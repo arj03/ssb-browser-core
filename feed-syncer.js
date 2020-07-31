@@ -24,40 +24,36 @@ module.exports = function (log, partial, contacts) {
   }
   
   function syncFeeds(cb) {
-    let partialState = partial.get()
-    contacts.getGraphForFeed(SSB.net.id, (err, graph) => {
-      SSB.connected((rpc) => {
-        console.time("full feeds")
-        pull(
-          pull.values(graph.following),
-          pull.asyncMap((feed, cb) => {
-            if (!partialState[feed] || !partialState[feed]['full']) {
-              pull(
-                rpc.partialReplication.getFeed({ id: feed, seq: 0, keys: false }),
-                pull.asyncMap(SSB.db.validateAndAdd),
-                pull.collect((err) => {
-                  if (err) throw err
-                  
-                  SSB.state.queue = []
-                  partial.updateState(feed, { full: true })
-                  cb()
-                })
-              )
-            } else
-              cb()
-          }),
-          pull.collect(() => {
-            console.timeEnd("full feeds")
-            // hack
-            console.log("waiting for contacts sync")
-            setTimeout(() => {
+    partial.get((err, partialState) => {
+      contacts.getGraphForFeed(SSB.net.id, (err, graph) => {
+        SSB.connected((rpc) => {
+          console.time("full feeds")
+          pull(
+            pull.values(graph.following),
+            pull.asyncMap((feed, cb) => {
+              if (!partialState[feed] || !partialState[feed]['full']) {
+                pull(
+                  rpc.partialReplication.getFeed({ id: feed, seq: 0, keys: false }),
+                  pull.asyncMap(SSB.db.validateAndAdd),
+                  pull.collect((err) => {
+                    if (err) throw err
+
+                    SSB.state.queue = []
+                    partial.updateState(feed, { full: true })
+                    cb()
+                  })
+                )
+              } else
+                cb()
+            }),
+            pull.collect(() => {
+              console.timeEnd("full feeds")
+
               console.time("partial feeds")
               contacts.getGraphForFeed(SSB.net.id, (err, graph) => {
-                console.log("status", SSB.db.getStatus())
                 pull(
                   pull.values(graph.extended),
                   pull.asyncMap((feed, cb) => {
-                    console.log(SSB.db.getStatus())
                     syncMessages(feed, 'syncedMessages',
                                  rpc.partialReplication.getFeedReverse({ id: feed, keys: false, limit: 25 }),
                                  partialState, cb)
@@ -78,9 +74,9 @@ module.exports = function (log, partial, contacts) {
                   })
                 )
               })
-            }, 1000)
-          })
-        )
+            })
+          )
+        })
       })
     })
   }

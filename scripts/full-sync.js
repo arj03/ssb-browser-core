@@ -71,13 +71,8 @@ SSB.events.on('SSB: loaded', function() {
         console.timeEnd("downloading main profile")
         console.log(msgs.length)
 
-        console.log("waiting for contacts sync")
-        // hack
-        setTimeout(() => {
-          console.log("starting sync")
-          SSB.db.feedSyncer.syncFeeds(() => {
-          })
-        }, 1000)
+        console.log("starting sync")
+        SSB.db.feedSyncer.syncFeeds(() => {})
       })
     )
   })

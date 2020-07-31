@@ -149,7 +149,7 @@ exports.init = function (dir, ssbId, config) {
   }
 
   function getStatus() {
-    const partialState = partial.get()
+    const partialState = partial.getSync()
     const graph = contacts.getGraphForFeedSync(SSB.net.id)
 
     let profilesSynced = 0
