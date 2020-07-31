@@ -2,18 +2,22 @@
 
 Secure scuttlebutt core (similar to [ssb-server]) in a browser.
 
-This is a full implementation of ssb running in the browser only. The
-key of your feed is stored in the browser together with the log,
-indexes and smaller images. To reduce storage and network
-requirements, partial replication has been implemented. Wasm is used
-for crypto and is around 90% the speed of the C implementation. A
-WebSocket is used to connect to pubs. The `bundle-core.js` file in
-dist/ is roughly 1.8mb.
+This is a full implementation of ssb running in the browser only (but
+not limited to of course). The key of your feed is stored in the
+browser together with the log, indexes and smaller images. To reduce
+storage and network requirements, partial replication has been
+implemented. Wasm is used for crypto and is around 90% the speed of
+the C implementation. A WebSocket is used to connect to pubs. The
+`bundle-core.js` file in dist/ is roughly 1.8mb.
 
 Replication in the browser is quite a bit slower than in node, around
 4-5x. There doesn't seem to be a single cause, it appears to be all
 the diferrent layers that are [slower]: end-to-end encryption,
 database write etc.
+
+Partial replication [speed] on a fast laptop is roughly 414 feeds in 85
+seconds, and roughly half of that on a slow laptop or when running on
+battery.
 
 # api
 
@@ -343,3 +347,4 @@ patches/sodium-browserify.patch
 [jitdb]: https://github.com/arj03/jitdb
 
 [slower]: https://github.com/arj03/ssb-browser-core/blob/master/scripts/sync.js#L17
+[speed]: https://github.com/arj03/ssb-browser-core/blob/master/scripts/full-sync.js

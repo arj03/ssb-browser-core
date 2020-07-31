@@ -2,12 +2,13 @@ const pull = require('pull-stream')
 
 const dir = '/tmp/ssb-browser-sync'
 
-//require('rimraf').sync(dir)
+require('rimraf').sync(dir)
 
 require('../core.js').init(dir)
 
 SSB.events.on('SSB: loaded', function() {
 
+  /*
   SSB.db.jitdb.onReady(() => {
     var query = {
       type: 'EQUAL',
@@ -47,6 +48,7 @@ SSB.events.on('SSB: loaded', function() {
   })
   
   return
+  */
   
   process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = 0 // wtf
   //SSB.remoteAddress = 'wss://between-two-worlds.dk:8990~noauth:lbocEWqF2Fg6WMYLgmfYvqJlMfL7hiqVAV6ANjHWNw8='
