@@ -63,7 +63,7 @@ exports.init = function (sbot, config) {
   })
 
   function getClock() {
-    SSB.db.getLast((err, last) => {
+    SSB.db.getAllLatest((err, last) => {
       var clock = {}
       for (var k in last) {
         clock[k] = last[k].sequence

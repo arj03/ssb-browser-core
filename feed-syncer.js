@@ -27,6 +27,7 @@ module.exports = function (log, partial, contacts) {
     let partialState = partial.get()
     contacts.getGraphForFeed(SSB.net.id, (err, graph) => {
       SSB.connected((rpc) => {
+        console.time("full feeds")
         pull(
           pull.values(graph.following),
           pull.asyncMap((feed, cb) => {
@@ -46,28 +47,38 @@ module.exports = function (log, partial, contacts) {
               cb()
           }),
           pull.collect(() => {
-            pull(
-              pull.values(graph.extended),
-              pull.asyncMap((feed, cb) => {
-                syncMessages(feed, 'syncedMessages',
-                             rpc.partialReplication.getFeedReverse({ id: feed, keys: false, limit: 25 }),
-                             partialState, cb)
-              }),
-              pull.asyncMap((feed, cb) => {
-                syncMessages(feed, 'syncedProfile',
-                             rpc.partialReplication.getMessagesOfType({id: feed, type: 'about'}),
-                             partialState, cb)
-              }),
-              pull.asyncMap((feed, cb) => {
-                syncMessages(feed, 'syncedContacts',
-                             rpc.partialReplication.getMessagesOfType({id: feed, type: 'contact'}),
-                             partialState, cb)
-              }),
-              pull.collect(() => {
-                console.log("feeds in sync")
-                if (cb) cb()
+            console.timeEnd("full feeds")
+            // hack
+            console.log("waiting for contacts sync")
+            setTimeout(() => {
+              console.time("partial feeds")
+              contacts.getGraphForFeed(SSB.net.id, (err, graph) => {
+                console.log("status", SSB.db.getStatus())
+                pull(
+                  pull.values(graph.extended),
+                  pull.asyncMap((feed, cb) => {
+                    console.log(SSB.db.getStatus())
+                    syncMessages(feed, 'syncedMessages',
+                                 rpc.partialReplication.getFeedReverse({ id: feed, keys: false, limit: 25 }),
+                                 partialState, cb)
+                  }),
+                  pull.asyncMap((feed, cb) => {
+                    syncMessages(feed, 'syncedProfile',
+                                 rpc.partialReplication.getMessagesOfType({id: feed, type: 'about'}),
+                                 partialState, cb)
+                  }),
+                  pull.asyncMap((feed, cb) => {
+                    syncMessages(feed, 'syncedContacts',
+                                 rpc.partialReplication.getMessagesOfType({id: feed, type: 'contact'}),
+                                 partialState, cb)
+                  }),
+                  pull.collect(() => {
+                    console.timeEnd("partial feeds")
+                    if (cb) cb()
+                  })
+                )
               })
-            )
+            }, 1000)
           })
         )
       })

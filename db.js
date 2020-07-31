@@ -7,10 +7,7 @@ const path = require('path')
 
 const Log = require('./log')
 const FullScanIndexes = require('./indexes/full-scan')
-const Contacts = require('./indexes/contacts')
-const Profiles = require('./indexes/profiles')
 const Partial = require('./indexes/partial')
-const Mentions = require('./indexes/mentions')
 const JITDb = require('jitdb')
 const FeedSyncer = require('./feed-syncer')
 
@@ -21,11 +18,9 @@ function getId(msg) {
 exports.init = function (dir, ssbId, config) {
   const log = Log(dir, ssbId, config)
   const jitdb = JITDb(log, path.join(dir, "indexes"))
-  const contacts = Contacts(jitdb, dir)
-  const profiles = Profiles(jitdb, dir)
   const fullIndex = FullScanIndexes(log, dir)
+  const contacts = fullIndex.contacts
   const partial = Partial(dir)
-  const mentions = Mentions(log, dir)
   const feedSyncer = FeedSyncer(log, partial, contacts)
 
   function get(id, cb) {
@@ -175,10 +170,7 @@ exports.init = function (dir, ssbId, config) {
 
     return {
       log: log.since.value,
-      full: fullIndex.seq.value,
-      contacts: contacts.seq.value,
-      profiles: profiles.seq.value,
-      mentions: mentions.seq.value,
+      indexes: fullIndex.seq.value,
       partial: {
         total,
         profilesSynced,
@@ -189,9 +181,6 @@ exports.init = function (dir, ssbId, config) {
   }
 
   function clearIndexes() {
-    contacts.remove(() => {})
-    profiles.remove(() => {})
-    mentions.remove(() => {})
     fullIndex.remove(() => {})
     partial.remove(() => {})
   }
@@ -204,12 +193,12 @@ exports.init = function (dir, ssbId, config) {
     validateAndAdd,
     validateAndAddOOO,
     getStatus,
-    getLast: fullIndex.getLast,
+    getAllLatest: fullIndex.getAllLatest,
     getClock: fullIndex.clockGet,
     contacts,
-    profiles,
-    getMessagesByRoot: mentions.getMessagesByRoot,
-    getMessagesByMention: mentions.getMessagesByMention,
+    profiles: fullIndex.profiles,
+    getMessagesByRoot: fullIndex.getMessagesByRoot,
+    getMessagesByMention: fullIndex.getMessagesByMention,
     jitdb,
     clearIndexes,
 

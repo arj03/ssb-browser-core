@@ -34,7 +34,7 @@ exports.init = function (dir, config) {
     var state = validate.initial()
 
     // restore current state
-    db.getLast((err, last) => {
+    db.getAllLatest((err, last) => {
       // copy to so we avoid weirdness, because this object
       // tracks the state coming in to the database.
       for (var k in last) {
