@@ -62,7 +62,7 @@ exports.init = function (sbot, config) {
     isFeed
   })
 
-  function getClock() {
+  function updateClock(cb) {
     SSB.db.getAllLatest((err, last) => {
       var clock = {}
       for (var k in last) {
@@ -71,10 +71,12 @@ exports.init = function (sbot, config) {
 
       ebt.state.clock = clock || {}
       ebt.update()
+
+      if (cb) cb()
     })
   }
 
-  SSB.events.on('SSB: loaded', getClock)
+  SSB.events.on('SSB: loaded', updateClock)
 
   sbot.post(function(msg) {
     ebt.onAppend(msg.value)
@@ -85,6 +87,7 @@ exports.init = function (sbot, config) {
   }
 
   return {
+    updateClock,
     replicate: function(opts) {
       if (opts.version !== 2 && opts.version != 3)
         throw new Error('expected ebt.replicate({version: 3 or 2})')

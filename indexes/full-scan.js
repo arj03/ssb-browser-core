@@ -30,6 +30,8 @@ module.exports = function (log, dir) {
   var hops = {}
   var profiles = {}
 
+  var notifyOnGraphChanges = []
+
   var f = AtomicFile(path.join(dir, "indexes/all.json"))
 
   function atomicSave()
@@ -87,6 +89,11 @@ module.exports = function (log, dir) {
       if (isFeed(from) && isFeed(to)) {
         hops[from] = hops[from] || {}
         hops[from][to] = value
+
+        if (from == SSB.net.id) {
+          for (var i = 0; i < notifyOnGraphChanges.length; ++i)
+            notifyOnGraphChanges[i]()
+        }
       }
     }
 
@@ -223,6 +230,13 @@ module.exports = function (log, dir) {
 
   return self = {
     contacts: {
+      onGraphChange: function(cb) {
+        notifyOnGraphChanges.push(cb)
+        function remove() {
+          notifyOnGraphChanges = notifyOnGraphChanges.filter(n => n != cb)
+        }
+        return remove
+      },
       isFollowing: function(source, dest) {
         return hops[source][dest] === 1
       },

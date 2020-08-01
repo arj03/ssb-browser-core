@@ -73,13 +73,16 @@ exports.removeBlobs = function() {
 
 exports.sync = function()
 {
+  // FIXME: should not be able to run twice
   exports.connected((rpc) => {
     SSB.db.contacts.getGraphForFeed(SSB.net.id, (err, graph) => {
-      SSB.net.ebt.request(SSB.net.id, true)
-      graph.following.forEach(feed => SSB.net.ebt.request(feed, true))
-      graph.extended.forEach(feed => SSB.net.ebt.request(feed, true))
+      SSB.net.ebt.updateClock(() => {
+        SSB.net.ebt.request(SSB.net.id, true)
+        graph.following.forEach(feed => SSB.net.ebt.request(feed, true))
+        graph.extended.forEach(feed => SSB.net.ebt.request(feed, true))
 
-      SSB.net.ebt.startEBT(rpc)
+        SSB.net.ebt.startEBT(rpc)
+      })
     })
   })
 }

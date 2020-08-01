@@ -4,7 +4,7 @@ module.exports = function (log, partial, contacts) {
   function syncMessages(feed, key, rpcCall, partialState, cb) {
     if (!partialState[feed] || !partialState[feed][key]) {
       pull(
-        rpcCall,
+        rpcCall(),
         pull.asyncMap(SSB.db.validateAndAddOOO),
         pull.collect((err, msgs) => {
           if (err) {
@@ -24,6 +24,7 @@ module.exports = function (log, partial, contacts) {
   }
   
   function syncFeeds(cb) {
+    console.log("syncing feeds")
     partial.get((err, partialState) => {
       contacts.getGraphForFeed(SSB.net.id, (err, graph) => {
         SSB.connected((rpc) => {
@@ -55,22 +56,33 @@ module.exports = function (log, partial, contacts) {
                   pull.values(graph.extended),
                   pull.asyncMap((feed, cb) => {
                     syncMessages(feed, 'syncedMessages',
-                                 rpc.partialReplication.getFeedReverse({ id: feed, keys: false, limit: 25 }),
+                                 () => rpc.partialReplication.getFeedReverse({ id: feed, keys: false, limit: 25 }),
                                  partialState, cb)
                   }),
                   pull.asyncMap((feed, cb) => {
                     syncMessages(feed, 'syncedProfile',
-                                 rpc.partialReplication.getMessagesOfType({id: feed, type: 'about'}),
+                                 () => rpc.partialReplication.getMessagesOfType({id: feed, type: 'about'}),
                                  partialState, cb)
                   }),
                   pull.asyncMap((feed, cb) => {
                     syncMessages(feed, 'syncedContacts',
-                                 rpc.partialReplication.getMessagesOfType({id: feed, type: 'contact'}),
+                                 () => rpc.partialReplication.getMessagesOfType({id: feed, type: 'contact'}),
                                  partialState, cb)
                   }),
                   pull.collect(() => {
                     console.timeEnd("partial feeds")
-                    if (cb) cb()
+
+                    // check for changes that happened while running syncFeeds
+                    contacts.getGraphForFeed(SSB.net.id, (err, newGraph) => {
+                      if (JSON.stringify(graph) === JSON.stringify(newGraph)) {
+                        const remove = contacts.onGraphChange(syncFeeds)
+                        SSB.net.on('replicate:finish', remove)
+
+                        if (cb) cb()
+                      }
+                      else
+                        syncFeeds(cb)
+                    })
                   })
                 )
               })

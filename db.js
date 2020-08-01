@@ -155,7 +155,16 @@ exports.init = function (dir, ssbId, config) {
     let profilesSynced = 0
     let contactsSynced = 0
     let messagesSynced = 0
+    let full = 0
+    let fullTotal = 0
     let total = 0
+
+    graph.following.forEach(relation => {
+      if (partialState[relation] && partialState[relation]['full'])
+        full += 1
+
+      fullTotal += 1
+    })
 
     graph.extended.forEach(relation => {
       if (partialState[relation] && partialState[relation]['syncedProfile'])
@@ -175,7 +184,9 @@ exports.init = function (dir, ssbId, config) {
         total,
         profilesSynced,
         contactsSynced,
-        messagesSynced
+        messagesSynced,
+        fullTotal,
+        full,
       }
     }
   }
