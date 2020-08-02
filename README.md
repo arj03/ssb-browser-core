@@ -287,8 +287,8 @@ Validates a message and stores it in the database. See db.add for format.
 
 ### sync()
 
-Start a EBT replication with the remote server. This syncs all the
-feeds known in `SSB.state.feeds`.
+Will run `feedSyncer.syncFeeds` follow by a EBT replication with the
+remote server. This syncs all the feeds known in `SSB.state.feeds`.
 
 ### box
 

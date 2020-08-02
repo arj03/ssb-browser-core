@@ -71,7 +71,7 @@ exports.removeBlobs = function() {
   })
 }
 
-exports.sync = function()
+exports.EBTSync = function()
 {
   // FIXME: should not be able to run twice
   exports.connected((rpc) => {
@@ -85,4 +85,9 @@ exports.sync = function()
       })
     })
   })
+}
+
+exports.sync = function()
+{
+  SSB.db.feedSyncer.syncFeeds(exports.EBTSync)
 }
