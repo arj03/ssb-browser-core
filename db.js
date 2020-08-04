@@ -88,7 +88,7 @@ exports.init = function (dir, ssbId, config) {
           value: Buffer.from(feedId),
           indexType: "author"
         }
-      }, 0, (err, results) => {
+      }, (err, results) => {
         push(
           push.values(results),
           push.asyncMap((msg, cb) => {

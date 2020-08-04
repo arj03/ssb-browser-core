@@ -41,7 +41,7 @@ SSB.events.on('SSB: loaded', function() {
     }
 
     console.time("latest messages")
-    SSB.db.jitdb.query(query, 50, (err, results) => {
+    SSB.db.jitdb.query(query, 0, 50, (err, results) => {
       console.timeEnd("latest messages")
       console.log(results.filter(msg => !msg.value.meta))
     })
