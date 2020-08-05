@@ -85,7 +85,7 @@ exports.init = function (dir, ssbId, config) {
         type: 'EQUAL',
         data: {
           seek: SSB.db.jitdb.seekAuthor,
-          value: Buffer.from(feedId),
+          value: feedId,
           indexType: "author"
         }
       }, (err, results) => {

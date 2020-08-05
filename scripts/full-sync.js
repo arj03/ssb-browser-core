@@ -14,29 +14,8 @@ SSB.events.on('SSB: loaded', function() {
       type: 'EQUAL',
       data: {
         seek: SSB.db.jitdb.seekType,
-        value: Buffer.from('post'),
+        value: 'post',
         indexType: "type"
-      }
-    }
-
-    if (this.onlyThreads) {
-      query = {
-        type: 'AND',
-        data: [{
-          type: 'EQUAL',
-          data: {
-            seek: SSB.db.jitdb.seekType,
-            value: Buffer.from('post'),
-            indexType: "type"
-          }
-        }, {
-          type: 'EQUAL',
-          data: {
-            seek: SSB.db.jitdb.seekRoot,
-            value: undefined,
-            indexType: "root"
-          }
-        }]
       }
     }
 
