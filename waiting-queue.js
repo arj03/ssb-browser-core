@@ -5,6 +5,8 @@ module.exports = function (log, seq) {
 
   function notifyWaiting()
   {
+    if (!started) return
+    
     const count = waiting.length
 
     if (count > 0 && started && seq != undefined ? seq.value === log.since.value : true) {
@@ -29,7 +31,7 @@ module.exports = function (log, seq) {
     },
 
     get: function(cb) {
-      if (started && seq != undefined ? seq.value === log.since.value : true)
+      if (started && (seq != undefined ? seq.value === log.since.value : true))
         cb(err, data)
       else
         waiting.push(cb)
