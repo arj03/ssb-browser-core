@@ -12,16 +12,17 @@ const AtomicFile = require('atomic-file')
 const path = require('path')
 
 module.exports = function (dir) {
+  const queue = require('../waiting-queue')()
   var state = {}
 
   var f = AtomicFile(path.join(dir, "indexes/partial.json"))
 
-  function load() {
-    f.get((err, data) => {
-      if (data)
-        state = data.state
-    })
-  }
+  f.get((err, data) => {
+    if (data)
+      state = data.state
+
+    queue.done(null, state)
+  })
 
   function save() {
     f.set({ state }, () => {})
@@ -39,13 +40,11 @@ module.exports = function (dir) {
       save()
     },
 
-    get: function() {
-      if (Object.keys(state).length == 0)
-        load()
+    get: queue.get,
+    getSync: function() {
       return state
     },
 
-    load,
     remove: function(cb) {
       f.destroy(cb)
     }
