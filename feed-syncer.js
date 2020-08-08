@@ -15,8 +15,7 @@ module.exports = function (log, partial, contacts) {
           SSB.state.queue = []
           var newState = {}
           newState[key] = true
-          partial.updateState(feed, newState)
-          cb(null, feed)
+          partial.updateState(feed, newState, (err) => { cb(err, feed) })
         })
       )
     } else
@@ -40,8 +39,7 @@ module.exports = function (log, partial, contacts) {
                     if (err) throw err
 
                     SSB.state.queue = []
-                    partial.updateState(feed, { full: true })
-                    cb()
+                    partial.updateState(feed, { full: true }, cb)
                   })
                 )
               } else
