@@ -33,6 +33,8 @@ module.exports = function (log, dir) {
   var notifyOnGraphChanges = []
 
   var f = AtomicFile(path.join(dir, "indexes/all.json"))
+  var fHops = AtomicFile(path.join(dir, "indexes/hops.json"))
+  var fProfiles = AtomicFile(path.join(dir, "indexes/profiles.json"))
 
   function atomicSave()
   {
@@ -42,28 +44,64 @@ module.exports = function (log, dir) {
       authorSequenceToSeq,
       authorLatest,
       mentions,
-      roots,
-      hops,
-      profiles
-    }, () => {})
+      roots
+    }, (err) => {
+      if (err) console.error("error saving full index", err)
+    })
   }
-  var save = debounce(atomicSave, 1000)
+  var save = debounce(atomicSave, 1000, { leading: true })
 
-  f.get((err, data) => {
+  function atomicSaveHops()
+  {
+    fHops.set({
+      seq: seq.value,
+      hops
+    }, (err) => {
+      if (err) console.error("error saving full index", err)
+    })
+  }
+  var saveHops = debounce(atomicSaveHops, 1000, { leading: true })
+
+  function atomicSaveProfiles()
+  {
+    fProfiles.set({
+      seq: seq.value,
+      profiles
+    }, (err) => {
+      if (err) console.error("error saving full index", err)
+    })
+  }
+  var saveProfiles = debounce(atomicSaveProfiles, 1000, { leading: true })
+
+  function getData(cb) {
+    f.get((err, data) => {
+      if (!err) {
+        seq.set(data.seq)
+
+        keyToSeq = data.keyToSeq
+        authorSequenceToSeq = data.authorSequenceToSeq
+        authorLatest = data.authorLatest
+        mentions = data.mentions
+        roots = data.roots
+      }
+
+      fHops.get((err, data) => {
+        if (!err)
+          hops = data.hops
+
+        fProfiles.get((err, data) => {
+          if (!err)
+            profiles = data.profiles
+
+          cb()
+        })
+      })
+    })
+  }
+
+  getData(() => {
     var count = 0
     const start = Date.now()
-
-    if (!err) {
-      seq.set(data.seq)
-
-      keyToSeq = data.keyToSeq
-      authorSequenceToSeq = data.authorSequenceToSeq
-      authorLatest = data.authorLatest
-      mentions = data.mentions
-      roots = data.roots
-      hops = data.hops
-      profiles = data.profiles
-    }
 
     const bValue = Buffer.from('value')
     const bKey = Buffer.from('key')
@@ -94,6 +132,8 @@ module.exports = function (log, dir) {
           for (var i = 0; i < notifyOnGraphChanges.length; ++i)
             notifyOnGraphChanges[i]()
         }
+
+        saveHops()
       }
     }
 
@@ -114,6 +154,8 @@ module.exports = function (log, dir) {
         profile.image = content.image
 
       profiles[author] = profile
+
+      saveProfiles()
     }
 
     function handleData(data) {
