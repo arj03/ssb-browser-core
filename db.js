@@ -193,7 +193,6 @@ exports.init = function (dir, ssbId, config) {
 
   function clearIndexes() {
     fullIndex.remove(() => {})
-    partial.remove(() => {})
   }
 
   return {
@@ -211,6 +210,8 @@ exports.init = function (dir, ssbId, config) {
     getMessagesByRoot: fullIndex.getMessagesByRoot,
     getMessagesByMention: fullIndex.getMessagesByMention,
     jitdb,
+
+    // debugging
     clearIndexes,
 
     // partial stuff

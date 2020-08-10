@@ -39,6 +39,7 @@ exports.removeIndexes = function removeIndexes(fs) {
 exports.removeDB = function() {
   deleteDatabaseFile('log.bipf')
   exports.removeIndexes()
+  SSB.db.partial.remove(() => {})
 }
 
 exports.removeBlobs = function() {
