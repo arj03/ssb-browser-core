@@ -10,6 +10,7 @@
 
 module.exports = function (dir) {
   const AtomicFile = require('atomic-file')
+  const debounce = require('lodash.debounce')
   const path = require('path')
 
   const queue = require('../waiting-queue')()
@@ -25,7 +26,14 @@ module.exports = function (dir) {
   })
 
   function save(cb) {
-    f.set({ state }, cb)
+    debounce(() => {
+      f.set({
+        state
+      }, (err) => {
+        if (err) console.error("error saving partial", err)
+      })
+    }, 1000, { leading: true })
+    cb()
   }
 
   return {
