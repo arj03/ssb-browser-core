@@ -25,14 +25,16 @@ module.exports = function (dir) {
     queue.done(null, state)
   })
 
+  function atomicSave()
+  {
+    f.set({ state }, (err) => {
+      if (err) console.error("error saving partial", err)
+    })
+  }
+  var saveState = debounce(atomicSave, 1000, { leading: true })
+
   function save(cb) {
-    debounce(() => {
-      f.set({
-        state
-      }, (err) => {
-        if (err) console.error("error saving partial", err)
-      })
-    }, 1000, { leading: true })
+    saveState()
     cb()
   }
 
