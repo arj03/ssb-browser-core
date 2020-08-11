@@ -1,0 +1,11 @@
+--- node_modules/idb-kv-store/index.js~	2018-05-08 02:39:04.000000000 +0200
++++ node_modules/idb-kv-store/index.js	2020-08-11 16:16:40.520237398 +0200
+@@ -29,7 +29,7 @@
+   self._waiters = []
+ 
+   var Channel = opts.channel || global.BroadcastChannel
+-  if (Channel) {
++  if (false) {
+     self._channel = new Channel(name)
+     self._channel.onmessage = onChange
+   }
