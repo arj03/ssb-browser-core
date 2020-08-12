@@ -32,6 +32,19 @@ exports.init = function (dir, ssbId, config) {
     })
   }
 
+  function getSync(id, cb) {
+    if (fullIndex.seq.value === log.since.value) {
+      get(id, cb)
+    } else {
+      var remove = fullIndex.seq(() => {
+        if (fullIndex.seq.value === log.since.value) {
+          remove()
+          get(id, cb)
+        }
+      })
+    }
+  }
+
   function add(msg, cb) {
     var id = getId(msg)
 
@@ -197,6 +210,7 @@ exports.init = function (dir, ssbId, config) {
 
   return {
     get,
+    getSync,
     add,
     del,
     deleteFeed,

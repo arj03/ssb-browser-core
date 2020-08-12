@@ -61,6 +61,11 @@ Default is 1.
 Will get a message with `id` from the database. If the message is not
 found an err will be returned.
 
+### getSync(id, cb)
+
+Same as `get` except this method will wait for the indexes to be in
+sync with the main log.
+
 ### validateAndAdd(msg, cb)
 
 Validate a raw message (without id and timestamp), meaning if its the
