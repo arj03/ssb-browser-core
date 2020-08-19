@@ -1,5 +1,14 @@
---- node_modules/ssb-blob-files/async/publish-blob.js~	1985-10-26 09:15:00.000000000 +0100
-+++ node_modules/ssb-blob-files/async/publish-blob.js	2019-10-27 20:25:27.251668979 +0100
+--- async/publish-blob.js	2020-08-19 21:55:59.206745243 +0200
++++ ../ssb-browser-core/node_modules/ssb-blob-files/async/publish-blob.js	2020-08-19 21:46:44.315286720 +0200
+@@ -11,7 +11,7 @@
+   return function (doc, cb) {
+     const { name, mimeType: type, blob } = doc
+ 
+-    var reader = new global.FileReader()
++    var reader = new FileReader()
+     reader.onload = function () {
+       // TODO bail out and run onError(?) if size > 5MB
+ 
 @@ -42,41 +42,50 @@
  
    onceTrue(server, sbot => {
