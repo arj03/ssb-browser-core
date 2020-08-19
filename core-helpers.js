@@ -30,10 +30,6 @@ function deleteDatabaseFile(filename) {
 
 exports.removeIndexes = function removeIndexes(fs) {
   SSB.db.clearIndexes()
-
-  const IdbKvStore = require('idb-kv-store')
-  const store = new IdbKvStore("/indexes")
-  store.clear()
 }
 
 exports.removeDB = function() {

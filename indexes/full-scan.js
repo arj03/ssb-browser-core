@@ -158,6 +158,7 @@ module.exports = function (log, dir) {
       saveProfiles()
     }
 
+    // FIXME: handle new messages from user, should call updateClock on ebt
     function handleData(data) {
       var p = 0 // note you pass in p!
       p = bipf.seekKey(data.value, p, bKey)
@@ -198,8 +199,8 @@ module.exports = function (log, dir) {
             }
           }
 
-          var p3 = bipf.seekKey(data.value, pContent, bMentions)
-          if (~p3) {
+          var pMentions = bipf.seekKey(data.value, pContent, bMentions)
+          if (~pMentions) {
             const mentionsData = bipf.decode(data.value, pContent)
             if (Array.isArray(mentionsData)) {
               mentionsData.forEach(mention => {
@@ -391,7 +392,13 @@ module.exports = function (log, dir) {
       delete authorLatest[feedId]
     },
     remove: function(cb) {
-      f.destroy(cb)
+      f.destroy((err) => {
+        if (err) return cb(err)
+        fHops.destroy((err) => {
+          if (err) return cb(err)
+          fProfiles.destroy(cb)
+        })
+      })
     }
   }
 }
