@@ -15,8 +15,8 @@ function getId(msg) {
   return '%'+hash(JSON.stringify(msg, null, 2))
 }
 
-exports.init = function (dir, ssbId, config) {
-  const log = Log(dir, ssbId, config)
+exports.init = function (dir, config) {
+  const log = Log(dir, config)
   const jitdb = JITDb(log, path.join(dir, "indexes"))
   const fullIndex = FullScanIndexes(log, dir)
   const contacts = fullIndex.contacts

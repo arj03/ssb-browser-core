@@ -3,7 +3,7 @@ var OffsetLogCompat = require('./offset-log-since')
 var bipf = require('bipf')
 var path = require('path')
 
-module.exports = function (dir, ssbId, config) {
+module.exports = function (dir, config) {
   config = config || {}
     
   var log = OffsetLogCompat(OffsetLog(

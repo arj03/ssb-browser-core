@@ -24,7 +24,7 @@ exports.init = function (dir, config) {
     console.log("wasm loaded")
 
     var net = require('./net').init(dir, config)
-    var db = require('./db').init(dir, net.id, config)
+    var db = require('./db').init(dir, config)
 
     console.log("my id: ", net.id)
 

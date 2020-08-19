@@ -2,6 +2,7 @@ const validate = require('ssb-validate')
 const keys = require('ssb-keys')
 const pull = require('pull-stream')
 const raf = require('polyraf')
+const path = require('path')
 
 var remote
 
@@ -34,8 +35,11 @@ exports.removeIndexes = function removeIndexes(fs) {
 
 exports.removeDB = function() {
   deleteDatabaseFile('log.bipf')
-  exports.removeIndexes()
-  SSB.db.partial.remove(() => {})
+
+  // remove all indexes including jitdb and partial
+  const IdbKvStore = require('idb-kv-store')
+  const store = new IdbKvStore(path.join(SSB.dir, "indexes"))
+  store.clear()
 }
 
 exports.removeBlobs = function() {
