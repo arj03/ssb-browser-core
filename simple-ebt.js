@@ -5,8 +5,7 @@ var path = require('path')
 var toPull = require('push-stream-to-pull-stream')
 var isFeed = require('ssb-ref').isFeed
 
-var Store = require('lossy-store')
-var toUrlFriendly = require('base64-url').escape
+var AtomicFile = require('atomic-file')
 
 exports.name = 'ebt'
 
@@ -32,22 +31,21 @@ function cleanClock(clock, message) {
 }
 
 exports.init = function (sbot, config) {
-  var dir = config.path ? path.join(config.path, 'ebt') : null
-  var store = Store(dir, null, toUrlFriendly)
-
   var ebt = EBT({
     logging: config.ebt && config.ebt.logging,
     id: sbot.id,
     getClock: function (id, cb) {
-      store.ensure(id, function () {
-        var clock = store.get(id) || {}
+      var f = AtomicFile(path.join(config.path, 'ebt', id))
+      f.get(function(err, clock) {
+        clock = clock || {}
         cleanClock(clock)
         cb(null, clock)
       })
     },
     setClock: function (id, clock) {
       cleanClock(clock, 'non-feed key when saving clock')
-      store.set(id, clock)
+      var f = AtomicFile(path.join(config.path, 'ebt', id))
+      f.set(clock)
     },
     getAt: function (pair, cb) {
       sbot.getAtSequence([pair.id, pair.sequence], function (err, data) {
