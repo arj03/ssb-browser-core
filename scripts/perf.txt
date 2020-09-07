@@ -1,0 +1,19 @@
+Go local:
+
+full feeds: 2.764s
+partial feeds: 20.727s
+
+JS local:
+
+full feeds: 3.100s
+partial feeds: 30.214s
+
+Remote go:
+
+full feeds: 2.693s
+partial feeds: 1:38.782 (m:ss.mmm)
+
+Remote js:
+
+full feeds: 4.026s
+partial feeds: 2:06.510 (m:ss.mmm)
