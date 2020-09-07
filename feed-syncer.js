@@ -1,5 +1,6 @@
 module.exports = function (log, partial, contacts) {
   const pull = require('pull-stream')
+  const paramap = require('pull-paramap')
 
   function syncMessages(feed, key, rpcCall, partialState, cb) {
     if (!partialState[feed] || !partialState[feed][key]) {
@@ -52,21 +53,21 @@ module.exports = function (log, partial, contacts) {
               contacts.getGraphForFeed(SSB.net.id, (err, graph) => {
                 pull(
                   pull.values(graph.extended),
-                  pull.asyncMap((feed, cb) => {
+                  paramap((feed, cb) => {
                     syncMessages(feed, 'syncedMessages',
                                  () => rpc.partialReplication.getFeedReverse({ id: feed, keys: false, limit: 25 }),
                                  partialState, cb)
-                  }),
-                  pull.asyncMap((feed, cb) => {
+                  }, 5),
+                  paramap((feed, cb) => {
                     syncMessages(feed, 'syncedProfile',
                                  () => rpc.partialReplication.getMessagesOfType({id: feed, type: 'about'}),
                                  partialState, cb)
-                  }),
-                  pull.asyncMap((feed, cb) => {
+                  }, 5),
+                  paramap((feed, cb) => {
                     syncMessages(feed, 'syncedContacts',
                                  () => rpc.partialReplication.getMessagesOfType({id: feed, type: 'contact'}),
                                  partialState, cb)
-                  }),
+                  }, 5),
                   pull.collect(() => {
                     console.timeEnd("partial feeds")
 
