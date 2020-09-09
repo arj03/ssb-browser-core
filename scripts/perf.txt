@@ -17,3 +17,8 @@ Remote js:
 
 full feeds: 4.026s
 partial feeds: 51.746s
+
+Browser remote js:
+
+full feeds: 12.9s
+partial feeds: 127s
