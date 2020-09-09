@@ -36,7 +36,6 @@
   },
   "devDependencies": {
     "browserify": "^16.5.2",
-    "common-shakeify": "^0.6.2",
     "node-localstorage": "^2.1.5",
     "rimraf": "^3.0.2",
     "tap-spec": "^5.0.0",
@@ -45,7 +44,7 @@
   },
   "scripts": {
     "build": "mkdir -p dist && browserify --full-paths browser.js > dist/bundle-core.js",
-    "release": "mkdir -p dist && browserify -g uglifyify -p common-shakeify browser.js > dist/bundle-core.js",
+    "release": "mkdir -p dist && browserify -g uglifyify browser.js > dist/bundle-core.js",
     "test": "tape test/*.js | tap-spec"
   },
   "author": "arj",
