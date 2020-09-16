@@ -68,8 +68,15 @@ exports.init = function(dir, overwriteConfig) {
       else
         helpers.fullSync(rpc)
 
+      // the problem is that the browser will close a connection after
+      // 30 seconds if there is no activity, the default ping "timeout"
+      // in ssb-gossip (and ssb-conn) is 5 minutes.
+      //
+      // tunnel (and rooms) is much better, it will give us back a pong
+      // right after calling, so we can choose how often to call to keep
+      // the connection alive
       function ping() {
-        rpc.gossip.ping(function (err, _ts) {
+        rpc.tunnel.ping(function (err, _ts) {
           if (err) return console.error(err)
           clearTimeout(timer)
           timer = setTimeout(ping, 10e3)
