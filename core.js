@@ -55,13 +55,9 @@ exports.init = function (dir, config) {
       validate,
       state,
 
-      connected: helpers.connected,
-
       removeDB: helpers.removeDB,
       removeIndexes: helpers.removeIndexes,
       removeBlobs: helpers.removeBlobs,
-
-      sync: helpers.sync,
 
       box: require('ssb-keys').box,
       blobFiles: require('ssb-blob-files'),
@@ -79,8 +75,6 @@ exports.init = function (dir, config) {
 
       // config
       hops: 1, // this means download full log for hops and partial logs for hops + 1
-
-      remoteAddress: '',
     })
 
     SSB.events.emit("SSB: loaded")

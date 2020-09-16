@@ -1,6 +1,7 @@
 const SecretStack = require('secret-stack')
 const caps = require('ssb-caps')
 const ssbKeys = require('ssb-keys')
+const helpers = require('./core-helpers')
 
 const path = require('path')
 
@@ -12,7 +13,7 @@ exports.init = function(dir, overwriteConfig) {
     keys,
     connections: {
       incoming: {
-	tunnel: [{ transform: 'shs' }]
+	tunnel: [{ scope: 'public', transform: 'shs' }]
       },
       outgoing: {
 	net: [{ transform: 'shs' }],
@@ -24,8 +25,10 @@ exports.init = function(dir, overwriteConfig) {
     timers: {
       inactivity: 30e3
     },
-    tunnel: {
-      logging: true
+    conn: {
+      autostart: true,
+      hops: 1,
+      populatePubs: false,
     },
     ebt: {
       logging: false
@@ -44,9 +47,9 @@ exports.init = function(dir, overwriteConfig) {
   .use(require('./simple-ooo'))
   .use(require('ssb-ws'))
   .use(require('./simple-ebt'))
-  .use(require('ssb-tunnel'))
+  .use(require('ssb-conn'))
+  .use(require('ssb-room/tunnel/client'))
   .use(require('ssb-no-auth'))
-  .use(require('./tunnel-message'))
   .use(require("./simple-blobs"))
   ()
 
@@ -55,27 +58,53 @@ exports.init = function(dir, overwriteConfig) {
   r.on('rpc:connect', function (rpc, isClient) {
     console.log("connected to:", rpc.id)
 
-    function ping() {
-      rpc.tunnel.ping(function (err, _ts) {
-	if (err) return console.error(err)
-	clearTimeout(timer)
-	timer = setTimeout(ping, 10e3)
-      })
-    }
+    if (rpc.ebt) {
+      console.log("doing ebt with", rpc.id)
 
-    ping()
+      if (SSB.db.feedSyncer.syncing)
+        ; // only one can sync at a time
+      else if (SSB.db.feedSyncer.inSync())
+        helpers.EBTSync(rpc)
+      else
+        helpers.fullSync(rpc)
+
+      function ping() {
+        rpc.gossip.ping(function (err, _ts) {
+          if (err) return console.error(err)
+          clearTimeout(timer)
+          timer = setTimeout(ping, 10e3)
+        })
+      }
+
+      ping()
+    }
   })
 
   r.on('replicate:finish', function () {
     console.log("finished ebt replicate")
   })
 
-  r.gossip = {
-    connect: function(addr, cb) {
-      // hack for ssb-tunnel
-      r.connect(SSB.remoteAddress, cb)
-    }
+  r.connectAndRemember = function(addr, data) {
+    r.conn.connect(addr, data, (err, rpc) => {
+      r.conn.remember(addr, Object.assign(data, { autoconnect: true }))
+    })
   }
+
+  r.directConnect = function(addr, cb) {
+    r.conn.connect(addr, cb)
+  }
+
+  /*
+  connectAndRemember("wss:between-two-worlds.dk:8989~shs:lbocEWqF2Fg6WMYLgmfYvqJlMfL7hiqVAV6ANjHWNw8=", {
+    key: '@lbocEWqF2Fg6WMYLgmfYvqJlMfL7hiqVAV6ANjHWNw8=.ed25519',
+    type: 'pub'
+  })
+
+  connectAndRemember("wss:between-two-worlds.dk:9999~shs:7R5/crt8/icLJNpGwP2D7Oqz2WUd7ObCIinFKVR6kNY=", {
+    key: '@7R5/crt8/icLJNpGwP2D7Oqz2WUd7ObCIinFKVR6kNY=.ed25519',
+    type: 'room'
+  })
+  */
 
   return r
 }

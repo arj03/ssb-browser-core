@@ -6,20 +6,6 @@ const path = require('path')
 
 var remote
 
-exports.connected = function(cb)
-{
-  if (!remote || remote.closed)
-  {
-    SSB.net.connect(SSB.remoteAddress, (err, rpc) => {
-      if (err) throw(err)
-
-      remote = rpc
-      cb(remote)
-    })
-  } else
-    cb(remote)
-}
-
 function deleteDatabaseFile(filename) {
   const path = require('path')
   const file = raf(path.join(SSB.dir, filename))
@@ -72,23 +58,20 @@ exports.removeBlobs = function() {
   })
 }
 
-exports.EBTSync = function()
+exports.EBTSync = function(rpc)
 {
-  // FIXME: should not be able to run twice
-  exports.connected((rpc) => {
-    SSB.db.contacts.getGraphForFeed(SSB.net.id, (err, graph) => {
-      SSB.net.ebt.updateClock(() => {
-        SSB.net.ebt.request(SSB.net.id, true)
-        graph.following.forEach(feed => SSB.net.ebt.request(feed, true))
-        graph.extended.forEach(feed => SSB.net.ebt.request(feed, true))
+  SSB.db.contacts.getGraphForFeed(SSB.net.id, (err, graph) => {
+    SSB.net.ebt.updateClock(() => {
+      SSB.net.ebt.request(SSB.net.id, true)
+      graph.following.forEach(feed => SSB.net.ebt.request(feed, true))
+      graph.extended.forEach(feed => SSB.net.ebt.request(feed, true))
 
-        SSB.net.ebt.startEBT(rpc)
-      })
+      SSB.net.ebt.startEBT(rpc)
     })
   })
 }
 
-exports.sync = function()
+exports.fullSync = function(rpc)
 {
-  SSB.db.feedSyncer.syncFeeds(exports.EBTSync)
+  SSB.db.feedSyncer.syncFeeds(rpc, exports.EBTSync)
 }
