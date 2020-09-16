@@ -77,6 +77,20 @@ exports.init = function (dir, config) {
       hops: 1, // this means download full log for hops and partial logs for hops + 1
     })
 
+    // helper for rooms to allow connecting to friends directly
+    SSB.net.friends = {
+      hops: function(cb) {
+        db.contacts.getGraphForFeed(SSB.net.id, (err, graph) => {
+          let hops = {}
+          graph.following.forEach(f => hops[f] = 1)
+          graph.extended.forEach(f => hops[f] = 2)
+          cb(err, hops)
+        })
+      }
+    }
+
+    SSB.net.conn.start()
+
     SSB.events.emit("SSB: loaded")
   })
 }

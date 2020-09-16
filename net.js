@@ -26,7 +26,7 @@ exports.init = function(dir, overwriteConfig) {
       inactivity: 30e3
     },
     conn: {
-      autostart: true,
+      autostart: false,
       hops: 1,
       populatePubs: false,
     },
