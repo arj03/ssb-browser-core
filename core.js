@@ -52,6 +52,8 @@ exports.init = function (dir, config) {
       net,
       dir,
 
+      getPeer: helpers.getPeer,
+
       validate,
       state,
 

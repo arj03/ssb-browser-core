@@ -4,7 +4,18 @@ const pull = require('pull-stream')
 const raf = require('polyraf')
 const path = require('path')
 
-var remote
+exports.getPeer = function()
+{
+  let connPeers = Array.from(SSB.net.conn.hub().entries())
+  var goodPeer = connPeers.find(cp => cp[1]['type'] != 'room')
+
+  let peers = Object.values(SSB.net.peers).flat()
+
+  if (goodPeer) return peers.find(p => p.id == goodPeer[1]['key'])
+  else if (peers) return peers[0]
+
+  return null
+}
 
 function deleteDatabaseFile(filename) {
   const path = require('path')
