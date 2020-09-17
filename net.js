@@ -101,17 +101,5 @@ exports.init = function(dir, overwriteConfig) {
     r.conn.connect(addr, cb)
   }
 
-  /*
-  connectAndRemember("wss:between-two-worlds.dk:8989~shs:lbocEWqF2Fg6WMYLgmfYvqJlMfL7hiqVAV6ANjHWNw8=", {
-    key: '@lbocEWqF2Fg6WMYLgmfYvqJlMfL7hiqVAV6ANjHWNw8=.ed25519',
-    type: 'pub'
-  })
-
-  connectAndRemember("wss:between-two-worlds.dk:9999~shs:7R5/crt8/icLJNpGwP2D7Oqz2WUd7ObCIinFKVR6kNY=", {
-    key: '@7R5/crt8/icLJNpGwP2D7Oqz2WUd7ObCIinFKVR6kNY=.ed25519',
-    type: 'room'
-  })
-  */
-
   return r
 }
