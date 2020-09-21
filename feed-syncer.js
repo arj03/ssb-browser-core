@@ -1,4 +1,4 @@
-module.exports = function (log, partial, contacts) {
+module.exports = function (partial, contacts) {
   const pull = require('pull-stream')
   const paramap = require('pull-paramap')
 

@@ -21,7 +21,7 @@ exports.init = function (dir, config) {
   const fullIndex = FullScanIndexes(log, dir)
   const contacts = fullIndex.contacts
   const partial = Partial(dir)
-  const feedSyncer = FeedSyncer(log, partial, contacts)
+  const feedSyncer = FeedSyncer(partial, contacts)
 
   function get(id, cb) {
     fullIndex.keysGet(id, (err, data) => {
