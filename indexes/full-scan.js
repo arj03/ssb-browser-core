@@ -281,9 +281,11 @@ module.exports = function (log, dir) {
         return remove
       },
       isFollowing: function(source, dest) {
+        if (!hops[source]) return false
         return hops[source][dest] === 1
       },
       isBlocking: function(source, dest) {
+        if (!hops[source]) return false
         return hops[source][dest] === -1
       },
       getGraphForFeed: function(feed, cb) {
