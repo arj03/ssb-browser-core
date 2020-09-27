@@ -289,7 +289,7 @@ module.exports = function (log, dir) {
         return hops[source][dest] === -1
       },
       getGraphForFeed: function(feed, cb) {
-        queueContacts.get((err, hops) => {
+        queueContacts.getFullySynced((err, hops) => {
           cb(err, self.contacts.getGraphForFeedSync(feed))
         })
       },
