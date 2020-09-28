@@ -26,7 +26,7 @@
     "secret-stack": "^6.3.1",
     "ssb-blob-files": "^1.2.1",
     "ssb-caps": "^1.0.1",
-    "ssb-keys": "^7.2.2",
+    "ssb-keys": "^8.0.0",
     "ssb-no-auth": "^1.0.0",
     "ssb-ref": "^2.13.3",
     "ssb-sort": "^1.1.3",
