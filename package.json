@@ -40,7 +40,7 @@
     "node-localstorage": "^2.1.5",
     "rimraf": "^3.0.2",
     "tap-spec": "^5.0.0",
-    "tape": "^4.13.2",
+    "tape": "^5.0.1",
     "uglifyify": "^5.0.2"
   },
   "scripts": {
