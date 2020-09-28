@@ -24,6 +24,13 @@ SSB.events.on('SSB: loaded', function() {
 
     // no decrypt: (300ms)
     // no bipf encode: (300ms)
+
+    function writeStatus() {
+      setTimeout(() => {
+        console.log(SSB.db.getStatus())
+        writeStatus()
+      }, 200)
+    }
     
     pull(
       rpc.partialReplication.getFeed({
@@ -36,6 +43,7 @@ SSB.events.on('SSB: loaded', function() {
         
         console.timeEnd("downloading messages")
         console.log(msgs.length)
+        writeStatus()
       })
     )
   })

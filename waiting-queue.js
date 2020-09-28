@@ -6,7 +6,7 @@ module.exports = function (log, seq) {
   function notifyWaiting()
   {
     if (!started) return
-    
+
     const count = waiting.length
 
     if (count > 0 && started && seq != undefined ? seq.value === log.since.value : true) {
@@ -35,6 +35,15 @@ module.exports = function (log, seq) {
         cb(err, data)
       else
         waiting.push(cb)
+    },
+
+    getFullySynced: function(cb) {
+      log.onDrain(() => {
+        if (started && (seq != undefined ? seq.value === log.since.value : true))
+          cb(err, data)
+        else
+          waiting.push(cb)
+      })
     }
   }
 }
