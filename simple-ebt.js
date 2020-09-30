@@ -87,8 +87,8 @@ exports.init = function (sbot, config) {
   return {
     updateClock,
     replicate: function(opts) {
-      if (opts.version !== 2 && opts.version != 3)
-        throw new Error('expected ebt.replicate({version: 3 or 2})')
+      if (opts.version != 3)
+        throw new Error('expected ebt version 3')
       return toPull.duplex(ebt.createStream(this.id, opts.version, false))
     },
     //get replication status for feeds for this id.
