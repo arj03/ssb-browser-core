@@ -16,6 +16,7 @@
     "jitdb": "^0.8.3",
     "lodash.debounce": "^4.0.8",
     "polyraf": "^1.1.0",
+    "pull-cont": "^0.1.1",
     "pull-defer": "^0.2.3",
     "pull-notify": "^0.1.1",
     "pull-paramap": "^1.2.2",

@@ -2,6 +2,7 @@
 // most of this stuff is from ssb-db
 
 const pull = require('pull-stream')
+const pullCont = require('pull-cont')
 var Obv = require('obv')
 
 exports.manifest =  {
@@ -13,8 +14,36 @@ exports.permissions = {
 }
 
 exports.init = function (sbot, config) {
-  sbot.createHistoryStream = function() {
-    return pull.empty()
+  sbot.createHistoryStream = function(streamOpts) {
+    const query = {
+      type: 'EQUAL',
+      data: {
+        seek: SSB.db.jitdb.seekAuthor,
+        value: streamOpts.id,
+        indexType: "author",
+        indexAll: true
+      }
+    }
+
+    function handleResults(results) {
+      if (streamOpts.keys)
+        return results.map(x => originalData(x))
+      else
+        return results.map(x => originalData(x).value)
+    }
+
+    return pull(
+      pullCont(function(cb) {
+        if (streamOpts.seq)
+          SSB.db.jitdb.query(query, streamOpts.seq, streamOpts.limit ?? 1e10, (err, results) => {
+            cb(err, pull.values(handleResults(results)))
+          })
+        else
+          SSB.db.jitdb.query(query, (err, results) => {
+            cb(err, pull.values(handleResults(results)))
+          })
+      })
+    )
   }
 
   // all the rest is ebt stuff
