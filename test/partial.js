@@ -120,11 +120,49 @@ SSB.events.on('SSB: loaded', function() {
     pull(
       SSB.net.partialReplication.getFeedReverse({ id: SSB.net.id, limit: 1, keys: false }),
       pull.collect((err, results) => {
-        console.log("results", results)
         t.equal(results.length, 1)
         t.equal(typeof results[0].content, 'string')
         t.end()
       })
     )
+  })
+
+  test('getTangle', t => {
+    var content = { type: 'post', text: 'Thread' }
+
+    SSB.publish(content, (err, threadMsg) => {
+      var reply = { type: 'post', text: 'Thread msg', root: threadMsg.key, branch: threadMsg.key }
+      SSB.publish(reply, (err, replyMsg) => {
+        SSB.db.onDrain(() => {
+          SSB.net.partialReplication.getTangle(threadMsg.key, (err, results) => {
+            t.equal(results.length, 2)
+            t.equal(results[0].content.text, content.text)
+            t.equal(results[1].content.text, reply.text)
+            t.end()
+          })
+        })
+      })
+    })
+  })
+
+  test('getTangle private', t => {
+    var content = { type: 'post', text: 'Private thread', recps: [SSB.net.id] }
+    content = SSB.box(content, content.recps.map(x => x.substr(1)))
+
+    SSB.publish(content, (err, threadMsg) => {
+      var reply = { type: 'post', text: 'Thread msg', root: threadMsg.key, branch: threadMsg.key,
+                    recps: [SSB.net.id] }
+      reply = SSB.box(reply, reply.recps.map(x => x.substr(1)))
+      SSB.publish(reply, (err, replyMsg) => {
+        SSB.db.onDrain(() => {
+          SSB.net.partialReplication.getTangle(threadMsg.key, (err, results) => {
+            t.equal(results.length, 2)
+            t.equal(typeof results[0].content, 'string')
+            t.equal(typeof results[1].content, 'string')
+            t.end()
+          })
+        })
+      })
+    })
   })
 })

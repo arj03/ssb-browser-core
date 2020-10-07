@@ -68,7 +68,7 @@ exports.init = function (dir, config) {
       publish: function(msg, cb) {
         state.queue = []
         state = validate.appendNew(state, null, net.config.keys, msg, Date.now())
-        console.log(state.queue[0])
+        //console.log(state.queue[0])
         db.add(state.queue[0].value, (err, data) => {
           net.post(data.value) // tell ebt
           cb(err, data)

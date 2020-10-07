@@ -1,5 +1,7 @@
 const pull = require('pull-stream')
 const pullCont = require('pull-cont')
+const sort = require('ssb-sort')
+const { originalValue } = require('./msg-utils')
 
 exports.manifest = {
   getFeed: 'source',
@@ -34,7 +36,20 @@ exports.init = function (sbot, config) {
           })
         })
       )
-    }
+    },
+
+    getTangle: function(msgId, cb) {
+      if (!msgId) return cb("msg not found:" + msgId)
+
+      SSB.db.get(msgId, (err, msg) => {
+        if (err) return cb(err)
+        SSB.db.getMessagesByRoot(msgId, (err, msgs) => {
+          if (err) return cb(err)
+          msgs = msgs.filter(x => x.value.private !== true)
+          cb(null, [originalValue(msg), ...sort(msgs).map(m => originalValue(m.value))])
+        })
+      })
+    },
   }
 }
 

@@ -4,6 +4,7 @@
 const pull = require('pull-stream')
 const pullCont = require('pull-cont')
 var Obv = require('obv')
+const { originalData } = require('./msg-utils')
 
 exports.manifest =  {
   createHistoryStream: 'source'
@@ -74,35 +75,6 @@ exports.init = function (sbot, config) {
       if (err) cb(err)
       else cb(null, originalData(value))
     })
-  }
-
-  // helpers
-
-  function isString (s) {
-    return typeof s === 'string'
-  }
-
-  function originalValue(value) {
-    var copy = {}
-
-    for (let key in value) {
-      if (key !== 'meta' && key !== 'cyphertext' && key !== 'private' && key !== 'unbox') {
-	copy[key] = value[key]
-      }
-    }
-
-    if (value.meta && value.meta.original) {
-      for (let key in value.meta.original) {
-	copy[key] = value.meta.original[key]
-      }
-    }
-
-    return copy
-  }
-
-  function originalData(data) {
-    data.value = originalValue(data.value)
-    return data
   }
 
   return {}
