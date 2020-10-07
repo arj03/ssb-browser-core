@@ -14,33 +14,42 @@ exports.permissions = {
 }
 
 exports.init = function (sbot, config) {
-  sbot.createHistoryStream = function(streamOpts) {
+  sbot.createHistoryStream = function(opts) {
+    // default values
+    const seq = opts.sequence || opts.seq || 0
+    const limit = opts.limit || 1e10
+    const keys = opts.keys === false ? false : true
+    const values = opts.values === false ? false : true
+
     const query = {
       type: 'EQUAL',
       data: {
         seek: SSB.db.jitdb.seekAuthor,
-        value: streamOpts.id,
+        value: opts.id,
         indexType: "author",
         indexAll: true
       }
     }
 
-    function handleResults(results) {
-      if (streamOpts.keys)
-        return results.map(x => originalData(x))
+    function formatMsg(msg) {
+      let fixedMsg = originalData(msg)
+      if (!keys && values)
+        return fixedMsg.value
+      else if (keys && !values)
+        return fixedMsg.key
       else
-        return results.map(x => originalData(x).value)
+        return fixedMsg
     }
 
     return pull(
       pullCont(function(cb) {
-        if (streamOpts.seq)
-          SSB.db.jitdb.query(query, streamOpts.seq, streamOpts.limit ?? 1e10, (err, results) => {
-            cb(err, pull.values(handleResults(results)))
+        if (seq) // sequences starts with 1, offset starts with 0 ;-)
+          SSB.db.jitdb.query(query, seq - 1, limit, true, (err, results) => {
+            cb(err, pull.values(results.map(x => formatMsg(x))))
           })
         else
           SSB.db.jitdb.query(query, (err, results) => {
-            cb(err, pull.values(handleResults(results)))
+            cb(err, pull.values(results.map(x => formatMsg(x))))
           })
       })
     )
