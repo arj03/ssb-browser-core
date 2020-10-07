@@ -55,6 +55,11 @@ exports.init = function (sbot, config) {
     )
   }
 
+  // partial
+  sbot.dbGetLastestSequence = function(feedId, cb) {
+    SSB.db.lastGet(feedId, cb)
+  }
+
   // all the rest is ebt stuff
 
   sbot.post = Obv()

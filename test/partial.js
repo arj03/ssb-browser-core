@@ -105,4 +105,26 @@ SSB.events.on('SSB: loaded', function() {
       })
     })
   })
+
+  test('getFeed', t => {
+    pull(
+      SSB.net.partialReplication.getFeed({ id: SSB.net.id, keys: false }),
+      pull.collect((err, results) => {
+        t.equal(results.length, 3)
+        t.end()
+      })
+    )
+  })
+
+  test('getFeedReverse', t => {
+    pull(
+      SSB.net.partialReplication.getFeedReverse({ id: SSB.net.id, limit: 1, keys: false }),
+      pull.collect((err, results) => {
+        console.log("results", results)
+        t.equal(results.length, 1)
+        t.equal(typeof results[0].content, 'string')
+        t.end()
+      })
+    )
+  })
 })

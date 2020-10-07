@@ -228,6 +228,7 @@ exports.init = function (dir, config) {
     getMessagesByMention: fullIndex.getMessagesByMention,
     jitdb,
     onDrain: log.onDrain,
+    lastGet: fullIndex.lastGet,
 
     // debugging
     clearIndexes,
