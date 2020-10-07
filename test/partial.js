@@ -156,9 +156,7 @@ SSB.events.on('SSB: loaded', function() {
       SSB.publish(reply, (err, replyMsg) => {
         SSB.db.onDrain(() => {
           SSB.net.partialReplication.getTangle(threadMsg.key, (err, results) => {
-            t.equal(results.length, 2)
-            t.equal(typeof results[0].content, 'string')
-            t.equal(typeof results[1].content, 'string')
+            t.equal(results.length, 0)
             t.end()
           })
         })

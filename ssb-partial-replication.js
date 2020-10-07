@@ -1,7 +1,7 @@
 const pull = require('pull-stream')
 const pullCont = require('pull-cont')
 const sort = require('ssb-sort')
-const { originalValue } = require('./msg-utils')
+const { originalValue, originalData } = require('./msg-utils')
 
 exports.manifest = {
   getFeed: 'source',
@@ -43,13 +43,14 @@ exports.init = function (sbot, config) {
 
       SSB.db.get(msgId, (err, msg) => {
         if (err) return cb(err)
+        if (msg.meta && msg.meta.private === 'true') return cb(null, [])
         SSB.db.getMessagesByRoot(msgId, (err, msgs) => {
           if (err) return cb(err)
-          msgs = msgs.filter(x => x.value.private !== true)
+          msgs = msgs.filter(x => !x.value.meta || x.value.meta.private !== 'true')
           cb(null, [originalValue(msg), ...sort(msgs).map(m => originalValue(m.value))])
         })
       })
-    },
+    }
   }
 }
 
