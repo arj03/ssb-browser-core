@@ -50,6 +50,48 @@ exports.init = function (sbot, config) {
           cb(null, [originalValue(msg), ...sort(msgs).map(m => originalValue(m.value))])
         })
       })
+    },
+
+    getMessagesOfType: function(opts)
+    {
+      // { id: feedId, type: string, seq: int?, limit: int? }
+      if (!opts.id) throw new Error("id is required!")
+      if (!opts.type) throw new Error("type is required!")
+
+      const seq = opts.sequence || opts.seq || 0
+      const limit = opts.limit || 1e10
+      const query = {
+        type: 'AND',
+        data: [{
+          type: 'EQUAL',
+          data: {
+            seek: SSB.db.jitdb.seekAuthor,
+            value: opts.id,
+            indexType: "author",
+            indexAll: true
+          }
+        }, {
+          type: 'EQUAL',
+          data: {
+            seek: SSB.db.jitdb.seekType,
+            value: opts.type,
+            indexType: "type",
+          }
+        }]
+      }
+
+      return pull(
+        pullCont(function(cb) {
+          if (seq) // sequences starts with 1, offset starts with 0 ;-)
+            SSB.db.jitdb.query(query, seq - 1, limit, true, (err, results) => {
+              cb(err, pull.values(results.map(x => originalData(x))))
+            })
+          else
+            SSB.db.jitdb.query(query, (err, results) => {
+              cb(err, pull.values(results.map(x => originalData(x))))
+            })
+        })
+      )
     }
   }
 }
