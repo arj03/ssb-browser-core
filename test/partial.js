@@ -163,4 +163,21 @@ SSB.events.on('SSB: loaded', function() {
       })
     })
   })
+
+  test('getMessagesOfType', t => {
+    var content = { type: 'about', name: 'Monty' }
+
+    SSB.publish(content, (err, content) => {
+      SSB.db.onDrain(() => {
+        pull(
+          SSB.net.partialReplication.getMessagesOfType({ id: SSB.net.id, type: 'post', keys: false }),
+          pull.collect((err, results) => {
+            t.equal(results.length, 4)
+            t.ok(results.every(x => typeof x !== 'string'))
+            t.end()
+          })
+        )
+      })
+    })
+  })
 })

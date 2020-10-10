@@ -52,9 +52,9 @@ exports.init = function (sbot, config) {
       })
     },
 
+    // opts: { id: feedId, type: string, seq: int?, limit: int? }
     getMessagesOfType: function(opts)
     {
-      // { id: feedId, type: string, seq: int?, limit: int? }
       if (!opts.id) throw new Error("id is required!")
       if (!opts.type) throw new Error("type is required!")
 
@@ -84,10 +84,12 @@ exports.init = function (sbot, config) {
         pullCont(function(cb) {
           if (seq) // sequences starts with 1, offset starts with 0 ;-)
             SSB.db.jitdb.query(query, seq - 1, limit, true, (err, results) => {
+              results = results.filter(x => !x.value.meta || x.value.meta.private !== 'true')
               cb(err, pull.values(results.map(x => originalData(x))))
             })
           else
             SSB.db.jitdb.query(query, (err, results) => {
+              results = results.filter(x => !x.value.meta || x.value.meta.private !== 'true')
               cb(err, pull.values(results.map(x => originalData(x))))
             })
         })
