@@ -173,7 +173,7 @@ SSB.events.on('SSB: loaded', function() {
           SSB.net.partialReplication.getMessagesOfType({ id: SSB.net.id, type: 'post', keys: false }),
           pull.collect((err, results) => {
             t.equal(results.length, 4)
-            t.ok(results.every(x => typeof x !== 'string'))
+            t.ok(results.every(x => typeof x.content !== 'string'))
             t.end()
           })
         )

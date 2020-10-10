@@ -9,6 +9,9 @@ exports.manifest = {
   getTangle: 'async',
   getMessagesOfType: 'source'
 }
+exports.permissions = {
+  anonymous: {allow: Object.keys(exports.manifest)}
+}
 
 exports.name = 'partial-replication'
 
@@ -84,13 +87,13 @@ exports.init = function (sbot, config) {
         pullCont(function(cb) {
           if (seq) // sequences starts with 1, offset starts with 0 ;-)
             SSB.db.jitdb.query(query, seq - 1, limit, true, (err, results) => {
-              results = results.filter(x => !x.value.meta || x.value.meta.private !== 'true')
-              cb(err, pull.values(results.map(x => originalData(x))))
+              results = results.filter(x => !x.value.meta || x.value.meta.private !== 'true').map(x => x.value)
+              cb(err, pull.values(results))
             })
           else
             SSB.db.jitdb.query(query, (err, results) => {
-              results = results.filter(x => !x.value.meta || x.value.meta.private !== 'true')
-              cb(err, pull.values(results.map(x => originalData(x))))
+              results = results.filter(x => !x.value.meta || x.value.meta.private !== 'true').map(x => x.value)
+              cb(err, pull.values(results))
             })
         })
       )
