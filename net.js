@@ -61,6 +61,11 @@ exports.init = function(dir, overwriteConfig) {
     if (rpc.ebt) {
       console.log("doing ebt with", rpc.id)
 
+      let connPeers = Array.from(SSB.net.conn.hub().entries())
+      connPeers = connPeers.filter(([, x]) => !!x.key).map(([address, data]) => ({ address, data }))
+      var peer = connPeers.find(x => x.data.key == rpc.id)
+      if (peer.data.type === 'room') return
+
       if (SSB.db.feedSyncer.syncing)
         ; // only one can sync at a time
       else if (SSB.db.feedSyncer.inSync())
