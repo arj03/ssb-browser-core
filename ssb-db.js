@@ -71,7 +71,7 @@ exports.init = function (sbot, config) {
 
   sbot.getAtSequence = function (seqid, cb) {
     // will NOT expose private plaintext
-    SSB.db.getClock(isString(seqid) ? seqid.split(':') : seqid, function (err, value) {
+    SSB.db.getClock((typeof seqid === 'string') ? seqid.split(':') : seqid, function (err, value) {
       if (err) cb(err)
       else cb(null, originalData(value))
     })
