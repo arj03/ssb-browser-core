@@ -158,7 +158,10 @@ exports.init = function (sbot, config) {
   }
 
   function remoteURL(id) {
-    let remoteAddress = SSB.getPeer().stream.address
+    const peer = SSB.getPeer()
+    if (!peer) return ''
+
+    let remoteAddress = peer.stream.address
 
     if (remoteAddress.includes("wss:"))
       return remoteAddress.split("~")[0].replace("wss:", "https://") + '/blobs/get/' + id

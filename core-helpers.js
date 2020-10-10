@@ -7,14 +7,14 @@ const path = require('path')
 exports.getPeer = function()
 {
   let connPeers = Array.from(SSB.net.conn.hub().entries())
-  var goodPeer = connPeers.find(cp => cp[1]['type'] != 'room')
+  connPeers = connPeers.filter(([, x]) => !!x.key).map(([address, data]) => ({ address, data }))
+  var goodPeer = connPeers.find(cp => cp.data.type != 'room')
 
   let peers = Object.values(SSB.net.peers).flat()
 
-  if (goodPeer) return peers.find(p => p.id == goodPeer[1]['key'])
-  else if (peers) return peers[0]
-
-  return null
+  if (goodPeer) return peers.find(p => p.id == goodPeer.data.key)
+  else if (peers.length > 0) return peers[0]
+  else return null
 }
 
 function deleteDatabaseFile(filename) {
