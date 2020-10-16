@@ -162,11 +162,14 @@ exports.init = function (sbot, config) {
     if (!peer) return ''
 
     let remoteAddress = peer.stream.address
+    let remoteHost = remoteAddress.split("~")[0]
+
+    if (remoteHost === 'undefined') return ''
 
     if (remoteAddress.includes("wss:"))
-      return remoteAddress.split("~")[0].replace("wss:", "https://") + '/blobs/get/' + id
+      return remoteHost.replace("wss:", "https://") + '/blobs/get/' + id
     else
-      return remoteAddress.split("~")[0].replace("ws:", "http://") + '/blobs/get/' + id
+      return remoteHost.replace("ws:", "http://") + '/blobs/get/' + id
   }
 
   var zeros = Buffer.alloc(24); zeros.fill(0)
