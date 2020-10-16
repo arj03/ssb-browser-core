@@ -58,38 +58,36 @@ exports.init = function(dir, overwriteConfig) {
   r.on('rpc:connect', function (rpc, isClient) {
     console.log("connected to:", rpc.id)
 
-    if (rpc.ebt) {
-      let connPeers = Array.from(SSB.net.conn.hub().entries())
-      connPeers = connPeers.filter(([, x]) => !!x.key).map(([address, data]) => ({ address, data }))
-      var peer = connPeers.find(x => x.data.key == rpc.id)
-      if (peer.data.type === 'room') return
+    let connPeers = Array.from(SSB.net.conn.hub().entries())
+    connPeers = connPeers.filter(([, x]) => !!x.key).map(([address, data]) => ({ address, data }))
+    var peer = connPeers.find(x => x.data.key == rpc.id)
+    if (!peer || peer.data.type === 'room') return
 
-      console.log("doing ebt with", rpc.id)
+    console.log("doing ebt with", rpc.id)
 
-      if (SSB.db.feedSyncer.syncing)
-        ; // only one can sync at a time
-      else if (SSB.db.feedSyncer.inSync())
-        helpers.EBTSync(rpc)
-      else
-        helpers.fullSync(rpc)
+    if (SSB.db.feedSyncer.syncing)
+      ; // only one can sync at a time
+    else if (SSB.db.feedSyncer.inSync())
+      helpers.EBTSync(rpc)
+    else
+      helpers.fullSync(rpc)
 
-      // the problem is that the browser will close a connection after
-      // 30 seconds if there is no activity, the default ping "timeout"
-      // in ssb-gossip (and ssb-conn) is 5 minutes.
-      //
-      // tunnel (and rooms) is much better, it will give us back a pong
-      // right after calling, so we can choose how often to call to keep
-      // the connection alive
-      function ping() {
-        rpc.tunnel.ping(function (err, _ts) {
-          if (err) return console.error(err)
-          clearTimeout(timer)
-          timer = setTimeout(ping, 10e3)
-        })
-      }
-
-      ping()
+    // the problem is that the browser will close a connection after
+    // 30 seconds if there is no activity, the default ping "timeout"
+    // in ssb-gossip (and ssb-conn) is 5 minutes.
+    //
+    // tunnel (and rooms) is much better, it will give us back a pong
+    // right after calling, so we can choose how often to call to keep
+    // the connection alive
+    function ping() {
+      rpc.tunnel.ping(function (err, _ts) {
+        if (err) return console.error(err)
+        clearTimeout(timer)
+        timer = setTimeout(ping, 10e3)
+      })
     }
+
+    ping()
   })
 
   r.on('replicate:finish', function () {
