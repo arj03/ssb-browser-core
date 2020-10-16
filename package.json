@@ -13,7 +13,7 @@
     "bipf": "^1.3.0",
     "epidemic-broadcast-trees": "^8.0.0",
     "gossip-query": "^2.0.2",
-    "jitdb": "^0.9.0",
+    "jitdb": "^0.9.3",
     "lodash.debounce": "^4.0.8",
     "polyraf": "^1.1.0",
     "pull-cont": "^0.1.1",
