@@ -16,7 +16,7 @@ exports.permissions = {
 exports.name = 'partial-replication'
 
 exports.init = function (sbot, config) {
-  return self = {
+  return {
     getFeed: function (opts) {
       return pull(
         sbot.createHistoryStream(opts)
