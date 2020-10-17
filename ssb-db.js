@@ -76,11 +76,6 @@ exports.init = function (sbot, config) {
     )
   }
 
-  // partial
-  sbot.dbGetLastestSequence = function(feedId, cb) {
-    SSB.db.lastGet(feedId, cb)
-  }
-
   // all the rest is ebt stuff
 
   sbot.post = Obv()
@@ -91,7 +86,7 @@ exports.init = function (sbot, config) {
 
   sbot.getAtSequence = function (seqid, cb) {
     // will NOT expose private plaintext
-    SSB.db.getClock((typeof seqid === 'string') ? seqid.split(':') : seqid, function (err, value) {
+    SSB.db.getDataFromAuthorSequence((typeof seqid === 'string') ? seqid.split(':') : seqid, function (err, value) {
       if (err) cb(err)
       else cb(null, originalData(value))
     })
