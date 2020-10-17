@@ -271,7 +271,7 @@ module.exports = function (log, dir) {
     })
   }
 
-  return self = {
+  var self = {
     contacts: {
       onGraphChange: function(cb) {
         notifyOnGraphChanges.push(cb)
@@ -403,4 +403,6 @@ module.exports = function (log, dir) {
       })
     }
   }
+
+  return self
 }
