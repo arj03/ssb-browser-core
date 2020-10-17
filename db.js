@@ -24,7 +24,7 @@ exports.init = function (dir, config) {
   const feedSyncer = FeedSyncer(partial, contacts)
 
   function get(id, cb) {
-    fullIndex.keysGet(id, (err, data) => {
+    fullIndex.getDataFromKey(id, (err, data) => {
       if (data)
         cb(null, data.value)
       else
@@ -57,7 +57,7 @@ exports.init = function (dir, config) {
       this problem.
     */
 
-    fullIndex.keysGet(id, (err, data) => {
+    fullIndex.getDataFromKey(id, (err, data) => {
       if (data)
         cb(null, data.value)
       else {
@@ -221,14 +221,14 @@ exports.init = function (dir, config) {
     validateAndAddOOO,
     getStatus,
     getAllLatest: fullIndex.getAllLatest,
-    getClock: fullIndex.clockGet,
+    getDataFromAuthorSequence: fullIndex.getDataFromAuthorSequence,
     contacts,
     profiles: fullIndex.profiles,
     getMessagesByRoot: fullIndex.getMessagesByRoot,
     getMessagesByMention: fullIndex.getMessagesByMention,
     jitdb,
     onDrain: log.onDrain,
-    lastGet: fullIndex.lastGet,
+    getLatest: fullIndex.getLatest,
 
     // debugging
     clearIndexes,
