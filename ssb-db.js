@@ -44,10 +44,30 @@ exports.init = function (sbot, config) {
 
     return pull(
       pullCont(function(cb) {
-        if (seq) // sequences starts with 1, offset starts with 0 ;-)
+        const partialState = SSB.db.partial.getSync()
+        if (seq && partialState[opts.id] && partialState[opts.id].full === true) {
+          // sequences starts with 1, offset starts with 0 ;-)
           SSB.db.jitdb.query(query, seq - 1, limit, true, (err, results) => {
             cb(err, pull.values(results.map(x => formatMsg(x))))
           })
+        }
+        else if (seq) {
+          // for partial feeds we don't know where seq is compared to
+          // and offset, so we lean on the fact that we probably don't
+          // have a lot of messages for this feed.
+
+          SSB.db.jitdb.query(query, (err, results) => {
+            if (err) return cb(err)
+            pull(
+              pull.values(results),
+              pull.filter(x => x.value.sequence >= seq),
+              pull.take(limit),
+              pull.collect((err, filtered) => {
+                cb(null, pull.values(filtered.map(x => formatMsg(x))))
+              })
+            )
+          })
+        }
         else
           SSB.db.jitdb.query(query, (err, results) => {
             cb(err, pull.values(results.map(x => formatMsg(x))))
