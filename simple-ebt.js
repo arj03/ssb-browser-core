@@ -102,7 +102,7 @@ exports.init = function (sbot, config) {
 
       for (var k in ebt.state.peers) {
         var peer = ebt.state.peers[k]
-        if(peer.clock[id] != null || peer.replicating[id] != null) {
+        if((peer.clock && peer.clock[id] != null) || (peer.replicating && peer.replicating[id] != null)) {
           var rep = peer.replicating && peer.replicating[id]
           data.peers[k] = {
             seq: peer.clock[id],
