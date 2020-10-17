@@ -72,9 +72,10 @@ exports.init = function(dir, overwriteConfig) {
     var peer = connPeers.find(x => x.data.key == rpc.id)
     if (!peer || peer.data.type === 'room') return
 
-    console.log("doing ebt with", rpc.id)
-
-    r.sync(rpc)
+    if (isClient) {
+      console.log("syncing with", rpc.id)
+      r.sync(rpc)
+    }
 
     // the problem is that the browser will close a connection after
     // 30 seconds if there is no activity, the default ping "timeout"
