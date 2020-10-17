@@ -53,6 +53,15 @@ exports.init = function(dir, overwriteConfig) {
   .use(require("./simple-blobs"))
   ()
 
+  r.sync = function(rpc) {
+    if (SSB.db.feedSyncer.syncing)
+      ; // only one can sync at a time
+    else if (SSB.db.feedSyncer.inSync())
+      helpers.EBTSync(rpc)
+    else
+      helpers.fullSync(rpc)
+  }
+
   var timer
 
   r.on('rpc:connect', function (rpc, isClient) {
@@ -65,12 +74,7 @@ exports.init = function(dir, overwriteConfig) {
 
     console.log("doing ebt with", rpc.id)
 
-    if (SSB.db.feedSyncer.syncing)
-      ; // only one can sync at a time
-    else if (SSB.db.feedSyncer.inSync())
-      helpers.EBTSync(rpc)
-    else
-      helpers.fullSync(rpc)
+    r.sync(rpc)
 
     // the problem is that the browser will close a connection after
     // 30 seconds if there is no activity, the default ping "timeout"
