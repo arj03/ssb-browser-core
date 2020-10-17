@@ -127,6 +127,9 @@ module.exports = function (partial, contacts) {
         totalPartial += 1
       })
 
+      if (totalPartial === 0 && totalFull === 0)
+        return false
+
       return totalPartial == messagesSynced &&
         totalPartial == contactsSynced &&
         totalPartial == profilesSynced &&
