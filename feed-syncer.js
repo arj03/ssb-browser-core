@@ -78,7 +78,7 @@ module.exports = function (partial, contacts) {
                     if (JSON.stringify(graph) === JSON.stringify(newGraph)) {
                       syncing = false
 
-                      if (cb) cb()
+                      if (cb) cb(rpc)
                     }
                     else // sync new changes
                       syncFeeds(rpc, cb)
