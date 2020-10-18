@@ -8,7 +8,7 @@ browser together with the log, indexes and smaller images. To reduce
 storage and network requirements, partial replication has been
 implemented. Wasm is used for crypto and is around 90% the speed of
 the C implementation. A WebSocket is used to connect to pubs. The
-`bundle-core.js` file in dist/ is roughly 1.8mb.
+`bundle-core.js` file in dist/ is roughly 2mb.
 
 Replication in the browser is quite a bit slower than in node, around
 4-5x. There doesn't seem to be a single cause, it appears to be all
