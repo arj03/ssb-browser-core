@@ -19,7 +19,7 @@ SSB conn is used for connections and rooms are supported. Partial
 replication is implemented which allows two connected browsers to do a
 partial sync.
 
-Partial replication [speed] on a fast laptop is roughly 414 feeds in 85
+Partial replication [speed] on a fast laptop is roughly 425 feeds in 56
 seconds, and roughly half of that on a slow laptop or when running on
 battery.
 
