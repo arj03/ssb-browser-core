@@ -3,19 +3,23 @@
 Secure scuttlebutt core (similar to [ssb-server]) in a browser.
 
 This is a full implementation of ssb running in the browser only (but
-not limited to of course). The key of your feed is stored in the
+not limited to, of course). The key of your feed is stored in the
 browser together with the log, indexes and smaller images. To reduce
 storage and network requirements, partial replication has been
 implemented. Wasm is used for crypto and is around 90% the speed of
 the C implementation. A WebSocket is used to connect to pubs. The
-`bundle-core.js` file in dist/ is roughly 1.8mb.
+`bundle-core.js` file in dist/ is roughly 2mb.
 
 Replication in the browser is quite a bit slower than in node, around
 4-5x. There doesn't seem to be a single cause, it appears to be all
 the diferrent layers that are [slower]: end-to-end encryption,
 database write etc.
 
-Partial replication [speed] on a fast laptop is roughly 414 feeds in 85
+SSB conn is used for connections and rooms are supported. Partial
+replication is implemented which allows two connected browsers to do a
+partial sync.
+
+Partial replication [speed] on a fast laptop is roughly 425 feeds in 56
 seconds, and roughly half of that on a slow laptop or when running on
 battery.
 
@@ -41,10 +45,6 @@ require('../core.js').init(dir, { blobs: { max: 512 * 1024 } })
 Default config options are defined in `net.js`.
 
 ## Runtime configurations
-
-### remoteAddress
-
-The remote server to connect to. Must be web socket.
 
 ### hops
 
@@ -111,11 +111,15 @@ Gets the current db status, same functionality as
 
 Returns a [jitdb] instance of the database useful for queries.
 
-### getLast(cb)
+### onDrain(cb)
 
-Returns the last index.
+Will cb when all outstanding writes for the log has been written to storage.
 
-### getClock(err)
+### getLatest(feedId, cb)
+
+Returns the latest state ({ id (msg key), sequence, timestamp }) for a feedId.
+
+### getDataFromAuthorSequence()
 
 Internal method for EBT.
 
@@ -134,17 +138,11 @@ Returns the profiles index.
 
 Returns all the messages for a particular root in sorted order.
 
-### getMessagesByMention (key, cb)
+### getMessagesByMention(key, cb)
 
 Returns a sorted array messages that has a particular key in the
 mentions array. This is useful for notifications for a particular
 feed.
-
-### feedSyncer.syncFeeds(cb)
-
-Calling this will ensure that the feeds you follow are synced in full
-and that feeds followed by someone you follow are synced partially,
-meaning the latest 25 messages, contacts & profile information.
 
 ## net
 
@@ -165,6 +163,15 @@ SSB.net.on('rpc:connect', (rpc) => {
   rpc.on('closed', () => console.log("bye"))
 })
 ```
+
+### connectAndRemember(addr, data)
+
+Will connect and store as to automatically reconnect on
+reload. Options are as described in [ssb-conn].
+
+### connect(addr, cb)
+
+Connect to addr only once. Cb is (err, rpc)
 
 ### blobs
 
@@ -217,48 +224,11 @@ locally and used for callback, otherwise the callback will return a
 
 The [ssb-ooo] module
 
-### tunnelMessage
-
-Uses a modified version of [ssb-tunnel] to send and receive end-to-end
-encrypted ephemeral messages between two peers.
-
-#### acceptMessages(confirmHandler)
-
-Tell the pub to allow incoming connections, but call confirmHandler
-with the remote feedId for manual confirmation.
-
-#### connect(feedId, cb)
-
-Connect to a remote feedId. When connected a message will be put in
-`messages`. Takes an optional cb.
-
-#### disconnect()
-
-Disconnects all currently active tunnel connections.
-
-#### sendMessage(type, data)
-
-Send a data message to the remote user, adds the message to the local `messages` stream.
-
-#### messages
-
-A stream of messages consisting of type, user and data. Example usage:
-
-```
-pull(
-  messages(),
-  pull.drain((msg) => {
-    console.log(msg.user + "> " + msg.data)
-  })
-)
-```
-
 ### Browser specific methods on net
 
-For partial replication a special plugin has been created, the pub
-needs to have the plugin installed:
-
-- [ssb-partial-replication]
+For partial replication a special plugin has been created and
+implemented in browser core, other clients such as a pub needs to have
+the [ssb-partial-replication] plugin installed.
 
 Once a rpc connection has been established, a few extra methods are
 available under SSB.net.partialReplication. See plugin for
@@ -281,19 +251,13 @@ The [ssb-validate] module.
 The current [state](https://github.com/ssbc/ssb-validate#state) of
 known feeds.
 
-### connected(cb)
-
-If not connected, will connect and return. If connected, will just
-return the already present rpc connection. Cb signature is (err, rpc).
-
 ### publish(msg, cb)
 
 Validates a message and stores it in the database. See db.add for format.
 
-### sync()
+### getPeer()
 
-Will run `feedSyncer.syncFeeds` follow by a EBT replication with the
-remote server. This syncs all the feeds known in `SSB.state.feeds`.
+Gets one of the connected peers that is not a room server.
 
 ### box
 
@@ -330,13 +294,11 @@ using safari.
 
 # Building
 
-The following patches (patch -p0 < x.patch) from the patches folder
-are needed:
- - ssb-tunnel.patch
- - ssb-blob-files.patch
+Run `npm run build` for debugging and `npm run release` for a smaller
+dist file.
 
-For a smaller bundle file, you can also apply
-patches/sodium-browserify.patch
+For a smaller bundle file you can apply (patch -p0 < x.patch):
+ - patches/sodium-browserify.patch
 
 [ssb-server]: https://github.com/ssbc/ssb-server
 [ssb-browser-demo]: https://github.com/arj03/ssb-browser-demo
@@ -345,7 +307,7 @@ patches/sodium-browserify.patch
 [ssb-validate]: https://github.com/ssbc/ssb-validate
 [ssb-blob-files]: https://github.com/ssbc/ssb-blob-files
 [ssb-ooo]: https://github.com/ssbc/ssb-ooo
-[ssb-tunnel]: https://github.com/ssbc/ssb-tunnel
+[ssb-conn]: https://github.com/staltz/ssb-conn
 
 [ssb-get-thread]: https://github.com/arj03/ssb-get-thread
 [ssb-partial-replication]: https://github.com/arj03/ssb-partial-replication

@@ -30,15 +30,15 @@ SSB.events.on('SSB: loaded', function() {
   */
   
   process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = 0 // wtf
-  //SSB.remoteAddress = 'wss://between-two-worlds.dk:8990~noauth:lbocEWqF2Fg6WMYLgmfYvqJlMfL7hiqVAV6ANjHWNw8='
-  SSB.remoteAddress = 'wss://between-two-worlds.dk:8989~shs:lbocEWqF2Fg6WMYLgmfYvqJlMfL7hiqVAV6ANjHWNw8='
-  //SSB.remoteAddress = 'ws://between-two-worlds.dk:8989~shs:mvYGZ9GhdAHTXP+QSgQmpdu7fZBwzZTRAlpTiIClt1E='
-  //SSB.remoteAddress = 'ws://localhost:8989~shs:mvYGZ9GhdAHTXP+QSgQmpdu7fZBwzZTRAlpTiIClt1E='
-  //SSB.remoteAddress = 'ws://localhost:8989~shs:6CAxOI3f+LUOVrbAl0IemqiS7ATpQvr9Mdw9LC4+Uv0='
+  // var remoteAddress = 'wss://between-two-worlds.dk:8990~noauth:lbocEWqF2Fg6WMYLgmfYvqJlMfL7hiqVAV6ANjHWNw8='
+  var remoteAddress = 'wss://between-two-worlds.dk:8989~shs:lbocEWqF2Fg6WMYLgmfYvqJlMfL7hiqVAV6ANjHWNw8='
+  // var remoteAddress = 'ws://between-two-worlds.dk:8989~shs:mvYGZ9GhdAHTXP+QSgQmpdu7fZBwzZTRAlpTiIClt1E='
+  // var remoteAddress = 'ws://localhost:8989~shs:mvYGZ9GhdAHTXP+QSgQmpdu7fZBwzZTRAlpTiIClt1E='
+  // var remoteAddress = 'ws://localhost:8989~shs:6CAxOI3f+LUOVrbAl0IemqiS7ATpQvr9Mdw9LC4+Uv0='
 
   SSB.net.id = '@VIOn+8a/vaQvv/Ew3+KriCngyUXHxHbjXkj4GafBAY0=.ed25519'
-  
-  SSB.connected((rpc) => {
+
+  SSB.net.connect(remoteAddress, (err, rpc) => {
     console.time("downloading main profile")
 
     pull(
@@ -54,7 +54,7 @@ SSB.events.on('SSB: loaded', function() {
         console.log(msgs.length)
 
         console.log("starting sync")
-        SSB.db.feedSyncer.syncFeeds(() => {
+        SSB.db.feedSyncer.syncFeeds(rpc, () => {
           console.log(SSB.db.getStatus())
         })
       })

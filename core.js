@@ -52,16 +52,14 @@ exports.init = function (dir, config) {
       net,
       dir,
 
+      getPeer: helpers.getPeer,
+
       validate,
       state,
-
-      connected: helpers.connected,
 
       removeDB: helpers.removeDB,
       removeIndexes: helpers.removeIndexes,
       removeBlobs: helpers.removeBlobs,
-
-      sync: helpers.sync,
 
       box: require('ssb-keys').box,
       blobFiles: require('ssb-blob-files'),
@@ -70,7 +68,7 @@ exports.init = function (dir, config) {
       publish: function(msg, cb) {
         state.queue = []
         state = validate.appendNew(state, null, net.config.keys, msg, Date.now())
-        console.log(state.queue[0])
+        //console.log(state.queue[0])
         db.add(state.queue[0].value, (err, data) => {
           net.post(data.value) // tell ebt
           cb(err, data)
@@ -79,9 +77,21 @@ exports.init = function (dir, config) {
 
       // config
       hops: 1, // this means download full log for hops and partial logs for hops + 1
-
-      remoteAddress: '',
     })
+
+    // helper for rooms to allow connecting to friends directly
+    SSB.net.friends = {
+      hops: function(cb) {
+        db.contacts.getGraphForFeed(SSB.net.id, (err, graph) => {
+          let hops = {}
+          graph.following.forEach(f => hops[f] = 1)
+          graph.extended.forEach(f => hops[f] = 2)
+          cb(err, hops)
+        })
+      }
+    }
+
+    SSB.net.conn.start()
 
     SSB.events.emit("SSB: loaded")
   })

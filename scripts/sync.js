@@ -8,10 +8,10 @@ require('../core.js').init(dir)
 
 SSB.events.on('SSB: loaded', function() {
   process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = 0 // wtf
-  //SSB.remoteAddress = 'wss://between-two-worlds.dk:8990~noauth:lbocEWqF2Fg6WMYLgmfYvqJlMfL7hiqVAV6ANjHWNw8='
-  SSB.remoteAddress = 'wss://between-two-worlds.dk:8989~shs:lbocEWqF2Fg6WMYLgmfYvqJlMfL7hiqVAV6ANjHWNw8='
+  //var remoteAddress = 'wss://between-two-worlds.dk:8990~noauth:lbocEWqF2Fg6WMYLgmfYvqJlMfL7hiqVAV6ANjHWNw8='
+  var remoteAddress = 'wss://between-two-worlds.dk:8989~shs:lbocEWqF2Fg6WMYLgmfYvqJlMfL7hiqVAV6ANjHWNw8='
 
-  SSB.connected((rpc) => {
+  SSB.net.connect(remoteAddress, (err, rpc) => {
     console.time("downloading messages")
 
     // node (no db, no auth): 2 sek

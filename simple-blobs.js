@@ -158,10 +158,18 @@ exports.init = function (sbot, config) {
   }
 
   function remoteURL(id) {
-    if (SSB.remoteAddress.includes("wss:"))
-      return SSB.remoteAddress.split("~")[0].replace("wss:", "https://") + '/blobs/get/' + id
+    const peer = SSB.getPeer()
+    if (!peer) return ''
+
+    let remoteAddress = peer.stream.address
+    let remoteHost = remoteAddress.split("~")[0]
+
+    if (remoteHost === 'undefined') return ''
+
+    if (remoteAddress.includes("wss:"))
+      return remoteHost.replace("wss:", "https://") + '/blobs/get/' + id
     else
-      return SSB.remoteAddress.split("~")[0].replace("ws:", "http://") + '/blobs/get/' + id
+      return remoteHost.replace("ws:", "http://") + '/blobs/get/' + id
   }
 
   var zeros = Buffer.alloc(24); zeros.fill(0)

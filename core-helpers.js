@@ -4,20 +4,17 @@ const pull = require('pull-stream')
 const raf = require('polyraf')
 const path = require('path')
 
-var remote
-
-exports.connected = function(cb)
+exports.getPeer = function()
 {
-  if (!remote || remote.closed)
-  {
-    SSB.net.connect(SSB.remoteAddress, (err, rpc) => {
-      if (err) throw(err)
+  let connPeers = Array.from(SSB.net.conn.hub().entries())
+  connPeers = connPeers.filter(([, x]) => !!x.key).map(([address, data]) => ({ address, data }))
+  var goodPeer = connPeers.find(cp => cp.data.type != 'room')
 
-      remote = rpc
-      cb(remote)
-    })
-  } else
-    cb(remote)
+  let peers = Object.values(SSB.net.peers).flat()
+
+  if (goodPeer) return peers.find(p => p.id == goodPeer.data.key)
+  else if (peers.length > 0) return peers[0]
+  else return null
 }
 
 function deleteDatabaseFile(filename) {
@@ -72,23 +69,21 @@ exports.removeBlobs = function() {
   })
 }
 
-exports.EBTSync = function()
+exports.EBTSync = function(rpc)
 {
-  // FIXME: should not be able to run twice
-  exports.connected((rpc) => {
-    SSB.db.contacts.getGraphForFeed(SSB.net.id, (err, graph) => {
-      SSB.net.ebt.updateClock(() => {
-        SSB.net.ebt.request(SSB.net.id, true)
-        graph.following.forEach(feed => SSB.net.ebt.request(feed, true))
-        graph.extended.forEach(feed => SSB.net.ebt.request(feed, true))
+  console.log("doing ebt with", rpc.id)
+  SSB.db.contacts.getGraphForFeed(SSB.net.id, (err, graph) => {
+    SSB.net.ebt.updateClock(() => {
+      SSB.net.ebt.request(SSB.net.id, true)
+      graph.following.forEach(feed => SSB.net.ebt.request(feed, true))
+      graph.extended.forEach(feed => SSB.net.ebt.request(feed, true))
 
-        SSB.net.ebt.startEBT(rpc)
-      })
+      SSB.net.ebt.startEBT(rpc)
     })
   })
 }
 
-exports.sync = function()
+exports.fullSync = function(rpc)
 {
-  SSB.db.feedSyncer.syncFeeds(exports.EBTSync)
+  SSB.db.feedSyncer.syncFeeds(rpc, exports.EBTSync)
 }

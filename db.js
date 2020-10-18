@@ -21,10 +21,10 @@ exports.init = function (dir, config) {
   const fullIndex = FullScanIndexes(log, dir)
   const contacts = fullIndex.contacts
   const partial = Partial(dir)
-  const feedSyncer = FeedSyncer(log, partial, contacts)
+  const feedSyncer = FeedSyncer(partial, contacts)
 
   function get(id, cb) {
-    fullIndex.keysGet(id, (err, data) => {
+    fullIndex.getDataFromKey(id, (err, data) => {
       if (data)
         cb(null, data.value)
       else
@@ -57,7 +57,7 @@ exports.init = function (dir, config) {
       this problem.
     */
 
-    fullIndex.keysGet(id, (err, data) => {
+    fullIndex.getDataFromKey(id, (err, data) => {
       if (data)
         cb(null, data.value)
       else {
@@ -165,18 +165,21 @@ exports.init = function (dir, config) {
     const partialState = partial.getSync()
     const graph = contacts.getGraphForFeedSync(SSB.net.id)
 
+    // partial
     let profilesSynced = 0
     let contactsSynced = 0
     let messagesSynced = 0
-    let full = 0
-    let fullTotal = 0
-    let total = 0
+    let totalPartial = 0
+
+    // full
+    let fullSynced = 0
+    let totalFull = 0
 
     graph.following.forEach(relation => {
       if (partialState[relation] && partialState[relation]['full'])
-        full += 1
+        fullSynced += 1
 
-      fullTotal += 1
+      totalFull += 1
     })
 
     graph.extended.forEach(relation => {
@@ -187,19 +190,19 @@ exports.init = function (dir, config) {
       if (partialState[relation] && partialState[relation]['syncedMessages'])
         messagesSynced += 1
 
-      total += 1
+      totalPartial += 1
     })
 
     return {
       log: log.since.value,
       indexes: fullIndex.seq.value,
       partial: {
-        total,
+        totalPartial,
         profilesSynced,
         contactsSynced,
         messagesSynced,
-        fullTotal,
-        full,
+        totalFull,
+        fullSynced,
       }
     }
   }
@@ -218,12 +221,14 @@ exports.init = function (dir, config) {
     validateAndAddOOO,
     getStatus,
     getAllLatest: fullIndex.getAllLatest,
-    getClock: fullIndex.clockGet,
+    getDataFromAuthorSequence: fullIndex.getDataFromAuthorSequence,
     contacts,
     profiles: fullIndex.profiles,
     getMessagesByRoot: fullIndex.getMessagesByRoot,
     getMessagesByMention: fullIndex.getMessagesByMention,
     jitdb,
+    onDrain: log.onDrain,
+    getLatest: fullIndex.getLatest,
 
     // debugging
     clearIndexes,

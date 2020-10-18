@@ -271,7 +271,7 @@ module.exports = function (log, dir) {
     })
   }
 
-  return self = {
+  var self = {
     contacts: {
       onGraphChange: function(cb) {
         notifyOnGraphChanges.push(cb)
@@ -348,7 +348,7 @@ module.exports = function (log, dir) {
       queueGet(queueRoots, rootId, cb)
     },
 
-    keysGet: function(key, cb) {
+    getDataFromKey: function(key, cb) {
       queueKey.get(() => {
         if (!keyToSeq[key])
           cb('Key not found:' + key)
@@ -359,7 +359,7 @@ module.exports = function (log, dir) {
           })
       })
     },
-    clockGet: function(key, cb) {
+    getDataFromAuthorSequence: function(key, cb) {
       queueSequence.get(() => {
         if (!authorSequenceToSeq[key])
           cb('Key not found:' + key)
@@ -370,7 +370,8 @@ module.exports = function (log, dir) {
           })
       })
     },
-    lastGet: function(feedId, cb) {
+    // returns { id (msg key), sequence, timestamp }
+    getLatest: function(feedId, cb) {
       queueLatest.get(() => {
         if (!authorLatest[feedId])
           cb('Author not found:' + feedId)
@@ -403,4 +404,6 @@ module.exports = function (log, dir) {
       })
     }
   }
+
+  return self
 }
