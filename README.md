@@ -26,7 +26,7 @@ battery.
 ![Diagram](./diagram.svg)
 
 <details>
-  digraph hierarchy {
+digraph hierarchy {
 
   nodesep=1.0 // increases the separation between nodes
   node [shape=record];
@@ -36,7 +36,7 @@ battery.
 
   SSBBrowserCore->{Network Connections Sync DB Feed}
                    Feed->{Validate Keys}
-                   DB->{JITDB Indexes}
+                   DB->{JITDB AsyncFlumelog Indexes}
                    Connections->{SSBconn Rooms}
                    Network->{SecretStack MuxRPC SHS}
                    Sync->{CreateHistStream Partial EBT}
