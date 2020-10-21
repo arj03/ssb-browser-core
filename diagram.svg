@@ -1,12 +1,12 @@
-<svg width="1232pt" height="191pt" viewBox="0.00 0.00 1231.81 191.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<svg width="1170pt" height="191pt" viewBox="0.00 0.00 1169.81 191.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
 <g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 187)">
 <title>hierarchy</title>
-<polygon fill="#ffffff" stroke="transparent" points="-4,4 -4,-187 1227.8072,-187 1227.8072,4 -4,4"></polygon>
+<polygon fill="#ffffff" stroke="transparent" points="-4,4 -4,-187 1165.8072,-187 1165.8072,4 -4,4"></polygon>
 <!-- SSBBrowserCore -->
 <g id="node1" class="node">
 <title>SSBBrowserCore</title>
-<polygon fill="none" stroke="#000000" points="578.2714,-146.5 578.2714,-182.5 693.8086,-182.5 693.8086,-146.5 578.2714,-146.5"></polygon>
-<text text-anchor="middle" x="636.04" y="-160.3" font-family="Times,serif" font-size="14.00" fill="#000000">SSBBrowserCore</text>
+<polygon fill="none" stroke="#000000" points="516.2714,-146.5 516.2714,-182.5 631.8086,-182.5 631.8086,-146.5 516.2714,-146.5"></polygon>
+<text text-anchor="middle" x="574.04" y="-160.3" font-family="Times,serif" font-size="14.00" fill="#000000">SSBBrowserCore</text>
 </g>
 <!-- Network -->
 <g id="node6" class="node">
@@ -17,8 +17,8 @@
 <!-- SSBBrowserCore&#45;&gt;Network -->
 <g id="edge1" class="edge">
 <title>SSBBrowserCore-&gt;Network</title>
-<path fill="none" stroke="#000000" d="M577.945,-156.5765C501.074,-146.0665 361.3521,-126.8739 242.04,-110 213.6388,-105.9833 181.7082,-101.3685 156.8433,-97.7528"></path>
-<polygon fill="#000000" stroke="#000000" points="157.0503,-94.2461 146.6504,-96.269 156.0419,-101.1731 157.0503,-94.2461"></polygon>
+<path fill="none" stroke="#000000" d="M516.2465,-155.3284C422.5276,-140.4556 239.5516,-111.4182 156.6631,-98.2641"></path>
+<polygon fill="#000000" stroke="#000000" points="157.0168,-94.7765 146.5918,-96.6658 155.9196,-101.69 157.0168,-94.7765"></polygon>
 </g>
 <!-- Connections -->
 <g id="node7" class="node">
@@ -29,56 +29,56 @@
 <!-- SSBBrowserCore&#45;&gt;Connections -->
 <g id="edge2" class="edge">
 <title>SSBBrowserCore-&gt;Connections</title>
-<path fill="none" stroke="#000000" d="M578.2641,-151.1107C519.9558,-137.5979 430.6698,-116.9063 374.1032,-103.7972"></path>
-<polygon fill="#000000" stroke="#000000" points="374.8139,-100.3692 364.2819,-101.5211 373.2335,-107.1885 374.8139,-100.3692"></polygon>
+<path fill="none" stroke="#000000" d="M515.9967,-147.7523C473.1828,-135.3989 415.3977,-118.7257 373.8703,-106.7435"></path>
+<polygon fill="#000000" stroke="#000000" points="374.7906,-103.3664 364.2123,-103.9568 372.85,-110.092 374.7906,-103.3664"></polygon>
 </g>
 <!-- Sync -->
 <g id="node8" class="node">
 <title>Sync</title>
-<polygon fill="none" stroke="#000000" points="609.04,-73.5 609.04,-109.5 663.04,-109.5 663.04,-73.5 609.04,-73.5"></polygon>
-<text text-anchor="middle" x="636.0386" y="-87.3" font-family="Times,serif" font-size="14.00" fill="#000000">Sync</text>
+<polygon fill="none" stroke="#000000" points="547.04,-73.5 547.04,-109.5 601.04,-109.5 601.04,-73.5 547.04,-73.5"></polygon>
+<text text-anchor="middle" x="574.0386" y="-87.3" font-family="Times,serif" font-size="14.00" fill="#000000">Sync</text>
 </g>
 <!-- SSBBrowserCore&#45;&gt;Sync -->
 <g id="edge3" class="edge">
 <title>SSBBrowserCore-&gt;Sync</title>
-<path fill="none" stroke="#000000" d="M636.04,-146.4551C636.04,-138.3828 636.04,-128.6764 636.04,-119.6817"></path>
-<polygon fill="#000000" stroke="#000000" points="639.5401,-119.5903 636.04,-109.5904 632.5401,-119.5904 639.5401,-119.5903"></polygon>
+<path fill="none" stroke="#000000" d="M574.04,-146.4551C574.04,-138.3828 574.04,-128.6764 574.04,-119.6817"></path>
+<polygon fill="#000000" stroke="#000000" points="577.5401,-119.5903 574.04,-109.5904 570.5401,-119.5904 577.5401,-119.5903"></polygon>
 </g>
 <!-- DB -->
 <g id="node9" class="node">
 <title>DB</title>
-<polygon fill="none" stroke="#000000" points="861.04,-73.5 861.04,-109.5 915.04,-109.5 915.04,-73.5 861.04,-73.5"></polygon>
-<text text-anchor="middle" x="887.7616" y="-87.3" font-family="Times,serif" font-size="14.00" fill="#000000">DB</text>
+<polygon fill="none" stroke="#000000" points="799.04,-73.5 799.04,-109.5 853.04,-109.5 853.04,-73.5 799.04,-73.5"></polygon>
+<text text-anchor="middle" x="825.7616" y="-87.3" font-family="Times,serif" font-size="14.00" fill="#000000">DB</text>
 </g>
 <!-- SSBBrowserCore&#45;&gt;DB -->
 <g id="edge4" class="edge">
 <title>SSBBrowserCore-&gt;DB</title>
-<path fill="none" stroke="#000000" d="M693.8539,-147.7523C742.3153,-133.7139 810.0341,-114.097 851.3614,-102.1251"></path>
-<polygon fill="#000000" stroke="#000000" points="852.389,-105.4715 861.0202,-99.3272 850.4412,-98.7479 852.389,-105.4715"></polygon>
+<path fill="none" stroke="#000000" d="M631.8539,-147.7523C680.3153,-133.7139 748.0341,-114.097 789.3614,-102.1251"></path>
+<polygon fill="#000000" stroke="#000000" points="790.389,-105.4715 799.0202,-99.3272 788.4412,-98.7479 790.389,-105.4715"></polygon>
 </g>
 <!-- Feed -->
 <g id="node10" class="node">
 <title>Feed</title>
-<polygon fill="none" stroke="#000000" points="987.04,-73.5 987.04,-109.5 1041.04,-109.5 1041.04,-73.5 987.04,-73.5"></polygon>
-<text text-anchor="middle" x="1013.6459" y="-87.3" font-family="Times,serif" font-size="14.00" fill="#000000">Feed</text>
+<polygon fill="none" stroke="#000000" points="925.04,-73.5 925.04,-109.5 979.04,-109.5 979.04,-73.5 925.04,-73.5"></polygon>
+<text text-anchor="middle" x="951.6459" y="-87.3" font-family="Times,serif" font-size="14.00" fill="#000000">Feed</text>
 </g>
 <!-- SSBBrowserCore&#45;&gt;Feed -->
 <g id="edge5" class="edge">
 <title>SSBBrowserCore-&gt;Feed</title>
-<path fill="none" stroke="#000000" d="M693.9172,-156.5146C757.4069,-147.2848 862.115,-130.6778 951.04,-110 959.579,-108.0144 968.6732,-105.5522 977.2184,-103.079"></path>
-<polygon fill="#000000" stroke="#000000" points="978.3392,-106.3973 986.9313,-100.1984 976.3489,-99.6862 978.3392,-106.3973"></polygon>
+<path fill="none" stroke="#000000" d="M631.9172,-156.5146C695.4069,-147.2848 800.115,-130.6778 889.04,-110 897.579,-108.0144 906.6732,-105.5522 915.2184,-103.079"></path>
+<polygon fill="#000000" stroke="#000000" points="916.3392,-106.3973 924.9313,-100.1984 914.3489,-99.6862 916.3392,-106.3973"></polygon>
 </g>
 <!-- Validate -->
 <g id="node2" class="node">
 <title>Validate</title>
-<polygon fill="none" stroke="#000000" points="916.3289,-146.5 916.3289,-182.5 979.7511,-182.5 979.7511,-146.5 916.3289,-146.5"></polygon>
-<text text-anchor="middle" x="948.04" y="-160.3" font-family="Times,serif" font-size="14.00" fill="#000000">Validate</text>
+<polygon fill="none" stroke="#000000" points="854.3289,-146.5 854.3289,-182.5 917.7511,-182.5 917.7511,-146.5 854.3289,-146.5"></polygon>
+<text text-anchor="middle" x="886.04" y="-160.3" font-family="Times,serif" font-size="14.00" fill="#000000">Validate</text>
 </g>
 <!-- Keys -->
 <g id="node3" class="node">
 <title>Keys</title>
-<polygon fill="none" stroke="#000000" points="1052.04,-146.5 1052.04,-182.5 1106.04,-182.5 1106.04,-146.5 1052.04,-146.5"></polygon>
-<text text-anchor="middle" x="1078.9229" y="-160.3" font-family="Times,serif" font-size="14.00" fill="#000000">Keys</text>
+<polygon fill="none" stroke="#000000" points="990.04,-146.5 990.04,-182.5 1044.04,-182.5 1044.04,-146.5 990.04,-146.5"></polygon>
+<text text-anchor="middle" x="1016.9229" y="-160.3" font-family="Times,serif" font-size="14.00" fill="#000000">Keys</text>
 </g>
 <!-- SecretStack -->
 <g id="node4" class="node">
@@ -140,89 +140,89 @@
 <path fill="none" stroke="#000000" d="M321.04,-73.4551C321.04,-65.3828 321.04,-55.6764 321.04,-46.6817"></path>
 <polygon fill="#000000" stroke="#000000" points="324.5401,-46.5903 321.04,-36.5904 317.5401,-46.5904 324.5401,-46.5903"></polygon>
 </g>
-<!-- CreateHistStream -->
-<g id="node17" class="node">
-<title>CreateHistStream</title>
-<polygon fill="none" stroke="#000000" points="421.2812,-.5 421.2812,-36.5 536.7988,-36.5 536.7988,-.5 421.2812,-.5"></polygon>
-<text text-anchor="middle" x="479.04" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">CreateHistStream</text>
-</g>
-<!-- Sync&#45;&gt;CreateHistStream -->
-<g id="edge16" class="edge">
-<title>Sync-&gt;CreateHistStream</title>
-<path fill="none" stroke="#000000" d="M608.6927,-78.7844C586.2163,-68.3336 553.8303,-53.2751 527.0498,-40.823"></path>
-<polygon fill="#000000" stroke="#000000" points="528.3798,-37.5816 517.8364,-36.5391 525.4284,-43.9291 528.3798,-37.5816"></polygon>
-</g>
 <!-- Partial -->
-<g id="node18" class="node">
+<g id="node17" class="node">
 <title>Partial</title>
-<polygon fill="none" stroke="#000000" points="609.04,-.5 609.04,-36.5 663.04,-36.5 663.04,-.5 609.04,-.5"></polygon>
-<text text-anchor="middle" x="635.8121" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">Partial</text>
+<polygon fill="none" stroke="#000000" points="421.04,-.5 421.04,-36.5 475.04,-36.5 475.04,-.5 421.04,-.5"></polygon>
+<text text-anchor="middle" x="447.8121" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">Partial</text>
 </g>
 <!-- Sync&#45;&gt;Partial -->
-<g id="edge17" class="edge">
+<g id="edge16" class="edge">
 <title>Sync-&gt;Partial</title>
-<path fill="none" stroke="#000000" d="M636.04,-73.4551C636.04,-65.3828 636.04,-55.6764 636.04,-46.6817"></path>
-<polygon fill="#000000" stroke="#000000" points="639.5401,-46.5903 636.04,-36.5904 632.5401,-46.5904 639.5401,-46.5903"></polygon>
+<path fill="none" stroke="#000000" d="M547.0098,-75.8397C528.6995,-65.2313 504.2928,-51.0909 484.2985,-39.5069"></path>
+<polygon fill="#000000" stroke="#000000" points="485.8675,-36.371 475.4602,-34.3863 482.3583,-42.4279 485.8675,-36.371"></polygon>
 </g>
 <!-- EBT -->
-<g id="node19" class="node">
+<g id="node18" class="node">
 <title>EBT</title>
-<polygon fill="none" stroke="#000000" points="735.04,-.5 735.04,-36.5 789.04,-36.5 789.04,-.5 735.04,-.5"></polygon>
-<text text-anchor="middle" x="761.7609" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">EBT</text>
+<polygon fill="none" stroke="#000000" points="547.04,-.5 547.04,-36.5 601.04,-36.5 601.04,-.5 547.04,-.5"></polygon>
+<text text-anchor="middle" x="573.7609" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">EBT</text>
 </g>
 <!-- Sync&#45;&gt;EBT -->
-<g id="edge18" class="edge">
+<g id="edge17" class="edge">
 <title>Sync-&gt;EBT</title>
-<path fill="none" stroke="#000000" d="M663.0702,-75.8397C681.3805,-65.2313 705.7872,-51.0909 725.7815,-39.5069"></path>
-<polygon fill="#000000" stroke="#000000" points="727.7217,-42.4279 734.6198,-34.3863 724.2125,-36.371 727.7217,-42.4279"></polygon>
+<path fill="none" stroke="#000000" d="M574.04,-73.4551C574.04,-65.3828 574.04,-55.6764 574.04,-46.6817"></path>
+<polygon fill="#000000" stroke="#000000" points="577.5401,-46.5903 574.04,-36.5904 570.5401,-46.5904 577.5401,-46.5903"></polygon>
+</g>
+<!-- Blobs -->
+<g id="node19" class="node">
+<title>Blobs</title>
+<polygon fill="none" stroke="#000000" points="673.04,-.5 673.04,-36.5 727.04,-36.5 727.04,-.5 673.04,-.5"></polygon>
+<text text-anchor="middle" x="699.8759" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">Blobs</text>
+</g>
+<!-- Sync&#45;&gt;Blobs -->
+<g id="edge18" class="edge">
+<title>Sync-&gt;Blobs</title>
+<path fill="none" stroke="#000000" d="M601.0702,-75.8397C619.3805,-65.2313 643.7872,-51.0909 663.7815,-39.5069"></path>
+<polygon fill="#000000" stroke="#000000" points="665.7217,-42.4279 672.6198,-34.3863 662.2125,-36.371 665.7217,-42.4279"></polygon>
 </g>
 <!-- JITDB -->
 <g id="node11" class="node">
 <title>JITDB</title>
-<polygon fill="none" stroke="#000000" points="860.9895,-.5 860.9895,-36.5 915.0905,-36.5 915.0905,-.5 860.9895,-.5"></polygon>
-<text text-anchor="middle" x="888.04" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">JITDB</text>
+<polygon fill="none" stroke="#000000" points="798.9895,-.5 798.9895,-36.5 853.0905,-36.5 853.0905,-.5 798.9895,-.5"></polygon>
+<text text-anchor="middle" x="826.04" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">JITDB</text>
 </g>
 <!-- DB&#45;&gt;JITDB -->
 <g id="edge8" class="edge">
 <title>DB-&gt;JITDB</title>
-<path fill="none" stroke="#000000" d="M888.04,-73.4551C888.04,-65.3828 888.04,-55.6764 888.04,-46.6817"></path>
-<polygon fill="#000000" stroke="#000000" points="891.5401,-46.5903 888.04,-36.5904 884.5401,-46.5904 891.5401,-46.5903"></polygon>
+<path fill="none" stroke="#000000" d="M826.04,-73.4551C826.04,-65.3828 826.04,-55.6764 826.04,-46.6817"></path>
+<polygon fill="#000000" stroke="#000000" points="829.5401,-46.5903 826.04,-36.5904 822.5401,-46.5904 829.5401,-46.5903"></polygon>
 </g>
 <!-- AsyncFlumelog -->
 <g id="node12" class="node">
 <title>AsyncFlumelog</title>
-<polygon fill="none" stroke="#000000" points="987.3226,-.5 987.3226,-36.5 1092.7574,-36.5 1092.7574,-.5 987.3226,-.5"></polygon>
-<text text-anchor="middle" x="1040.04" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">AsyncFlumelog</text>
+<polygon fill="none" stroke="#000000" points="925.3226,-.5 925.3226,-36.5 1030.7574,-36.5 1030.7574,-.5 925.3226,-.5"></polygon>
+<text text-anchor="middle" x="978.04" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">AsyncFlumelog</text>
 </g>
 <!-- DB&#45;&gt;AsyncFlumelog -->
 <g id="edge9" class="edge">
 <title>DB-&gt;AsyncFlumelog</title>
-<path fill="none" stroke="#000000" d="M915.2146,-78.4491C936.8894,-68.0394 967.7524,-53.2171 993.3662,-40.9157"></path>
-<polygon fill="#000000" stroke="#000000" points="995.0395,-43.9949 1002.5386,-36.5105 992.009,-37.6848 995.0395,-43.9949"></polygon>
+<path fill="none" stroke="#000000" d="M853.2146,-78.4491C874.8894,-68.0394 905.7524,-53.2171 931.3662,-40.9157"></path>
+<polygon fill="#000000" stroke="#000000" points="933.0395,-43.9949 940.5386,-36.5105 930.009,-37.6848 933.0395,-43.9949"></polygon>
 </g>
 <!-- Indexes -->
 <g id="node13" class="node">
 <title>Indexes</title>
-<polygon fill="none" stroke="#000000" points="1164.2728,-.5 1164.2728,-36.5 1223.8072,-36.5 1223.8072,-.5 1164.2728,-.5"></polygon>
-<text text-anchor="middle" x="1194.04" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">Indexes</text>
+<polygon fill="none" stroke="#000000" points="1102.2728,-.5 1102.2728,-36.5 1161.8072,-36.5 1161.8072,-.5 1102.2728,-.5"></polygon>
+<text text-anchor="middle" x="1132.04" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">Indexes</text>
 </g>
 <!-- DB&#45;&gt;Indexes -->
 <g id="edge10" class="edge">
 <title>DB-&gt;Indexes</title>
-<path fill="none" stroke="#000000" d="M915.1895,-82.9717C926.2514,-79.6426 939.1999,-75.93 951.04,-73 1029.3896,-53.6115 1050.6103,-56.0617 1129.04,-37 1137.2264,-35.0103 1145.9343,-32.6814 1154.2269,-30.36"></path>
-<polygon fill="#000000" stroke="#000000" points="1155.4146,-33.661 1164.0733,-27.5555 1153.497,-26.9288 1155.4146,-33.661"></polygon>
+<path fill="none" stroke="#000000" d="M853.1895,-82.9717C864.2514,-79.6426 877.1999,-75.93 889.04,-73 967.3896,-53.6115 988.6103,-56.0617 1067.04,-37 1075.2264,-35.0103 1083.9343,-32.6814 1092.2269,-30.36"></path>
+<polygon fill="#000000" stroke="#000000" points="1093.4146,-33.661 1102.0733,-27.5555 1091.497,-26.9288 1093.4146,-33.661"></polygon>
 </g>
 <!-- Feed&#45;&gt;Validate -->
 <g id="edge6" class="edge">
 <title>Feed-&gt;Validate</title>
-<path fill="none" stroke="#000000" d="M997.6843,-109.5904C989.6661,-118.459 979.872,-129.2919 971.1083,-138.985"></path>
-<polygon fill="#000000" stroke="#000000" points="968.4649,-136.69 964.3546,-146.4551 973.6573,-141.3845 968.4649,-136.69"></polygon>
+<path fill="none" stroke="#000000" d="M935.6843,-109.5904C927.6661,-118.459 917.872,-129.2919 909.1083,-138.985"></path>
+<polygon fill="#000000" stroke="#000000" points="906.4649,-136.69 902.3546,-146.4551 911.6573,-141.3845 906.4649,-136.69"></polygon>
 </g>
 <!-- Feed&#45;&gt;Keys -->
 <g id="edge7" class="edge">
 <title>Feed-&gt;Keys</title>
-<path fill="none" stroke="#000000" d="M1030.1479,-109.5904C1038.0446,-118.459 1047.6903,-129.2919 1056.3212,-138.985"></path>
-<polygon fill="#000000" stroke="#000000" points="1053.7086,-141.3141 1062.9726,-146.4551 1058.9365,-136.6591 1053.7086,-141.3141"></polygon>
+<path fill="none" stroke="#000000" d="M968.1479,-109.5904C976.0446,-118.459 985.6903,-129.2919 994.3212,-138.985"></path>
+<polygon fill="#000000" stroke="#000000" points="991.7086,-141.3141 1000.9726,-146.4551 996.9365,-136.6591 991.7086,-141.3141"></polygon>
 </g>
 </g>
 </svg>
