@@ -23,6 +23,28 @@ Partial replication [speed] on a fast laptop is roughly 425 feeds in 56
 seconds, and roughly half of that on a slow laptop or when running on
 battery.
 
+![Alt text](https://g.gravizo.com/source/custom_mark10?https%3A%2F%2Fraw.githubusercontent.com%2Farj030%2Fssb-browser-core%2Fmaster%2FREADME.md)
+<details> 
+<summary></summary>
+custom_mark10
+digraph hierarchy {
+
+  nodesep=1.0 // increases the separation between nodes
+  node [shape=record];
+  
+  { rank=same SSBBrowserCore Validate Keys }
+  { rank=same SSBBrowserCore SecretStack MuxRPC }
+
+  SSBBrowserCore->{Network Connections Sync DB Feed}
+                   Feed->{Validate Keys}
+                   DB->{JITDB Indexes}
+                   Connections->{SSBconn Rooms}
+                   Network->{SecretStack MuxRPC SHS}
+                   Sync->{CreateHistStream Partial EBT}
+}
+custom_mark10
+</details>
+
 # api
 
 Once you load the `bundle-core.js` file in a browser a global SSB
