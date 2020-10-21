@@ -28,7 +28,7 @@ battery.
 <details>
 digraph hierarchy {
 
-  nodesep=1.0 // increases the separation between nodes
+  nodesep=0.6
   node [shape=record];
   
   { rank=same SSBBrowserCore Validate Keys }
@@ -39,7 +39,7 @@ digraph hierarchy {
                    DB->{JITDB AsyncFlumelog Indexes}
                    Connections->{SSBconn Rooms}
                    Network->{SecretStack MuxRPC SHS}
-                   Sync->{CreateHistStream Partial EBT}
+                   Sync->{Partial EBT Blobs}
 }
 </details>
 
