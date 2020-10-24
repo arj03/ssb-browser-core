@@ -226,6 +226,7 @@ exports.init = function (dir, config) {
     profiles: fullIndex.profiles,
     getMessagesByRoot: fullIndex.getMessagesByRoot,
     getMessagesByMention: fullIndex.getMessagesByMention,
+    getMessagesByVoteLink: fullIndex.getMessagesByVoteLink,
     jitdb,
     onDrain: log.onDrain,
     getLatest: fullIndex.getLatest,

@@ -17,6 +17,7 @@ module.exports = function (log, dir) {
   const queueSequence = require('../waiting-queue')()
   const queueMentions = require('../waiting-queue')(log, seq)
   const queueRoots = require('../waiting-queue')(log, seq)
+  const queueVoteLinks = require('../waiting-queue')(log, seq)
   const queueContacts = require('../waiting-queue')(log, seq)
   const queueProfiles = require('../waiting-queue')(log, seq)
 
@@ -26,6 +27,7 @@ module.exports = function (log, dir) {
 
   var mentions = {}
   var roots = {}
+  var links = {}
 
   var hops = {}
   var profiles = {}
@@ -44,7 +46,8 @@ module.exports = function (log, dir) {
       authorSequenceToSeq,
       authorLatest,
       mentions,
-      roots
+      roots,
+      links
     }, (err) => {
       if (err) console.error("error saving full index", err)
     })
@@ -83,6 +86,7 @@ module.exports = function (log, dir) {
         authorLatest = data.authorLatest
         mentions = data.mentions
         roots = data.roots
+        links = data.links
       }
 
       fHops.get((err, data) => {
@@ -116,6 +120,8 @@ module.exports = function (log, dir) {
     const bType = Buffer.from('type')
     const bContact = Buffer.from('contact')
     const bAbout = Buffer.from('about')
+    const bVote = Buffer.from('vote')
+    const bLink = Buffer.from('link')
 
     function updateContactData(from, content) {
       var to = content.contact
@@ -221,6 +227,18 @@ module.exports = function (log, dir) {
               updateContactData(author, bipf.decode(data.value, pContent))
             else if (bipf.compareString(data.value, pType, bAbout) === 0)
               updateProfileData(author, bipf.decode(data.value, pContent))
+            else if (bipf.compareString(data.value, pType, bVote) === 0) {
+              var pVote = bipf.seekKey(data.value, pContent, bVote)
+              if (~pVote) {
+                var pLink = bipf.seekKey(data.value, pVote, bLink)
+                if (~pLink) {
+                  const link = bipf.decode(data.value, pLink)
+                  let d = links[link] || []
+                  d.push(data.seq)
+                  links[link] = d
+                }
+              }
+            }
           }
         }
       }
@@ -247,6 +265,7 @@ module.exports = function (log, dir) {
         queueSequence.done(null, authorSequenceToSeq)
         queueMentions.done(null, mentions)
         queueRoots.done(null, roots)
+        queueVoteLinks.done(null, links)
         queueContacts.done(null, hops)
         queueProfiles.done(null, profiles)
       }
@@ -346,6 +365,9 @@ module.exports = function (log, dir) {
     },
     getMessagesByRoot: function(rootId, cb) {
       queueGet(queueRoots, rootId, cb)
+    },
+    getMessagesByVoteLink: function(linkId, cb) {
+      queueGet(queueVoteLinks, linkId, cb)
     },
 
     getDataFromKey: function(key, cb) {
