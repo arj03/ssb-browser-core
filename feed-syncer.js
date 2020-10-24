@@ -35,6 +35,11 @@ module.exports = function (partial, contacts) {
           pull.values(graph.following),
           pull.asyncMap((feed, cb) => {
             if (!partialState[feed] || !partialState[feed]['full']) {
+
+              // we might already have partial state about the feed,
+              // so when we do a full sync we need to clear the state
+              delete SSB.state.feeds[feed]
+
               pull(
                 rpc.partialReplication.getFeed({ id: feed, seq: 0, keys: false }),
                 pull.asyncMap(SSB.db.validateAndAdd),
