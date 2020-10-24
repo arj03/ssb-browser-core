@@ -27,7 +27,10 @@ exports.init = function (sbot, config) {
       return pull(
         pullCont(function(cb) {
           SSB.db.getLatest(opts.id, (err, latest) => {
-            if (err) throw err
+            if (err) {
+              console.error("Got error on feed reverse", err)
+              return cb(null, pull.empty())
+            }
 
             var seqStart = latest ? latest.sequence - (opts.limit - 1) : 0
             if (seqStart < 0)
