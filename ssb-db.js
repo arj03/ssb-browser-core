@@ -3,7 +3,6 @@
 
 const pull = require('pull-stream')
 const pullCont = require('pull-cont')
-var Obv = require('obv')
 const { originalData } = require('./msg-utils')
 
 exports.manifest =  {
@@ -74,22 +73,6 @@ exports.init = function (sbot, config) {
           })
       })
     )
-  }
-
-  // all the rest is ebt stuff
-
-  sbot.post = Obv()
-
-  sbot.add = function(msg, cb) {
-    SSB.db.validateAndAdd(msg, cb)
-  }
-
-  sbot.getAtSequence = function (seqid, cb) {
-    // will NOT expose private plaintext
-    SSB.db.getDataFromAuthorSequence((typeof seqid === 'string') ? seqid.split(':') : seqid, function (err, value) {
-      if (err) cb(err)
-      else cb(null, originalData(value))
-    })
   }
 
   return {}

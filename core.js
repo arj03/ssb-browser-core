@@ -70,7 +70,7 @@ exports.init = function (dir, config) {
         state = validate.appendNew(state, null, net.config.keys, msg, Date.now())
         //console.log(state.queue[0])
         db.add(state.queue[0].value, (err, data) => {
-          net.post(data.value) // tell ebt
+          net.ebt.onPost(data)
           cb(err, data)
         })
       },
