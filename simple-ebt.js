@@ -5,7 +5,7 @@ var path = require('path')
 var toPull = require('push-stream-to-pull-stream')
 var isFeed = require('ssb-ref').isFeed
 
-const { originalData } = require('./msg-utils')
+const { originalData } = require('ssb-db2/msg-utils')
 
 var AtomicFile = require('atomic-file')
 
