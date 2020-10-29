@@ -85,5 +85,5 @@ exports.EBTSync = function(rpc)
 
 exports.fullSync = function(rpc)
 {
-  SSB.db.feedSyncer.syncFeeds(rpc, exports.EBTSync)
+  SSB.feedSyncer.syncFeeds(rpc, exports.EBTSync)
 }
