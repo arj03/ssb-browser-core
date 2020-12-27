@@ -4,6 +4,8 @@ const pl = require('pull-level')
 const jsonCodec = require('flumecodec/json')
 const Plugin = require('ssb-db2/indexes/plugin')
 
+const isFeed = require('ssb-ref').isFeed
+
 // 1 index:
 // - feed => hydrated about
 
@@ -16,7 +18,7 @@ module.exports = function (log, dir) {
 
   let batch = []
 
-  const name = 'about'
+  const name = 'profile'
   const { level, offset, stateLoaded, onData, writeBatch } = Plugin(
     dir,
     name,
@@ -27,7 +29,7 @@ module.exports = function (log, dir) {
   )
 
   function writeData(cb) {
-    level.batch(batch, { keyEncoding: 'json' }, cb)
+    level.batch(batch, { keyEncoding: 'json', valueEncoding: 'json' }, cb)
     batch = []
   }
 
@@ -53,8 +55,8 @@ module.exports = function (log, dir) {
       if (content.about != author) return batch.length
 
       updateProfileData(author, content)
-      
-      if (isFeed(author) && isFeed(to)) {
+
+      if (isFeed(author)) {
         batch.push({
           type: 'put',
           key: author,
@@ -88,14 +90,15 @@ module.exports = function (log, dir) {
   function beforeIndexUpdate(cb) {
     pull(
       pl.read(level, {
-        gte: [''],
-        lte: [undefined],
+        gte: '',
+        lte: undefined,
         keyEncoding: jsonCodec,
-        keys: false,
+        valueEncoding: jsonCodec,
+        keys: true
       }),
       pull.collect((err, data) => {
-        console.log("got profile data", data)
-        // FIXME: use profiles!
+        profiles = {}
+        data.forEach(x => profiles[x.key] = x.value)
         cb()
       })
     )
