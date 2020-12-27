@@ -49,6 +49,11 @@ exports.init = function(dir, overwriteConfig) {
       sbot.db.registerIndex(require('./indexes/contacts'))
     }
   })
+  .use({
+    init: function (sbot, config) {
+      sbot.db.registerIndex(require('./indexes/about-profile'))
+    }
+  })
   .use(require('./ssb-partial-replication'))
   .use(require('./simple-ooo'))
   .use(require('ssb-ws'))
