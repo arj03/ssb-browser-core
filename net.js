@@ -43,7 +43,7 @@ exports.init = function(dir, overwriteConfig) {
 
   var r = SecretStack(config)
   .use(require('ssb-db2'))
-  .use(require('ssb-db2/history-stream'))
+  .use(require('ssb-db2/compat'))
   .use(require('./ssb-partial-replication'))
   .use(require('./simple-ooo'))
   .use(require('ssb-ws'))

@@ -47,7 +47,6 @@ exports.init = function (dir, config) {
 
       // sbot convenience wrappers
       publish: net.db.publish,
-      // FIXME: net.ebt.onPost(data)
 
       // config
       hops: 1, // this means download full log for hops and partial logs for hops + 1
@@ -56,6 +55,7 @@ exports.init = function (dir, config) {
     // helper for rooms to allow connecting to friends directly
     SSB.net.friends = {
       hops: function(cb) {
+        // FIXME
         net.db.contacts.getGraphForFeed(SSB.net.id, (err, graph) => {
           let hops = {}
           graph.following.forEach(f => hops[f] = 1)

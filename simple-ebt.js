@@ -5,8 +5,6 @@ var path = require('path')
 var toPull = require('push-stream-to-pull-stream')
 var isFeed = require('ssb-ref').isFeed
 
-const { originalData } = require('ssb-db2/msg-utils')
-
 var AtomicFile = require('atomic-file')
 
 exports.name = 'ebt'
@@ -50,13 +48,13 @@ exports.init = function (sbot, config) {
       f.set(clock)
     },
     getAt: function (pair, cb) {
-      SSB.db.getDataFromAuthorSequence([pair.id, pair.sequence], (err, value) => {
+      sbot.getAtSequence([pair.id, pair.sequence], (err, data) => {
         if (err) cb(err)
-        else cb(null, originalData(value).value)
+        else cb(null, data ? data.value : null)
       })
     },
     append: function (msg, cb) {
-      SSB.db.validateAndAdd(msg, (err, msg) => {
+      SSB.db.add(msg, (err, msg) => {
         cb(err && err.fatal ? err : null, msg)
       })
     },
@@ -78,6 +76,10 @@ exports.init = function (sbot, config) {
   }
 
   SSB.events.on('SSB: loaded', updateClock)
+
+  SSB.db.post(function (msg) {
+    ebt.onAppend(msg.value)
+  })
 
   function onClose() {
     sbot.emit('replicate:finish', ebt.state.clock)

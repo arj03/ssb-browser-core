@@ -1,7 +1,7 @@
 const pull = require('pull-stream')
 const pullCont = require('pull-cont')
 const sort = require('ssb-sort')
-const { originalValue, originalData } = require('./msg-utils')
+const { reEncrypt } = require('ssb-db2/indexes/private')
 
 exports.manifest = {
   getFeed: 'source',
@@ -53,7 +53,7 @@ exports.init = function (sbot, config) {
         SSB.db.getMessagesByRoot(msgId, (err, msgs) => {
           if (err) return cb(err)
           msgs = msgs.filter(x => !x.value.meta || x.value.meta.private !== 'true')
-          cb(null, [originalValue(msg), ...sort(msgs).map(m => originalValue(m.value))])
+          cb(null, [reEncrypt(msg), ...sort(msgs).map(m => reEncrypt(m.value))])
         })
       })
     },
@@ -90,12 +90,12 @@ exports.init = function (sbot, config) {
         pullCont(function(cb) {
           if (seq) // sequences starts with 1, offset starts with 0 ;-)
             SSB.db.jitdb.query(query, seq - 1, limit, true, (err, results) => {
-              results = results.filter(x => !x.value.meta || x.value.meta.private !== 'true').map(x => x.value)
+              results = results.map(x => reEncrypt(x).value)
               cb(err, pull.values(results))
             })
           else
             SSB.db.jitdb.query(query, (err, results) => {
-              results = results.filter(x => !x.value.meta || x.value.meta.private !== 'true').map(x => x.value)
+              results = results.map(x => reEncrypt(x).value)
               cb(err, pull.values(results))
             })
         })
@@ -103,4 +103,3 @@ exports.init = function (sbot, config) {
     }
   }
 }
-
