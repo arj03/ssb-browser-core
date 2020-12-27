@@ -57,13 +57,6 @@ module.exports = function (log, dir) {
           key: [author, to],
           value: getStatus(author, content)
         })
-
-        /* FIXME
-        if (from == SSB.net.id) {
-          for (var i = 0; i < notifyOnGraphChanges.length; ++i)
-            notifyOnGraphChanges[i]()
-        }
-        */
       }
     }
 
@@ -93,16 +86,6 @@ module.exports = function (log, dir) {
     )
   }
 
-  // FIXME
-  let notifyOnGraphChanges = []
-  function onGraphChange(cb) {
-    notifyOnGraphChanges.push(cb)
-    function remove() {
-      notifyOnGraphChanges = notifyOnGraphChanges.filter(n => n != cb)
-    }
-    return remove
-  }
-  
   function isFollowing(source, dest) {
     if (!hops[source]) return false
     return hops[source][dest] === 1
