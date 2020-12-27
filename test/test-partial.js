@@ -1,14 +1,13 @@
 const test = require('tape')
 const pull = require('pull-stream')
 
-const dir = '/tmp/ssb-browser-validate'
+const dir = '/tmp/ssb-browser-partial'
 
 require('rimraf').sync(dir)
 
 require('../core.js').init(dir)
 
 SSB.events.on('SSB: loaded', function() {
-
   test('Base', t => {
     const post = { type: 'post', text: 'Testing!' }
 
