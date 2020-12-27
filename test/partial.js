@@ -135,6 +135,7 @@ SSB.events.on('SSB: loaded', function() {
       SSB.publish(reply, (err, replyMsg) => {
         SSB.db.onDrain(() => {
           SSB.net.partialReplication.getTangle(threadMsg.key, (err, results) => {
+            t.error(err, 'no err')
             t.equal(results.length, 2)
             t.equal(results[0].content.text, content.text)
             t.equal(results[1].content.text, reply.text)
@@ -156,7 +157,8 @@ SSB.events.on('SSB: loaded', function() {
       SSB.publish(reply, (err, replyMsg) => {
         SSB.db.onDrain(() => {
           SSB.net.partialReplication.getTangle(threadMsg.key, (err, results) => {
-            t.equal(results.length, 0)
+            t.equal(results.length, 1, "only the original message")
+            t.equal(results[0].text, content.text)
             t.end()
           })
         })
@@ -172,8 +174,8 @@ SSB.events.on('SSB: loaded', function() {
         pull(
           SSB.net.partialReplication.getMessagesOfType({ id: SSB.net.id, type: 'post', keys: false }),
           pull.collect((err, results) => {
-            t.equal(results.length, 4)
-            t.ok(results.every(x => typeof x.content !== 'string'))
+            t.equal(results.length, 7)
+            t.equal(results.filter(x => typeof x.content !== 'string').length, 4)
             t.end()
           })
         )

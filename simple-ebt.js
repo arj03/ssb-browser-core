@@ -54,7 +54,7 @@ exports.init = function (sbot, config) {
       })
     },
     append: function (msg, cb) {
-      SSB.db.add(msg, (err, msg) => {
+      sbot.db.add(msg, (err, msg) => {
         cb(err && err.fatal ? err : null, msg)
       })
     },
@@ -62,7 +62,7 @@ exports.init = function (sbot, config) {
   })
 
   function updateClock(cb) {
-    SSB.db.getAllLatest((err, last) => {
+    sbot.db.getAllLatest((err, last) => {
       var clock = {}
       for (var k in last) {
         clock[k] = last[k].sequence
@@ -77,7 +77,7 @@ exports.init = function (sbot, config) {
 
   SSB.events.on('SSB: loaded', updateClock)
 
-  SSB.db.post(function (msg) {
+  sbot.db.post(function (msg) {
     ebt.onAppend(msg.value)
   })
 

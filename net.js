@@ -42,8 +42,13 @@ exports.init = function(dir, overwriteConfig) {
   }, overwriteConfig)
 
   var r = SecretStack(config)
-  .use(require('ssb-db2'))
+  .use(require('ssb-db2/db'))
   .use(require('ssb-db2/compat'))
+  .use({
+    init: function (sbot, config) {
+      sbot.db.registerIndex(require('./indexes/contacts'))
+    }
+  })
   .use(require('./ssb-partial-replication'))
   .use(require('./simple-ooo'))
   .use(require('ssb-ws'))
