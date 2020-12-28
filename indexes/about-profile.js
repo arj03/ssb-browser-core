@@ -35,23 +35,24 @@ module.exports = function (log, dir) {
 
   function handleData(record, processed) {
     if (record.offset < offset.value) return batch.length
-    if (!record.value) return batch.length // deleted
+    const recBuffer = record.value
+    if (!recBuffer) return batch.length // deleted
 
     let p = 0 // note you pass in p!
-    p = bipf.seekKey(record.value, p, bValue)
+    p = bipf.seekKey(recBuffer, p, bValue)
     if (!~p) return batch.length
 
-    const pAuthor = bipf.seekKey(record.value, p, bAuthor)
-    const author = bipf.decode(record.value, pAuthor)
+    const pAuthor = bipf.seekKey(recBuffer, p, bAuthor)
+    const author = bipf.decode(recBuffer, pAuthor)
 
-    const pContent = bipf.seekKey(record.value, p, bContent)
+    const pContent = bipf.seekKey(recBuffer, p, bContent)
     if (!~pContent) return batch.length
 
-    const pType = bipf.seekKey(record.value, pContent, bType)
+    const pType = bipf.seekKey(recBuffer, pContent, bType)
     if (!~pType) return batch.length
 
-    if (bipf.compareString(record.value, pType, bAbout) === 0) {
-      const content = bipf.decode(record.value, pContent)
+    if (bipf.compareString(recBuffer, pType, bAbout) === 0) {
+      const content = bipf.decode(recBuffer, pContent)
       if (content.about != author) return batch.length
 
       updateProfileData(author, content)
