@@ -1,6 +1,8 @@
-module.exports = function (partial, contacts) {
+module.exports = function (dir, contacts) {
   const pull = require('pull-stream')
   const paramap = require('pull-paramap')
+  const Partial = require('./partial')
+  const partial = Partial(dir)
 
   function syncMessages(feed, key, rpcCall, partialState, cb) {
     if (!partialState[feed] || !partialState[feed][key]) {
@@ -100,6 +102,47 @@ module.exports = function (partial, contacts) {
   return {
     syncFeeds,
     syncing,
+    status: function() {
+      const partialState = partial.getSync()
+      const graph = contacts.getGraphForFeedSync(config.keys.public)
+
+      // full
+      let fullSynced = 0
+      let totalFull = 0
+
+      // partial
+      let profilesSynced = 0
+      let contactsSynced = 0
+      let messagesSynced = 0
+      let totalPartial = 0
+
+      graph.following.forEach(relation => {
+        if (partialState[relation] && partialState[relation]['full'])
+          fullSynced += 1
+
+        totalFull += 1
+      })
+
+      graph.extended.forEach(relation => {
+        if (partialState[relation] && partialState[relation]['syncedProfile'])
+          profilesSynced += 1
+        if (partialState[relation] && partialState[relation]['syncedContacts'])
+          contactsSynced += 1
+        if (partialState[relation] && partialState[relation]['syncedMessages'])
+          messagesSynced += 1
+
+        totalPartial += 1
+      })
+
+      return {
+        totalPartial,
+        profilesSynced,
+        contactsSynced,
+        messagesSynced,
+        totalFull,
+        fullSynced,
+      }
+    },
     inSync: function() {
       const partialState = partial.getSync()
       const graph = contacts.getGraphForFeedSync(SSB.net.id)

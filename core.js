@@ -1,5 +1,4 @@
 exports.init = function (dir, config) {
-  const pull = require('pull-stream')
   const FeedSyncer = require('./feed-syncer')
 
   const EventEmitter = require('events')
@@ -36,7 +35,7 @@ exports.init = function (dir, config) {
       db: net.db,
       net,
       dir,
-      feedSyncer: FeedSyncer(net.db.partial, net.db.contacts),
+      feedSyncer: FeedSyncer(dir, net.db.contacts),
 
       getPeer: helpers.getPeer,
 
