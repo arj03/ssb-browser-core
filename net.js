@@ -46,6 +46,11 @@ exports.init = function(dir, overwriteConfig) {
   .use(require('ssb-db2/compat'))
   .use({
     init: function (sbot, config) {
+      sbot.db.registerIndex(require('ssb-db2/indexes/full-mentions'))
+    }
+  })
+  .use({
+    init: function (sbot, config) {
       sbot.db.registerIndex(require('./indexes/contacts'))
     }
   })
