@@ -8,14 +8,13 @@ module.exports = function (dir, id, contacts) {
     if (!partialState[feed] || !partialState[feed][key]) {
       pull(
         rpcCall(),
-        pull.asyncMap(SSB.db.validateAndAddOOO),
+        pull.asyncMap(SSB.db.addOOO),
         pull.collect((err, msgs) => {
           if (err) {
             console.error(err.message)
             return cb(err)
           }
 
-          SSB.state.queue = []
           var newState = {}
           newState[key] = true
           partial.updateState(feed, newState, (err) => { cb(err, feed) })
@@ -37,18 +36,12 @@ module.exports = function (dir, id, contacts) {
           pull.values(graph.following),
           pull.asyncMap((feed, cb) => {
             if (!partialState[feed] || !partialState[feed]['full']) {
-
-              // we might already have partial state about the feed,
-              // so when we do a full sync we need to clear the state
-              delete SSB.state.feeds[feed]
-
               pull(
                 rpc.partialReplication.getFeed({ id: feed, seq: 0, keys: false }),
-                pull.asyncMap(SSB.db.validateAndAdd),
+                pull.asyncMap(SSB.db.add),
                 pull.collect((err) => {
                   if (err) throw err
 
-                  SSB.state.queue = []
                   partial.updateState(feed, { full: true }, cb)
                 })
               )
