@@ -35,7 +35,7 @@
     "ssb-ws": "^6.2.3"
   },
   "devDependencies": {
-    "browserify": "^16.5.2",
+    "browserify": "^17.0.0",
     "node-localstorage": "^2.1.5",
     "rimraf": "^3.0.2",
     "tap-spec": "^5.0.0",
