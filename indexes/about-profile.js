@@ -18,7 +18,7 @@ module.exports = function (log, dir) {
 
   let batch = []
 
-  const name = 'profile'
+  const name = 'profiles'
   const { level, offset, stateLoaded, onData, writeBatch } = Plugin(
     dir,
     name,
