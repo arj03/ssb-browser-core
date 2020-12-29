@@ -1,4 +1,4 @@
-module.exports = function (dir, contacts) {
+module.exports = function (dir, id, contacts) {
   const pull = require('pull-stream')
   const paramap = require('pull-paramap')
   const Partial = require('./partial')
@@ -104,7 +104,7 @@ module.exports = function (dir, contacts) {
     syncing,
     status: function() {
       const partialState = partial.getSync()
-      const graph = contacts.getGraphForFeedSync(config.keys.public)
+      const graph = contacts.getGraphForFeedSync(id)
 
       // full
       let fullSynced = 0

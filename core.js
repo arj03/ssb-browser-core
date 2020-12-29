@@ -35,7 +35,7 @@ exports.init = function (dir, config) {
       db: net.db,
       net,
       dir,
-      feedSyncer: FeedSyncer(dir, net.db.contacts),
+      feedSyncer: FeedSyncer(dir, net.id, net.db.getIndexes().contacts),
 
       getPeer: helpers.getPeer,
 

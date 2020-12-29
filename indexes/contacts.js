@@ -172,6 +172,7 @@ module.exports = function (log, dir) {
     get,
     getFeed,
     getGraphForFeed,
+    getGraphForFeedSync,
     isFollowing,
     isBlocking,
   }
