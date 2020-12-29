@@ -72,7 +72,7 @@ exports.removeBlobs = function() {
 exports.EBTSync = function(rpc)
 {
   console.log("doing ebt with", rpc.id)
-  SSB.db.contacts.getGraphForFeed(SSB.net.id, (err, graph) => {
+  SSB.db.getIndexes().contacts.getGraphForFeed(SSB.net.id, (err, graph) => {
     SSB.net.ebt.updateClock(() => {
       SSB.net.ebt.request(SSB.net.id, true)
       graph.following.forEach(feed => SSB.net.ebt.request(feed, true))
