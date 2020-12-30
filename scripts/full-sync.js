@@ -46,7 +46,7 @@ SSB.events.on('SSB: loaded', function() {
         id: "@VIOn+8a/vaQvv/Ew3+KriCngyUXHxHbjXkj4GafBAY0=.ed25519",
         seq: 0, keys: false
       }),
-      pull.asyncMap(SSB.db.validateAndAddOOO),
+      pull.asyncMap(SSB.db.add),
       pull.collect((err, msgs) => {
         if (err) throw err
         
