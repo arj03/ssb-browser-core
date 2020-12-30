@@ -13,6 +13,7 @@
     "epidemic-broadcast-trees": "^8.0.0",
     "gossip-query": "^2.0.2",
     "polyraf": "^1.1.0",
+    "promisify-4loc": "^1.0.0",
     "pull-cont": "^0.1.1",
     "pull-defer": "^0.2.3",
     "pull-notify": "^0.1.1",
