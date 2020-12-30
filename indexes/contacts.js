@@ -3,6 +3,7 @@ const pull = require('pull-stream')
 const pl = require('pull-level')
 const jsonCodec = require('flumecodec/json')
 const Plugin = require('ssb-db2/indexes/plugin')
+const promisify = require('promisify-4loc')
 
 const isFeed = require('ssb-ref').isFeed
 
@@ -109,7 +110,21 @@ module.exports = function (log, dir) {
   function getGraphForFeed(feed, cb) {
     getFeed(feed, (err, data) => {
       hops[feed] = data
-      cb(err, getGraphForFeedSync(feed))
+      let feedsToGet = []
+      for (var other in data) {
+        if (data[other] > 0) {
+          const follow = other
+          if (!hops[follow]) {
+            feedsToGet.push(promisify((cb) => {
+              getFeed(follow, (err, data) => {
+                hops[follow] = data
+                cb()
+              })
+            })())
+          }
+        }
+      }
+      Promise.all(feedsToGet).then(() => cb(err, getGraphForFeedSync(feed)))
     })
   }
 
