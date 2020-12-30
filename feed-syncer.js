@@ -1,8 +1,9 @@
-module.exports = function (dir, id, contacts) {
+module.exports = function (dir, id, db) {
   const pull = require('pull-stream')
   const paramap = require('pull-paramap')
   const Partial = require('./partial')
   const partial = Partial(dir)
+  const contacts = db.getIndex('contacts')
 
   function syncMessages(feed, key, rpcCall, partialState, cb) {
     if (!partialState[feed] || !partialState[feed][key]) {
@@ -36,15 +37,18 @@ module.exports = function (dir, id, contacts) {
           pull.values(graph.following),
           pull.asyncMap((feed, cb) => {
             if (!partialState[feed] || !partialState[feed]['full']) {
-              pull(
-                rpc.partialReplication.getFeed({ id: feed, seq: 0, keys: false }),
-                pull.asyncMap(SSB.db.add),
-                pull.collect((err) => {
-                  if (err) throw err
+              db.getAllLatest((err, latest) => {
+                const latestSeq = latest[feed] ? latest[feed].sequence + 1 : 0
+                pull(
+                  rpc.partialReplication.getFeed({ id: feed, seq: latestSeq, keys: false }),
+                  pull.asyncMap(SSB.db.add),
+                  pull.collect((err) => {
+                    if (err) throw err
 
-                  partial.updateState(feed, { full: true }, cb)
-                })
-              )
+                    partial.updateState(feed, { full: true }, cb)
+                  })
+                )
+              })
             } else
               cb()
           }),

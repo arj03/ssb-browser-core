@@ -35,7 +35,7 @@ exports.init = function (dir, config) {
       db: net.db,
       net,
       dir,
-      feedSyncer: FeedSyncer(dir, net.id, net.db.getIndexes().contacts),
+      feedSyncer: FeedSyncer(dir, net.id, net.db),
 
       getPeer: helpers.getPeer,
 
@@ -56,7 +56,7 @@ exports.init = function (dir, config) {
     // helper for rooms to allow connecting to friends directly
     SSB.net.friends = {
       hops: function(cb) {
-        net.db.getIndexes().contacts.getGraphForFeed(SSB.net.id, (err, graph) => {
+        net.db.getIndex('contacts').getGraphForFeed(SSB.net.id, (err, graph) => {
           let hops = {}
           graph.following.forEach(f => hops[f] = 1)
           graph.extended.forEach(f => hops[f] = 2)
