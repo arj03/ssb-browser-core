@@ -64,11 +64,11 @@ exports.init = function (sbot, config) {
   function updateClock(cb) {
     sbot.db.getAllLatest((err, last) => {
       var clock = {}
-      for (var k in last) {
+      for (var k in last)
         clock[k] = last[k].sequence
-      }
 
-      ebt.state.clock = clock || {}
+      //console.log("EBT updated clock", clock)
+      ebt.state.clock = clock
       ebt.update()
 
       if (cb) cb()
