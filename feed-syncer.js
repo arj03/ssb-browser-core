@@ -1,15 +1,26 @@
 module.exports = function (dir, id, db) {
   const pull = require('pull-stream')
   const paramap = require('pull-paramap')
+  const validate = require('ssb-validate')
   const Partial = require('./partial')
   const partial = Partial(dir)
   const contacts = db.getIndex('contacts')
 
   function syncMessages(feed, key, rpcCall, partialState, cb) {
     if (!partialState[feed] || !partialState[feed][key]) {
+      let adder = SSB.db.addOOO // this should be default, but is too slow
+      if (key == 'syncedMessages') {
+        const oooState = validate.initial()
+        adder = (msg, cb) => SSB.db.addOOOStrictOrder(msg, oooState, cb)
+      } else { // hack
+        adder = (msg, cb) => {
+          const oooState = validate.initial()
+          SSB.db.addOOOStrictOrder(msg, oooState, cb)
+        }
+      }
       pull(
         rpcCall(),
-        pull.asyncMap(SSB.db.addOOO),
+        pull.asyncMap(adder),
         pull.collect((err, msgs) => {
           if (err) {
             console.error(err.message)
