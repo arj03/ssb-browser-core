@@ -3,7 +3,10 @@ exports.init = function (dir, config) {
 
   const EventEmitter = require('events')
   SSB = {
-    events: new EventEmitter()
+    events: new EventEmitter(),
+    dbOperators: Object.assign({},
+                               require('ssb-db2/operators'),
+                               require('ssb-db2/operators/full-mentions')),
   }
 
   // outside browser
