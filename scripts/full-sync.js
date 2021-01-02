@@ -55,7 +55,7 @@ SSB.events.on('SSB: loaded', function() {
 
         console.log("starting sync")
         SSB.feedSyncer.syncFeeds(rpc, () => {
-          console.log(SSB.db.getStatus())
+          console.log(Object.assign(SSB.db.getStatus(), SSB.feedSyncer.status()))
         })
       })
     )
