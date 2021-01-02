@@ -113,7 +113,7 @@ module.exports = function (log, dir) {
       cb(err, getGraphForFeedSync(feed))
     })
   }
-  
+
   function getGraphForFeed(feed, cb) {
     getFeed(feed, (err, data) => {
       hops[feed] = data
