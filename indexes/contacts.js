@@ -107,6 +107,13 @@ module.exports = function (log, dir) {
     return hops[source][dest] === -1
   }
 
+  function getGraphForFeedHops1(feed, cb) {
+    getFeed(feed, (err, data) => {
+      hops[feed] = data
+      cb(err, getGraphForFeedSync(feed))
+    })
+  }
+  
   function getGraphForFeed(feed, cb) {
     getFeed(feed, (err, data) => {
       hops[feed] = data
@@ -185,7 +192,7 @@ module.exports = function (log, dir) {
     close: level.close.bind(level),
 
     get,
-    getFeed,
+    getGraphForFeedHops1,
     getGraphForFeed,
     getGraphForFeedSync,
     isFollowing,
