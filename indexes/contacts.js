@@ -115,23 +115,26 @@ module.exports = function (log, dir) {
   }
 
   function getGraphForFeed(feed, cb) {
-    getFeed(feed, (err, data) => {
-      hops[feed] = data
-      let feedsToGet = []
-      for (var other in data) {
-        if (data[other] > 0) {
-          const follow = other
-          if (!hops[follow]) {
-            feedsToGet.push(promisify((cb) => {
-              getFeed(follow, (err, data) => {
-                hops[follow] = data
-                cb()
-              })
-            })())
+    SSB.db.onDrain('base', () => {
+      getFeed(feed, (err, data) => {
+        hops[feed] = data
+        let feedsToGet = []
+        for (var other in data) {
+          if (data[other] > 0) {
+            const follow = other
+            if (!hops[follow]) {
+              feedsToGet.push(promisify((cb) => {
+                getFeed(follow, (err, data) => {
+                  if (!err && Object.keys(data).length > 0)
+                    hops[follow] = data
+                  cb()
+                })
+              })())
+            }
           }
         }
-      }
-      Promise.all(feedsToGet).then(() => cb(err, getGraphForFeedSync(feed)))
+        Promise.all(feedsToGet).then(() => cb(err, getGraphForFeedSync(feed)))
+      })
     })
   }
 
