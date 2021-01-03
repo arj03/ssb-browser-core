@@ -14,7 +14,7 @@ SSB.events.on('SSB: loaded', function() {
                          following: true }
     SSB.publish(contactMsg, (err) => {
       SSB.db.onDrain('contacts', () => {
-        SSB.db.getIndexes().contacts.getGraphForFeed(SSB.net.id, (err, graph) => {
+        SSB.db.getIndex('contacts').getGraphForFeed(SSB.net.id, (err, graph) => {
           t.equal(graph.following[0], contactMsg.contact)
           t.end()
         })

@@ -12,7 +12,7 @@ SSB.events.on('SSB: loaded', function() {
     const post = { type: 'post', text: 'Testing!' }
 
     SSB.publish(post, (err, postMsg) => {
-      SSB.db.onDrain(() => {
+      SSB.db.onDrain('ebt', () => {
         pull(
           SSB.net.createHistoryStream({ id: SSB.net.id, keys: false }),
           pull.collect((err, results) => {
