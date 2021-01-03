@@ -138,7 +138,6 @@ module.exports = function (log, dir) {
     })
   }
 
-  // FIXME: cache
   let hops = {}
 
   // might return empty when hops is not loaded yet
