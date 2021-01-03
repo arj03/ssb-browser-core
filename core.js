@@ -8,20 +8,6 @@ exports.init = function (dir, config) {
   }
   SSB.dbOperators.mentions = require('ssb-db2/operators/full-mentions')
 
-  // outside browser
-  /*
-  if (typeof localStorage === "undefined" || localStorage === null) {
-    const path = require('path')
-    const fs = require('fs')
-
-    if (!fs.existsSync(dir))
-      fs.mkdirSync(dir)
-
-    var LocalStorage = require('node-localstorage').LocalStorage
-    localStorage = new LocalStorage(path.join(dir, 'localstorage'))
-  }
-  */
-
   const s = require('sodium-browserify')
   s.events.on('sodium-browserify:wasm loaded', function() {
 
