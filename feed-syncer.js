@@ -1,9 +1,7 @@
-module.exports = function (dir, id, db) {
+module.exports = function (id, partial, db) {
   const pull = require('pull-stream')
   const paramap = require('pull-paramap')
   const validate = require('ssb-validate')
-  const Partial = require('./partial')
-  const partial = Partial(dir)
   const contacts = db.getIndex('contacts')
 
   function syncMessages(feed, key, rpcCall, partialState, cb) {

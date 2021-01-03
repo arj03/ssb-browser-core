@@ -19,11 +19,14 @@ exports.init = function (dir, config) {
 
     var helpers = require('./core-helpers')
 
+    const Partial = require('./partial')
+    const partial = Partial(dir)
+
     SSB = Object.assign(SSB, {
       db: net.db,
       net,
       dir,
-      feedSyncer: FeedSyncer(dir, net.id, net.db),
+      feedSyncer: FeedSyncer(net.id, partial, net.db),
 
       getPeer: helpers.getPeer,
 
@@ -36,6 +39,8 @@ exports.init = function (dir, config) {
 
       // sbot convenience wrappers
       publish: net.db.publish,
+
+      partial,
 
       // config
       hops: 1, // this means download full log for hops and partial logs for hops + 1
