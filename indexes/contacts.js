@@ -115,7 +115,7 @@ module.exports = function (log, dir) {
   }
 
   function getGraphForFeed(feed, cb) {
-    SSB.db.onDrain('base', () => {
+    SSB.db.onDrain('contacts', () => {
       getFeed(feed, (err, data) => {
         hops[feed] = data
         let feedsToGet = []
