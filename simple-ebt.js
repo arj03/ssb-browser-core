@@ -79,7 +79,7 @@ exports.init = function (sbot, config) {
 
   sbot.db.post(function (msg) {
     // FIXME: maybe handle block and follow here
-    ebt.onAppend(msg.value)
+    sbot.db.onDrain('ebt', () => ebt.onAppend(msg.value))
   })
 
   function onClose() {
