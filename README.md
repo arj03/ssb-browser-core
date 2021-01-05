@@ -7,13 +7,13 @@ not limited to, of course). The key of your feed is stored in the
 browser together with the log, indexes and smaller images. To reduce
 storage and network requirements, partial replication has been
 implemented. Wasm is used for crypto and is around 90% the speed of
-the C implementation. A WebSocket is used to connect to pubs. The
-`bundle-core.js` file in dist/ is roughly 2mb.
+the C implementation. A WebSocket is used to connect to pubs or
+rooms. The `bundle-core.js` file in dist/ is roughly 2mb.
 
 Replication in the browser is quite a bit slower than in node, around
-4-5x. There doesn't seem to be a single cause, it appears to be all
-the diferrent layers that are [slower]: end-to-end encryption,
-database write etc.
+2x. There doesn't seem to be a single cause, it appears to be all the
+diferrent layers that are [slower]: end-to-end encryption, database
+write etc.
 
 SSB conn is used for connections and rooms are supported. Partial
 replication is implemented which allows two connected browsers to do a
@@ -25,7 +25,9 @@ battery.
 
 ![Diagram](./diagram.svg)
 
-Boxes represent modules, some internal to browser-core and some external. Ellipses in gray represents overall areas and are thus not modules.
+Boxes represent modules, some internal to browser-core and some
+external. Ellipses in gray represents overall areas and are thus not
+modules.
 
 <details>
 3`graphviz
@@ -77,72 +79,7 @@ Default is 1.
 
 ## db
 
-### get(id, cb)
-
-Will get a message with `id` from the database. If the message is not
-found an err will be returned.
-
-### getSync(id, cb)
-
-Same as `get` except this method will wait for the indexes to be in
-sync with the main log.
-
-### validateAndAdd(msg, cb)
-
-Validate a raw message (without id and timestamp), meaning if its the
-first message from the feed, validate it without the previous pointer
-otherwise it has to be the next message for the feed. Callback is the
-stored message (id, timestamp, value = original message) or err.
-
-### validateAndAddOOO(msg, cb)
-
-Works the same way as validateAndAdd, expect that it will always do
-validate without the previous pointer, meaning it can be used to
-insert out of order messages from the feed.
-
-### add(msg, cb)
-
-Add a raw message (without id and timestamp) to the database. Callback
-is the stored message (id, timestamp, value = original message) or
-err.
-
-### get(key, cb)
-
-Get a message based on the key. Callback is the stored message (id,
-timestamp, value = original message) or err.
-
-### del(key, cb)
-
-Remove a message from the database. Please note that this can create
-problems with replication, in that a remote peer that does not have
-this message will not be able to get this messages and any message
-that comes afterwards.
-
-### deleteFeed(feedId, cb)
-
-Delete all messages for a particular feed and removes any state
-associated with the feed.
-
-### getStatus()
-
-Gets the current db status, same functionality as
-[db.status](https://github.com/ssbc/ssb-db#dbstatus) in ssb-db.
-
-### jitdb
-
-Returns a [jitdb] instance of the database useful for queries.
-
-### onDrain(cb)
-
-Will cb when all outstanding writes for the log has been written to storage.
-
-### getLatest(feedId, cb)
-
-Returns the latest state ({ id (msg key), sequence, timestamp }) for a feedId.
-
-### getDataFromAuthorSequence()
-
-Internal method for EBT.
+This is the [ssb-db2] module.
 
 ### contacts
 
@@ -154,16 +91,6 @@ object of: following, blocking and extended given the feed.
 ### profiles.get(cb)
 
 Returns the profiles index.
-
-### getMessagesByRoot(key, cb)
-
-Returns all the messages for a particular root in sorted order.
-
-### getMessagesByMention(key, cb)
-
-Returns a sorted array messages that has a particular key in the
-mentions array. This is useful for notifications for a particular
-feed.
 
 ## net
 
@@ -263,19 +190,6 @@ Other things directly on the global SSB object
 
 The path to where the database and blobs are stored.
 
-### validate
-
-The [ssb-validate] module.
-
-### state
-
-The current [state](https://github.com/ssbc/ssb-validate#state) of
-known feeds.
-
-### publish(msg, cb)
-
-Validates a message and stores it in the database. See db.add for format.
-
 ### getPeer()
 
 Gets one of the connected peers that is not a room server.
@@ -325,10 +239,10 @@ For a smaller bundle file you can apply (patch -p0 < x.patch):
 [ssb-browser-demo]: https://github.com/arj03/ssb-browser-demo
 [secret-stack]: https://github.com/ssbc/secret-stack
 [ssb-ws]: https://github.com/ssbc/ssb-ws
-[ssb-validate]: https://github.com/ssbc/ssb-validate
 [ssb-blob-files]: https://github.com/ssbc/ssb-blob-files
 [ssb-ooo]: https://github.com/ssbc/ssb-ooo
 [ssb-conn]: https://github.com/staltz/ssb-conn
+[ssb-db2]: https://github.com/ssb-ngi-pointer/ssb-db2
 
 [ssb-get-thread]: https://github.com/arj03/ssb-get-thread
 [ssb-partial-replication]: https://github.com/arj03/ssb-partial-replication
