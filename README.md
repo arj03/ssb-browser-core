@@ -26,21 +26,20 @@ battery.
 ![Diagram](./diagram.svg)
 
 <details>
+3`graphviz
 digraph hierarchy {
+nodesep=0.6 node [shape=record];
 
-  nodesep=0.6
-  node [shape=record];
-  
-  { rank=same SSBBrowserCore Validate Keys }
-  { rank=same SSBBrowserCore SecretStack MuxRPC }
+{ rank=same SSBBrowserCore Validate Keys } 
+{ rank=same SSBBrowserCore SecretStack MuxRPC }
 
-  SSBBrowserCore->{Network Connections Sync DB Feed}
-                   Feed->{Validate Keys}
-                   DB->{JITDB AsyncFlumelog Indexes}
-                   Connections->{SSBconn Rooms}
-                   Network->{SecretStack MuxRPC SHS}
-                   Sync->{Partial EBT Blobs}
-}
+Network [shape=ellipse style=filled]
+Connections [shape=ellipse style=filled]
+Sync [shape=ellipse style=filled]
+Feed [shape=ellipse style=filled]
+
+SSBBrowserCore->{Network Connections Sync SSBDB2 Feed} Feed->{Validate Keys} Connections->{SSBconn Rooms} Network->{SecretStack MuxRPC SecretHandshake} Sync->{FeedSyncer EBT Blobs} SSBDB2->{Indexes JITDB AsyncAppendOnlyLog } }
+3`
 </details>
 
 # api
