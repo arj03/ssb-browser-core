@@ -37,9 +37,6 @@ exports.init = function (dir, config) {
       box: require('ssb-keys').box,
       blobFiles: require('ssb-blob-files'),
 
-      // sbot convenience wrappers
-      publish: net.db.publish,
-
       partial,
 
       // config
