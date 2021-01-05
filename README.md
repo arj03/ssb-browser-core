@@ -55,6 +55,9 @@ The api is not meant to be 100% compatible with regular
 ssb-db. Overall there are two major parts: [`db`](#db) and
 [`net`](#net).
 
+I highly recommend looking at [ssb-browser-demo] for an example of how
+this library can be used to build applications.
+
 # config
 
 Loading the bundle-core file as above will use `browser.js`, meaning
