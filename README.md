@@ -25,6 +25,8 @@ battery.
 
 ![Diagram](./diagram.svg)
 
+Boxes represent modules, some internal to browser-core and some external. Ellipses in gray represents overall areas and are thus not modules.
+
 <details>
 3`graphviz
 digraph hierarchy {
