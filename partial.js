@@ -9,26 +9,33 @@
 */
 
 module.exports = function (dir) {
-  const AtomicFile = require('atomic-file')
+  const { readFile, writeFile } = require('atomically-universal')
   const debounce = require('lodash.debounce')
   const path = require('path')
+  const DeferredPromise = require('p-defer')
 
-  const queue = require('../waiting-queue')()
+  const stateLoaded = DeferredPromise()
   var state = {}
 
-  var f = AtomicFile(path.join(dir, "indexes/partial.json"))
+  const filename = path.join(dir, "indexes/partial.json")
 
-  f.get((err, data) => {
-    if (data)
-      state = data.state
+  function get(cb) {
+    readFile(filename).then((data) => {
+      if (data)
+        state = JSON.parse(data).state
 
-    queue.done(null, state)
-  })
+      stateLoaded.resolve()
+      cb(null, state)
+    }).catch((err) => {
+      stateLoaded.resolve()
+      cb(err, {})
+    })
+  }
 
   function atomicSave()
   {
-    f.set({ state }, (err) => {
-      if (err) console.error("error saving partial", err)
+    writeFile(filename, JSON.stringify({ state }), { fsyncWait: false }).catch((err) => {
+      console.error("error saving partial", err)
     })
   }
   var saveState = debounce(atomicSave, 1000, { leading: true })
@@ -40,7 +47,7 @@ module.exports = function (dir) {
 
   return {
     updateState: function(feedId, updateFeedState, cb) {
-      queue.get(() => {
+      stateLoaded.promise.then(() => {
         let feedState = state[feedId] || {}
         state[feedId] = Object.assign(feedState, updateFeedState)
         save(cb)
@@ -48,19 +55,20 @@ module.exports = function (dir) {
     },
 
     removeFeed: function(feedId, cb) {
-      queue.get(() => {
+      stateLoaded.promise.then(() => {
         delete state[feedId]
         save(cb)
       })
     },
 
-    get: queue.get,
+    get,
     getSync: function() {
       return state
     },
 
     remove: function(cb) {
-      f.destroy(cb)
+      // FIXME
+      //f.destroy(cb)
     }
   }
 }

@@ -42,7 +42,23 @@ exports.init = function(dir, overwriteConfig) {
   }, overwriteConfig)
 
   var r = SecretStack(config)
-  .use(require('./ssb-db'))
+  .use(require('ssb-db2/db'))
+  .use(require('ssb-db2/compat'))
+  .use({
+    init: function (sbot, config) {
+      sbot.db.registerIndex(require('ssb-db2/indexes/full-mentions'))
+    }
+  })
+  .use({
+    init: function (sbot, config) {
+      sbot.db.registerIndex(require('./indexes/contacts'))
+    }
+  })
+  .use({
+    init: function (sbot, config) {
+      sbot.db.registerIndex(require('./indexes/about-profile'))
+    }
+  })
   .use(require('./ssb-partial-replication'))
   .use(require('./simple-ooo'))
   .use(require('ssb-ws'))
@@ -54,9 +70,9 @@ exports.init = function(dir, overwriteConfig) {
   ()
 
   r.sync = function(rpc) {
-    if (SSB.db.feedSyncer.syncing)
+    if (SSB.feedSyncer.syncing)
       ; // only one can sync at a time
-    else if (SSB.db.feedSyncer.inSync())
+    else if (SSB.feedSyncer.inSync())
       helpers.EBTSync(rpc)
     else
       helpers.fullSync(rpc)

@@ -1,7 +1,16 @@
 const pull = require('pull-stream')
 const pullCont = require('pull-cont')
 const sort = require('ssb-sort')
-const { originalValue, originalData } = require('./msg-utils')
+const { reEncrypt } = require('ssb-db2/indexes/private')
+const {
+  and,
+  toCallback,
+  hasRoot,
+  author,
+  type,
+  startFrom,
+  paginate
+} = require('ssb-db2/operators')
 
 exports.manifest = {
   getFeed: 'source',
@@ -49,12 +58,15 @@ exports.init = function (sbot, config) {
 
       SSB.db.get(msgId, (err, msg) => {
         if (err) return cb(err)
-        if (msg.meta && msg.meta.private === 'true') return cb(null, [])
-        SSB.db.getMessagesByRoot(msgId, (err, msgs) => {
-          if (err) return cb(err)
-          msgs = msgs.filter(x => !x.value.meta || x.value.meta.private !== 'true')
-          cb(null, [originalValue(msg), ...sort(msgs).map(m => originalValue(m.value))])
-        })
+        if (msg.meta && msg.meta.private === true) return cb(null, [])
+        SSB.db.query(
+          and(hasRoot(msgId)),
+          toCallback((err, msgs) => {
+            if (err) return cb(err)
+            msgs = msgs.filter(x => !x.meta || x.meta.private !== true)
+            cb(null, [reEncrypt(msg), ...sort(msgs).map(m => reEncrypt(m.value))])
+          })
+        )
       })
     },
 
@@ -66,41 +78,27 @@ exports.init = function (sbot, config) {
 
       const seq = opts.sequence || opts.seq || 0
       const limit = opts.limit || 1e10
-      const query = {
-        type: 'AND',
-        data: [{
-          type: 'EQUAL',
-          data: {
-            seek: SSB.db.jitdb.seekAuthor,
-            value: opts.id,
-            indexType: "author",
-            indexAll: true
-          }
-        }, {
-          type: 'EQUAL',
-          data: {
-            seek: SSB.db.jitdb.seekType,
-            value: opts.type,
-            indexType: "type",
-          }
-        }]
-      }
 
       return pull(
         pullCont(function(cb) {
+          let q = SSB.db.query(
+            and(author(opts.id), type(opts.type))
+          )
+
           if (seq) // sequences starts with 1, offset starts with 0 ;-)
-            SSB.db.jitdb.query(query, seq - 1, limit, true, (err, results) => {
-              results = results.filter(x => !x.value.meta || x.value.meta.private !== 'true').map(x => x.value)
-              cb(err, pull.values(results))
+            q = SSB.db.query(q, (startFrom(seq-1)))
+
+          SSB.db.query(
+            q,
+            paginate(limit),
+            toCallback((err, answer) => {
+              if (err) return cb(err)
+              let results = answer.results.map(x => reEncrypt(x).value)
+              cb(null, pull.values(results))
             })
-          else
-            SSB.db.jitdb.query(query, (err, results) => {
-              results = results.filter(x => !x.value.meta || x.value.meta.private !== 'true').map(x => x.value)
-              cb(err, pull.values(results))
-            })
+          )
         })
       )
     }
   }
 }
-

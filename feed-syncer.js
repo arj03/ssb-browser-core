@@ -1,19 +1,30 @@
-module.exports = function (partial, contacts) {
+module.exports = function (id, partial, db) {
   const pull = require('pull-stream')
   const paramap = require('pull-paramap')
+  const validate = require('ssb-validate')
+  const contacts = db.getIndex('contacts')
 
   function syncMessages(feed, key, rpcCall, partialState, cb) {
     if (!partialState[feed] || !partialState[feed][key]) {
+      let adder = SSB.db.addOOO // this should be default, but is too slow
+      if (key == 'syncedMessages') {
+        const oooState = validate.initial()
+        adder = (msg, cb) => SSB.db.addOOOStrictOrder(msg, oooState, cb)
+      } else { // hack
+        adder = (msg, cb) => {
+          const oooState = validate.initial()
+          SSB.db.addOOOStrictOrder(msg, oooState, cb)
+        }
+      }
       pull(
         rpcCall(),
-        pull.asyncMap(SSB.db.validateAndAddOOO),
+        pull.asyncMap(adder),
         pull.collect((err, msgs) => {
           if (err) {
             console.error(err.message)
             return cb(err)
           }
 
-          SSB.state.queue = []
           var newState = {}
           newState[key] = true
           partial.updateState(feed, newState, (err) => { cb(err, feed) })
@@ -35,21 +46,18 @@ module.exports = function (partial, contacts) {
           pull.values(graph.following),
           pull.asyncMap((feed, cb) => {
             if (!partialState[feed] || !partialState[feed]['full']) {
+              db.getAllLatest((err, latest) => {
+                const latestSeq = latest[feed] ? latest[feed].sequence + 1 : 0
+                pull(
+                  rpc.partialReplication.getFeed({ id: feed, seq: latestSeq, keys: false }),
+                  pull.asyncMap(SSB.db.add),
+                  pull.collect((err) => {
+                    if (err) throw err
 
-              // we might already have partial state about the feed,
-              // so when we do a full sync we need to clear the state
-              delete SSB.state.feeds[feed]
-
-              pull(
-                rpc.partialReplication.getFeed({ id: feed, seq: 0, keys: false }),
-                pull.asyncMap(SSB.db.validateAndAdd),
-                pull.collect((err) => {
-                  if (err) throw err
-
-                  SSB.state.queue = []
-                  partial.updateState(feed, { full: true }, cb)
-                })
-              )
+                    partial.updateState(feed, { full: true }, cb)
+                  })
+                )
+              })
             } else
               cb()
           }),
@@ -100,6 +108,47 @@ module.exports = function (partial, contacts) {
   return {
     syncFeeds,
     syncing,
+    status: function() {
+      const partialState = partial.getSync()
+      const graph = contacts.getGraphForFeedSync(id)
+
+      // full
+      let fullSynced = 0
+      let totalFull = 0
+
+      // partial
+      let profilesSynced = 0
+      let contactsSynced = 0
+      let messagesSynced = 0
+      let totalPartial = 0
+
+      graph.following.forEach(relation => {
+        if (partialState[relation] && partialState[relation]['full'])
+          fullSynced += 1
+
+        totalFull += 1
+      })
+
+      graph.extended.forEach(relation => {
+        if (partialState[relation] && partialState[relation]['syncedProfile'])
+          profilesSynced += 1
+        if (partialState[relation] && partialState[relation]['syncedContacts'])
+          contactsSynced += 1
+        if (partialState[relation] && partialState[relation]['syncedMessages'])
+          messagesSynced += 1
+
+        totalPartial += 1
+      })
+
+      return {
+        totalPartial,
+        profilesSynced,
+        contactsSynced,
+        messagesSynced,
+        totalFull,
+        fullSynced,
+      }
+    },
     inSync: function() {
       const partialState = partial.getSync()
       const graph = contacts.getGraphForFeedSync(SSB.net.id)
