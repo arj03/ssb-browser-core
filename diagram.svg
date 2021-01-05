@@ -1,228 +1,228 @@
-<svg width="938pt" height="191pt" viewBox="0.00 0.00 937.81 191.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<svg width="1040pt" height="191pt" viewBox="0.00 0.00 1039.90 191.00" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
 <g id="graph0" class="graph" transform="scale(1 1) rotate(0) translate(4 187)">
 <title>hierarchy</title>
-<polygon fill="#ffffff" stroke="transparent" points="-4,4 -4,-187 933.8072,-187 933.8072,4 -4,4"></polygon>
+<polygon fill="#ffffff" stroke="transparent" points="-4,4 -4,-187 1035.9047,-187 1035.9047,4 -4,4"></polygon>
 <!-- SSBBrowserCore -->
 <g id="node1" class="node">
 <title>SSBBrowserCore</title>
-<polygon fill="none" stroke="#000000" points="400.2714,-146.5 400.2714,-182.5 515.8086,-182.5 515.8086,-146.5 400.2714,-146.5"></polygon>
-<text text-anchor="middle" x="458.04" y="-160.3" font-family="Times,serif" font-size="14.00" fill="#000000">SSBBrowserCore</text>
+<polygon fill="none" stroke="#000000" points="460.8177,-146.5 460.8177,-182.5 576.3549,-182.5 576.3549,-146.5 460.8177,-146.5"></polygon>
+<text text-anchor="middle" x="518.5863" y="-160.3" font-family="Times,serif" font-size="14.00" fill="#000000">SSBBrowserCore</text>
 </g>
 <!-- Network -->
 <g id="node6" class="node">
 <title>Network</title>
-<polygon fill="none" stroke="#000000" points="67.5505,-73.5 67.5505,-109.5 132.5295,-109.5 132.5295,-73.5 67.5505,-73.5"></polygon>
-<text text-anchor="middle" x="100.04" y="-87.3" font-family="Times,serif" font-size="14.00" fill="#000000">Network</text>
+<ellipse fill="#d3d3d3" stroke="#000000" cx="102.5863" cy="-91.5" rx="44.6434" ry="18"></ellipse>
+<text text-anchor="middle" x="102.5863" y="-87.3" font-family="Times,serif" font-size="14.00" fill="#000000">Network</text>
 </g>
 <!-- SSBBrowserCore&#45;&gt;Network -->
 <g id="edge1" class="edge">
 <title>SSBBrowserCore-&gt;Network</title>
-<path fill="none" stroke="#000000" d="M400.1232,-152.6902C328.1393,-138.0119 206.9738,-113.3049 142.8417,-100.2277"></path>
-<polygon fill="#000000" stroke="#000000" points="143.1773,-96.7242 132.6796,-98.1556 141.7787,-103.5831 143.1773,-96.7242"></polygon>
+<path fill="none" stroke="#000000" d="M460.7433,-154.3497C379.232,-140.046 231.845,-114.1824 153.9837,-100.5193"></path>
+<polygon fill="#000000" stroke="#000000" points="154.3835,-97.036 143.929,-98.7549 153.1735,-103.9307 154.3835,-97.036"></polygon>
 </g>
 <!-- Connections -->
 <g id="node7" class="node">
 <title>Connections</title>
-<polygon fill="none" stroke="#000000" points="220.0442,-73.5 220.0442,-109.5 306.0358,-109.5 306.0358,-73.5 220.0442,-73.5"></polygon>
-<text text-anchor="middle" x="263.04" y="-87.3" font-family="Times,serif" font-size="14.00" fill="#000000">Connections</text>
+<ellipse fill="#d3d3d3" stroke="#000000" cx="295.5863" cy="-91.5" rx="59.1314" ry="18"></ellipse>
+<text text-anchor="middle" x="295.5863" y="-87.3" font-family="Times,serif" font-size="14.00" fill="#000000">Connections</text>
 </g>
 <!-- SSBBrowserCore&#45;&gt;Connections -->
 <g id="edge2" class="edge">
 <title>SSBBrowserCore-&gt;Connections</title>
-<path fill="none" stroke="#000000" d="M409.8377,-146.4551C381.263,-135.7578 345.022,-122.1907 315.699,-111.2134"></path>
-<polygon fill="#000000" stroke="#000000" points="316.6334,-107.826 306.041,-107.5978 314.1792,-114.3817 316.6334,-107.826"></polygon>
+<path fill="none" stroke="#000000" d="M463.4627,-146.4551C427.3872,-134.6456 380.6267,-119.3383 345.6218,-107.8793"></path>
+<polygon fill="#000000" stroke="#000000" points="346.6716,-104.5403 336.079,-104.7555 344.4938,-111.1929 346.6716,-104.5403"></polygon>
 </g>
 <!-- Sync -->
 <g id="node8" class="node">
 <title>Sync</title>
-<polygon fill="none" stroke="#000000" points="431.04,-73.5 431.04,-109.5 485.04,-109.5 485.04,-73.5 431.04,-73.5"></polygon>
-<text text-anchor="middle" x="458.0386" y="-87.3" font-family="Times,serif" font-size="14.00" fill="#000000">Sync</text>
+<ellipse fill="#d3d3d3" stroke="#000000" cx="518.5863" cy="-91.5" rx="30.1977" ry="18"></ellipse>
+<text text-anchor="middle" x="518.5863" y="-87.3" font-family="Times,serif" font-size="14.00" fill="#000000">Sync</text>
 </g>
 <!-- SSBBrowserCore&#45;&gt;Sync -->
 <g id="edge3" class="edge">
 <title>SSBBrowserCore-&gt;Sync</title>
-<path fill="none" stroke="#000000" d="M458.04,-146.4551C458.04,-138.3828 458.04,-128.6764 458.04,-119.6817"></path>
-<polygon fill="#000000" stroke="#000000" points="461.5401,-119.5903 458.04,-109.5904 454.5401,-119.5904 461.5401,-119.5903"></polygon>
-</g>
-<!-- DB -->
-<g id="node9" class="node">
-<title>DB</title>
-<polygon fill="none" stroke="#000000" points="625.04,-73.5 625.04,-109.5 679.04,-109.5 679.04,-73.5 625.04,-73.5"></polygon>
-<text text-anchor="middle" x="651.7616" y="-87.3" font-family="Times,serif" font-size="14.00" fill="#000000">DB</text>
-</g>
-<!-- SSBBrowserCore&#45;&gt;DB -->
-<g id="edge4" class="edge">
-<title>SSBBrowserCore-&gt;DB</title>
-<path fill="none" stroke="#000000" d="M505.9951,-146.4551C539.8117,-133.7302 584.4207,-116.9444 615.3991,-105.2876"></path>
-<polygon fill="#000000" stroke="#000000" points="616.8204,-108.4924 624.9471,-101.6947 614.3551,-101.9409 616.8204,-108.4924"></polygon>
+<path fill="none" stroke="#000000" d="M518.5863,-146.4551C518.5863,-138.3828 518.5863,-128.6764 518.5863,-119.6817"></path>
+<polygon fill="#000000" stroke="#000000" points="522.0864,-119.5903 518.5863,-109.5904 515.0864,-119.5904 522.0864,-119.5903"></polygon>
 </g>
 <!-- Feed -->
-<g id="node10" class="node">
+<g id="node9" class="node">
 <title>Feed</title>
-<polygon fill="none" stroke="#000000" points="722.04,-73.5 722.04,-109.5 776.04,-109.5 776.04,-73.5 722.04,-73.5"></polygon>
-<text text-anchor="middle" x="748.6459" y="-87.3" font-family="Times,serif" font-size="14.00" fill="#000000">Feed</text>
+<ellipse fill="#d3d3d3" stroke="#000000" cx="821.5863" cy="-91.5" rx="29.6147" ry="18"></ellipse>
+<text text-anchor="middle" x="821.5863" y="-87.3" font-family="Times,serif" font-size="14.00" fill="#000000">Feed</text>
 </g>
 <!-- SSBBrowserCore&#45;&gt;Feed -->
-<g id="edge5" class="edge">
+<g id="edge4" class="edge">
 <title>SSBBrowserCore-&gt;Feed</title>
-<path fill="none" stroke="#000000" d="M515.832,-153.8439C565.2296,-144.1764 637.9552,-128.612 700.04,-110 704.0575,-108.7956 708.218,-107.4247 712.3396,-105.9862"></path>
-<polygon fill="#000000" stroke="#000000" points="713.5933,-109.2547 721.8002,-102.5542 711.206,-102.6743 713.5933,-109.2547"></polygon>
+<path fill="none" stroke="#000000" d="M576.4345,-154.2916C627.8704,-144.671 704.8851,-128.9273 770.5863,-110 775.9035,-108.4682 781.4663,-106.6651 786.8817,-104.796"></path>
+<polygon fill="#000000" stroke="#000000" points="788.1438,-108.0619 796.3857,-101.4045 785.7911,-101.4691 788.1438,-108.0619"></polygon>
+</g>
+<!-- SSBDB2 -->
+<g id="node10" class="node">
+<title>SSBDB2</title>
+<polygon fill="none" stroke="#000000" points="681.9138,-73.5 681.9138,-109.5 749.2588,-109.5 749.2588,-73.5 681.9138,-73.5"></polygon>
+<text text-anchor="middle" x="715.5863" y="-87.3" font-family="Times,serif" font-size="14.00" fill="#000000">SSBDB2</text>
+</g>
+<!-- SSBBrowserCore&#45;&gt;SSBDB2 -->
+<g id="edge5" class="edge">
+<title>SSBBrowserCore-&gt;SSBDB2</title>
+<path fill="none" stroke="#000000" d="M567.2829,-146.4551C599.3606,-134.5684 641.0014,-119.1381 671.9896,-107.6551"></path>
+<polygon fill="#000000" stroke="#000000" points="673.49,-110.8318 681.6507,-104.0751 671.0576,-104.2679 673.49,-110.8318"></polygon>
 </g>
 <!-- Validate -->
 <g id="node2" class="node">
 <title>Validate</title>
-<polygon fill="none" stroke="#000000" points="666.3289,-146.5 666.3289,-182.5 729.7511,-182.5 729.7511,-146.5 666.3289,-146.5"></polygon>
-<text text-anchor="middle" x="698.04" y="-160.3" font-family="Times,serif" font-size="14.00" fill="#000000">Validate</text>
+<polygon fill="none" stroke="#000000" points="738.8752,-146.5 738.8752,-182.5 802.2974,-182.5 802.2974,-146.5 738.8752,-146.5"></polygon>
+<text text-anchor="middle" x="770.5863" y="-160.3" font-family="Times,serif" font-size="14.00" fill="#000000">Validate</text>
 </g>
 <!-- Keys -->
 <g id="node3" class="node">
 <title>Keys</title>
-<polygon fill="none" stroke="#000000" points="773.04,-146.5 773.04,-182.5 827.04,-182.5 827.04,-146.5 773.04,-146.5"></polygon>
-<text text-anchor="middle" x="799.9229" y="-160.3" font-family="Times,serif" font-size="14.00" fill="#000000">Keys</text>
+<polygon fill="none" stroke="#000000" points="845.5863,-146.5 845.5863,-182.5 899.5863,-182.5 899.5863,-146.5 845.5863,-146.5"></polygon>
+<text text-anchor="middle" x="872.4692" y="-160.3" font-family="Times,serif" font-size="14.00" fill="#000000">Keys</text>
 </g>
 <!-- SecretStack -->
 <g id="node4" class="node">
 <title>SecretStack</title>
-<polygon fill="none" stroke="#000000" points="0,-146.5 0,-182.5 82.08,-182.5 82.08,-146.5 0,-146.5"></polygon>
-<text text-anchor="middle" x="41.04" y="-160.3" font-family="Times,serif" font-size="14.00" fill="#000000">SecretStack</text>
+<polygon fill="none" stroke="#000000" points="2.5463,-146.5 2.5463,-182.5 84.6263,-182.5 84.6263,-146.5 2.5463,-146.5"></polygon>
+<text text-anchor="middle" x="43.5863" y="-160.3" font-family="Times,serif" font-size="14.00" fill="#000000">SecretStack</text>
 </g>
 <!-- MuxRPC -->
 <g id="node5" class="node">
 <title>MuxRPC</title>
-<polygon fill="none" stroke="#000000" points="124.5898,-146.5 124.5898,-182.5 193.4902,-182.5 193.4902,-146.5 124.5898,-146.5"></polygon>
-<text text-anchor="middle" x="159.04" y="-160.3" font-family="Times,serif" font-size="14.00" fill="#000000">MuxRPC</text>
+<polygon fill="none" stroke="#000000" points="127.1361,-146.5 127.1361,-182.5 196.0365,-182.5 196.0365,-146.5 127.1361,-146.5"></polygon>
+<text text-anchor="middle" x="161.5863" y="-160.3" font-family="Times,serif" font-size="14.00" fill="#000000">MuxRPC</text>
 </g>
 <!-- Network&#45;&gt;SecretStack -->
-<g id="edge13" class="edge">
+<g id="edge10" class="edge">
 <title>Network-&gt;SecretStack</title>
-<path fill="none" stroke="#000000" d="M85.419,-109.5904C78.3932,-118.2834 69.842,-128.8636 62.1282,-138.4079"></path>
-<polygon fill="#000000" stroke="#000000" points="59.1881,-136.4776 55.6243,-146.4551 64.6323,-140.8777 59.1881,-136.4776"></polygon>
+<path fill="none" stroke="#000000" d="M88.5761,-108.8347C81.4132,-117.6973 72.5494,-128.6643 64.5884,-138.5144"></path>
+<polygon fill="#000000" stroke="#000000" points="61.7344,-136.4776 58.1706,-146.4551 67.1786,-140.8777 61.7344,-136.4776"></polygon>
 </g>
 <!-- Network&#45;&gt;MuxRPC -->
-<g id="edge14" class="edge">
+<g id="edge11" class="edge">
 <title>Network-&gt;MuxRPC</title>
-<path fill="none" stroke="#000000" d="M114.661,-109.5904C121.6868,-118.2834 130.238,-128.8636 137.9518,-138.4079"></path>
-<polygon fill="#000000" stroke="#000000" points="135.4477,-140.8777 144.4557,-146.4551 140.8919,-136.4776 135.4477,-140.8777"></polygon>
+<path fill="none" stroke="#000000" d="M116.5965,-108.8347C123.7594,-117.6973 132.6232,-128.6643 140.5842,-138.5144"></path>
+<polygon fill="#000000" stroke="#000000" points="137.994,-140.8777 147.002,-146.4551 143.4382,-136.4776 137.994,-140.8777"></polygon>
 </g>
-<!-- SHS -->
-<g id="node16" class="node">
-<title>SHS</title>
-<polygon fill="none" stroke="#000000" points="27.04,-.5 27.04,-36.5 81.04,-36.5 81.04,-.5 27.04,-.5"></polygon>
-<text text-anchor="middle" x="53.8759" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">SHS</text>
+<!-- SecretHandshake -->
+<g id="node13" class="node">
+<title>SecretHandshake</title>
+<polygon fill="none" stroke="#000000" points="0,-.5 0,-36.5 113.1726,-36.5 113.1726,-.5 0,-.5"></polygon>
+<text text-anchor="middle" x="56.5863" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">SecretHandshake</text>
 </g>
-<!-- Network&#45;&gt;SHS -->
-<g id="edge15" class="edge">
-<title>Network-&gt;SHS</title>
-<path fill="none" stroke="#000000" d="M88.6692,-73.4551C83.3062,-64.9441 76.7983,-54.6165 70.8785,-45.2219"></path>
-<polygon fill="#000000" stroke="#000000" points="73.7318,-43.1848 65.4394,-36.5904 67.8095,-46.9167 73.7318,-43.1848"></polygon>
+<!-- Network&#45;&gt;SecretHandshake -->
+<g id="edge12" class="edge">
+<title>Network-&gt;SecretHandshake</title>
+<path fill="none" stroke="#000000" d="M91.451,-73.8287C86.0508,-65.2589 79.449,-54.7821 73.4485,-45.2597"></path>
+<polygon fill="#000000" stroke="#000000" points="76.231,-43.1101 67.9386,-36.5157 70.3087,-46.842 76.231,-43.1101"></polygon>
 </g>
 <!-- SSBconn -->
-<g id="node14" class="node">
+<g id="node11" class="node">
 <title>SSBconn</title>
-<polygon fill="none" stroke="#000000" points="123.9818,-.5 123.9818,-36.5 192.0982,-36.5 192.0982,-.5 123.9818,-.5"></polygon>
-<text text-anchor="middle" x="158.04" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">SSBconn</text>
+<polygon fill="none" stroke="#000000" points="156.5281,-.5 156.5281,-36.5 224.6445,-36.5 224.6445,-.5 156.5281,-.5"></polygon>
+<text text-anchor="middle" x="190.5863" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">SSBconn</text>
 </g>
 <!-- Connections&#45;&gt;SSBconn -->
-<g id="edge11" class="edge">
+<g id="edge8" class="edge">
 <title>Connections-&gt;SSBconn</title>
-<path fill="none" stroke="#000000" d="M237.0849,-73.4551C223.5812,-64.0667 206.8978,-52.4678 192.3435,-42.3491"></path>
-<polygon fill="#000000" stroke="#000000" points="194.269,-39.425 184.0604,-36.5904 190.2731,-45.1725 194.269,-39.425"></polygon>
+<path fill="none" stroke="#000000" d="M271.7602,-74.9352C257.8739,-65.2809 240.1269,-52.9425 224.7703,-42.266"></path>
+<polygon fill="#000000" stroke="#000000" points="226.7331,-39.3679 216.5245,-36.5332 222.7372,-45.1154 226.7331,-39.3679"></polygon>
 </g>
 <!-- Rooms -->
-<g id="node15" class="node">
+<g id="node12" class="node">
 <title>Rooms</title>
-<polygon fill="none" stroke="#000000" points="235.2041,-.5 235.2041,-36.5 290.8759,-36.5 290.8759,-.5 235.2041,-.5"></polygon>
-<text text-anchor="middle" x="263.04" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">Rooms</text>
+<polygon fill="none" stroke="#000000" points="267.7504,-.5 267.7504,-36.5 323.4222,-36.5 323.4222,-.5 267.7504,-.5"></polygon>
+<text text-anchor="middle" x="295.5863" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">Rooms</text>
 </g>
 <!-- Connections&#45;&gt;Rooms -->
-<g id="edge12" class="edge">
+<g id="edge9" class="edge">
 <title>Connections-&gt;Rooms</title>
-<path fill="none" stroke="#000000" d="M263.04,-73.4551C263.04,-65.3828 263.04,-55.6764 263.04,-46.6817"></path>
-<polygon fill="#000000" stroke="#000000" points="266.5401,-46.5903 263.04,-36.5904 259.5401,-46.5904 266.5401,-46.5903"></polygon>
+<path fill="none" stroke="#000000" d="M295.5863,-73.4551C295.5863,-65.3828 295.5863,-55.6764 295.5863,-46.6817"></path>
+<polygon fill="#000000" stroke="#000000" points="299.0864,-46.5903 295.5863,-36.5904 292.0864,-46.5904 299.0864,-46.5903"></polygon>
 </g>
-<!-- Partial -->
-<g id="node17" class="node">
-<title>Partial</title>
-<polygon fill="none" stroke="#000000" points="334.04,-.5 334.04,-36.5 388.04,-36.5 388.04,-.5 334.04,-.5"></polygon>
-<text text-anchor="middle" x="360.8121" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">Partial</text>
+<!-- FeedSyncer -->
+<g id="node14" class="node">
+<title>FeedSyncer</title>
+<polygon fill="none" stroke="#000000" points="366.5442,-.5 366.5442,-36.5 448.6284,-36.5 448.6284,-.5 366.5442,-.5"></polygon>
+<text text-anchor="middle" x="407.5863" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">FeedSyncer</text>
 </g>
-<!-- Sync&#45;&gt;Partial -->
-<g id="edge16" class="edge">
-<title>Sync-&gt;Partial</title>
-<path fill="none" stroke="#000000" d="M434.0625,-73.4551C421.7041,-64.1545 406.4631,-52.6844 393.1074,-42.6332"></path>
-<polygon fill="#000000" stroke="#000000" points="395.1726,-39.807 385.0779,-36.5904 390.9634,-45.4001 395.1726,-39.807"></polygon>
+<!-- Sync&#45;&gt;FeedSyncer -->
+<g id="edge13" class="edge">
+<title>Sync-&gt;FeedSyncer</title>
+<path fill="none" stroke="#000000" d="M498.2272,-78.1107C483.0595,-68.1355 461.9433,-54.2483 443.9079,-42.3872"></path>
+<polygon fill="#000000" stroke="#000000" points="445.6195,-39.3238 435.3412,-36.7532 441.7731,-45.1724 445.6195,-39.3238"></polygon>
 </g>
 <!-- EBT -->
-<g id="node18" class="node">
+<g id="node15" class="node">
 <title>EBT</title>
-<polygon fill="none" stroke="#000000" points="431.04,-.5 431.04,-36.5 485.04,-36.5 485.04,-.5 431.04,-.5"></polygon>
-<text text-anchor="middle" x="457.7609" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">EBT</text>
+<polygon fill="none" stroke="#000000" points="491.5863,-.5 491.5863,-36.5 545.5863,-36.5 545.5863,-.5 491.5863,-.5"></polygon>
+<text text-anchor="middle" x="518.3072" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">EBT</text>
 </g>
 <!-- Sync&#45;&gt;EBT -->
-<g id="edge17" class="edge">
+<g id="edge14" class="edge">
 <title>Sync-&gt;EBT</title>
-<path fill="none" stroke="#000000" d="M458.04,-73.4551C458.04,-65.3828 458.04,-55.6764 458.04,-46.6817"></path>
-<polygon fill="#000000" stroke="#000000" points="461.5401,-46.5903 458.04,-36.5904 454.5401,-46.5904 461.5401,-46.5903"></polygon>
+<path fill="none" stroke="#000000" d="M518.5863,-73.4551C518.5863,-65.3828 518.5863,-55.6764 518.5863,-46.6817"></path>
+<polygon fill="#000000" stroke="#000000" points="522.0864,-46.5903 518.5863,-36.5904 515.0864,-46.5904 522.0864,-46.5903"></polygon>
 </g>
 <!-- Blobs -->
-<g id="node19" class="node">
+<g id="node16" class="node">
 <title>Blobs</title>
-<polygon fill="none" stroke="#000000" points="528.04,-.5 528.04,-36.5 582.04,-36.5 582.04,-.5 528.04,-.5"></polygon>
-<text text-anchor="middle" x="554.8759" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">Blobs</text>
+<polygon fill="none" stroke="#000000" points="588.5863,-.5 588.5863,-36.5 642.5863,-36.5 642.5863,-.5 588.5863,-.5"></polygon>
+<text text-anchor="middle" x="615.4222" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">Blobs</text>
 </g>
 <!-- Sync&#45;&gt;Blobs -->
-<g id="edge18" class="edge">
+<g id="edge15" class="edge">
 <title>Sync-&gt;Blobs</title>
-<path fill="none" stroke="#000000" d="M482.0175,-73.4551C494.3759,-64.1545 509.6169,-52.6844 522.9726,-42.6332"></path>
-<polygon fill="#000000" stroke="#000000" points="525.1166,-45.4001 531.0021,-36.5904 520.9074,-39.807 525.1166,-45.4001"></polygon>
-</g>
-<!-- JITDB -->
-<g id="node11" class="node">
-<title>JITDB</title>
-<polygon fill="none" stroke="#000000" points="624.9895,-.5 624.9895,-36.5 679.0905,-36.5 679.0905,-.5 624.9895,-.5"></polygon>
-<text text-anchor="middle" x="652.04" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">JITDB</text>
-</g>
-<!-- DB&#45;&gt;JITDB -->
-<g id="edge8" class="edge">
-<title>DB-&gt;JITDB</title>
-<path fill="none" stroke="#000000" d="M652.04,-73.4551C652.04,-65.3828 652.04,-55.6764 652.04,-46.6817"></path>
-<polygon fill="#000000" stroke="#000000" points="655.5401,-46.5903 652.04,-36.5904 648.5401,-46.5904 655.5401,-46.5903"></polygon>
-</g>
-<!-- AsyncFlumelog -->
-<g id="node12" class="node">
-<title>AsyncFlumelog</title>
-<polygon fill="none" stroke="#000000" points="722.3226,-.5 722.3226,-36.5 827.7574,-36.5 827.7574,-.5 722.3226,-.5"></polygon>
-<text text-anchor="middle" x="775.04" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">AsyncFlumelog</text>
-</g>
-<!-- DB&#45;&gt;AsyncFlumelog -->
-<g id="edge9" class="edge">
-<title>DB-&gt;AsyncFlumelog</title>
-<path fill="none" stroke="#000000" d="M679.3377,-75.2989C695.8813,-65.4803 717.2666,-52.7883 735.6244,-41.893"></path>
-<polygon fill="#000000" stroke="#000000" points="737.5456,-44.8228 744.3588,-36.7092 733.9729,-38.8032 737.5456,-44.8228"></polygon>
-</g>
-<!-- Indexes -->
-<g id="node13" class="node">
-<title>Indexes</title>
-<polygon fill="none" stroke="#000000" points="870.2728,-.5 870.2728,-36.5 929.8072,-36.5 929.8072,-.5 870.2728,-.5"></polygon>
-<text text-anchor="middle" x="900.04" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">Indexes</text>
-</g>
-<!-- DB&#45;&gt;Indexes -->
-<g id="edge10" class="edge">
-<title>DB-&gt;Indexes</title>
-<path fill="none" stroke="#000000" d="M679.2362,-80.3086C685.9745,-77.733 693.2197,-75.1282 700.04,-73 765.075,-52.7062 783.8065,-56.6461 849.04,-37 852.7883,-35.8711 856.6639,-34.6212 860.5265,-33.3192"></path>
-<polygon fill="#000000" stroke="#000000" points="861.7273,-36.6073 870.0215,-30.0151 859.4267,-29.9961 861.7273,-36.6073"></polygon>
+<path fill="none" stroke="#000000" d="M537.7504,-77.0775C550.7943,-67.261 568.373,-54.0317 583.5242,-42.6292"></path>
+<polygon fill="#000000" stroke="#000000" points="585.7622,-45.3254 591.6477,-36.5157 581.5529,-39.7323 585.7622,-45.3254"></polygon>
 </g>
 <!-- Feed&#45;&gt;Validate -->
 <g id="edge6" class="edge">
 <title>Feed-&gt;Validate</title>
-<path fill="none" stroke="#000000" d="M736.4015,-109.5904C730.3897,-118.1955 723.0858,-128.6501 716.471,-138.1183"></path>
-<polygon fill="#000000" stroke="#000000" points="713.5047,-136.2529 710.6467,-146.4551 719.243,-140.2619 713.5047,-136.2529"></polygon>
+<path fill="none" stroke="#000000" d="M809.8238,-108.3365C803.6603,-117.1587 795.9704,-128.1658 789.0356,-138.0922"></path>
+<polygon fill="#000000" stroke="#000000" points="786.051,-136.2529 783.193,-146.4551 791.7893,-140.2619 786.051,-136.2529"></polygon>
 </g>
 <!-- Feed&#45;&gt;Keys -->
 <g id="edge7" class="edge">
 <title>Feed-&gt;Keys</title>
-<path fill="none" stroke="#000000" d="M761.6785,-109.5904C767.6903,-118.1955 774.9942,-128.6501 781.609,-138.1183"></path>
-<polygon fill="#000000" stroke="#000000" points="778.837,-140.2619 787.4333,-146.4551 784.5753,-136.2529 778.837,-140.2619"></polygon>
+<path fill="none" stroke="#000000" d="M833.3488,-108.3365C839.5123,-117.1587 847.2022,-128.1658 854.137,-138.0922"></path>
+<polygon fill="#000000" stroke="#000000" points="851.3833,-140.2619 859.9796,-146.4551 857.1216,-136.2529 851.3833,-140.2619"></polygon>
+</g>
+<!-- Indexes -->
+<g id="node17" class="node">
+<title>Indexes</title>
+<polygon fill="none" stroke="#000000" points="685.8191,-.5 685.8191,-36.5 745.3535,-36.5 745.3535,-.5 685.8191,-.5"></polygon>
+<text text-anchor="middle" x="715.5863" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">Indexes</text>
+</g>
+<!-- SSBDB2&#45;&gt;Indexes -->
+<g id="edge16" class="edge">
+<title>SSBDB2-&gt;Indexes</title>
+<path fill="none" stroke="#000000" d="M715.5863,-73.4551C715.5863,-65.3828 715.5863,-55.6764 715.5863,-46.6817"></path>
+<polygon fill="#000000" stroke="#000000" points="719.0864,-46.5903 715.5863,-36.5904 712.0864,-46.5904 719.0864,-46.5903"></polygon>
+</g>
+<!-- JITDB -->
+<g id="node18" class="node">
+<title>JITDB</title>
+<polygon fill="none" stroke="#000000" points="788.5358,-.5 788.5358,-36.5 842.6368,-36.5 842.6368,-.5 788.5358,-.5"></polygon>
+<text text-anchor="middle" x="815.5863" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">JITDB</text>
+</g>
+<!-- SSBDB2&#45;&gt;JITDB -->
+<g id="edge17" class="edge">
+<title>SSBDB2-&gt;JITDB</title>
+<path fill="none" stroke="#000000" d="M740.3054,-73.4551C753.046,-64.1545 768.7584,-52.6844 782.5271,-42.6332"></path>
+<polygon fill="#000000" stroke="#000000" points="784.7918,-45.3134 790.805,-36.5904 780.6644,-39.6596 784.7918,-45.3134"></polygon>
+</g>
+<!-- AsyncAppendOnlyLog -->
+<g id="node19" class="node">
+<title>AsyncAppendOnlyLog</title>
+<polygon fill="none" stroke="#000000" points="885.2679,-.5 885.2679,-36.5 1031.9047,-36.5 1031.9047,-.5 885.2679,-.5"></polygon>
+<text text-anchor="middle" x="958.5863" y="-14.3" font-family="Times,serif" font-size="14.00" fill="#000000">AsyncAppendOnlyLog</text>
+</g>
+<!-- SSBDB2&#45;&gt;AsyncAppendOnlyLog -->
+<g id="edge18" class="edge">
+<title>SSBDB2-&gt;AsyncAppendOnlyLog</title>
+<path fill="none" stroke="#000000" d="M749.5466,-79.8269C756.4897,-77.5108 763.7601,-75.1364 770.5863,-73 807.6309,-61.406 849.0458,-49.3081 883.5558,-39.4641"></path>
+<polygon fill="#000000" stroke="#000000" points="884.9021,-42.7201 893.5629,-36.6175 882.9868,-35.9872 884.9021,-42.7201"></polygon>
 </g>
 </g>
 </svg>
