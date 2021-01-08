@@ -1,19 +1,19 @@
-module.exports = function (id, partial, db) {
+module.exports = function (net, partial) {
   const pull = require('pull-stream')
   const paramap = require('pull-paramap')
   const validate = require('ssb-validate')
-  const contacts = db.getIndex('contacts')
+  const contacts = net.db.getIndex('contacts')
 
   function syncMessages(feed, key, rpcCall, partialState, cb) {
     if (!partialState[feed] || !partialState[feed][key]) {
-      let adder = SSB.db.addOOO // this should be default, but is too slow
-      if (key == 'syncedMessages') {
+      let adder = net.db.addOOO // this should be default, but is too slow
+      if (key == 'syncedMessages') { // false for go!
         const oooState = validate.initial()
-        adder = (msg, cb) => SSB.db.addOOOStrictOrder(msg, oooState, cb)
+        adder = (msg, cb) => net.db.addOOOStrictOrder(msg, oooState, cb)
       } else { // hack
         adder = (msg, cb) => {
           const oooState = validate.initial()
-          SSB.db.addOOOStrictOrder(msg, oooState, cb)
+          net.db.addOOOStrictOrder(msg, oooState, cb)
         }
       }
       pull(
@@ -40,17 +40,17 @@ module.exports = function (id, partial, db) {
     syncing = true
     console.log("syncing feeds")
     partial.get((err, partialState) => {
-      contacts.getGraphForFeed(SSB.net.id, (err, graph) => {
+      contacts.getGraphForFeed(net.id, (err, graph) => {
         console.time("full feeds")
         pull(
           pull.values(graph.following),
           pull.asyncMap((feed, cb) => {
             if (!partialState[feed] || !partialState[feed]['full']) {
-              db.getAllLatest((err, latest) => {
+              net.db.getAllLatest((err, latest) => {
                 const latestSeq = latest[feed] ? latest[feed].sequence + 1 : 0
                 pull(
                   rpc.partialReplication.getFeed({ id: feed, seq: latestSeq, keys: false }),
-                  pull.asyncMap(SSB.db.add),
+                  pull.asyncMap(net.db.add),
                   pull.collect((err) => {
                     if (err) throw err
 
@@ -65,7 +65,7 @@ module.exports = function (id, partial, db) {
             console.timeEnd("full feeds")
 
             console.time("partial feeds")
-            contacts.getGraphForFeed(SSB.net.id, (err, graph) => {
+            contacts.getGraphForFeed(net.id, (err, graph) => {
               pull(
                 pull.values(graph.extended),
                 paramap((feed, cb) => {
@@ -87,7 +87,7 @@ module.exports = function (id, partial, db) {
                   console.timeEnd("partial feeds")
 
                   // check for changes that happened while running syncFeeds
-                  contacts.getGraphForFeed(SSB.net.id, (err, newGraph) => {
+                  contacts.getGraphForFeed(net.id, (err, newGraph) => {
                     if (JSON.stringify(graph) === JSON.stringify(newGraph)) {
                       syncing = false
 
@@ -110,7 +110,7 @@ module.exports = function (id, partial, db) {
     syncing,
     status: function() {
       const partialState = partial.getSync()
-      const graph = contacts.getGraphForFeedSync(id)
+      const graph = contacts.getGraphForFeedSync(net.id)
 
       // full
       let fullSynced = 0

@@ -26,7 +26,7 @@ exports.init = function (dir, config) {
       db: net.db,
       net,
       dir,
-      feedSyncer: FeedSyncer(net.id, partial, net.db),
+      feedSyncer: FeedSyncer(net, partial),
 
       getPeer: helpers.getPeer,
 
