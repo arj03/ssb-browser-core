@@ -35,14 +35,14 @@ digraph hierarchy {
 nodesep=0.6 node [shape=record];
 
 { rank=same SSBBrowserCore Validate Keys } 
-{ rank=same SSBBrowserCore SecretStack MuxRPC }
+{ rank=same SSBBrowserCore MultiServer MuxRPC }
 
 Network [shape=ellipse style=filled]
 Connections [shape=ellipse style=filled]
 Sync [shape=ellipse style=filled]
 Feed [shape=ellipse style=filled]
 
-SSBBrowserCore->{Network Connections Sync SSBDB2 Feed} Feed->{Validate Keys} Connections->{SSBconn Rooms} Network->{SecretStack MuxRPC SecretHandshake} Sync->{FeedSyncer EBT Blobs} SSBDB2->{Indexes JITDB AsyncAppendOnlyLog } }
+SSBBrowserCore->{Network Connections Sync SSBDB2 Feed} Feed->{Validate Keys} Connections->{SSBConn Rooms} Network->{MultiServer MuxRPC SecretHandshake} Sync->{FeedSyncer EBT Blobs} SSBDB2->{Indexes JITDB AsyncAppendOnlyLog } }
 3`
 </details>
 
