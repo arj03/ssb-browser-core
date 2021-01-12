@@ -13,12 +13,14 @@ exports.init = function(dir, overwriteConfig) {
     keys,
     connections: {
       incoming: {
-	tunnel: [{ scope: 'public', transform: 'shs' }]
+	tunnel: [{ scope: 'public', transform: 'shs' }],
+	dht: [{ scope: 'public', transform: 'shs', port: 8423 }]
       },
       outgoing: {
 	net: [{ transform: 'shs' }],
 	ws: [{ transform: 'shs' }, { transform: 'noauth' }],
-	tunnel: [{ transform: 'shs' }]
+	tunnel: [{ transform: 'shs' }],
+	dht: [{ transform: 'shs' }]
       }
     },
     path: dir,
@@ -67,6 +69,7 @@ exports.init = function(dir, overwriteConfig) {
   .use(require('ssb-room/tunnel/client'))
   .use(require('ssb-no-auth'))
   .use(require("./simple-blobs"))
+  .use(require('ssb-dht-invite'))
   ()
 
   r.sync = function(rpc) {

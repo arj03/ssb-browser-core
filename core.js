@@ -52,7 +52,12 @@ exports.init = function (dir, config) {
           graph.extended.forEach(f => hops[f] = 2)
           cb(err, hops)
         })
-      }
+      },
+      isFollowing: function(opts, cb) {
+          // See https://github.com/ssbc/ssb-friends/blob/master/index.js#L33
+          console.log('isFollowing shim until ssb-friends can be ported to new database');
+          cb(null, net.db.getIndex('contacts').isFollowing(opts.source, opts.dest));
+        }
     }
 
     SSB.net.conn.start()
