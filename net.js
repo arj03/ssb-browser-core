@@ -13,8 +13,7 @@ exports.init = function(dir, overwriteConfig) {
     keys,
     connections: {
       incoming: {
-	tunnel: [{ scope: 'public', transform: 'shs' }],
-	dht: [{ scope: 'public', transform: 'shs', port: 8423 }]
+	tunnel: [{ scope: 'public', transform: 'shs' }]
       },
       outgoing: {
 	net: [{ transform: 'shs' }],
