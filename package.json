@@ -49,5 +49,5 @@
     "test": "set -e; for t in test/*.js; do tape $t | tap-spec; done"
   },
   "author": "arj",
-  "license": "beerware"
+  "license": "Beerware"
 }
