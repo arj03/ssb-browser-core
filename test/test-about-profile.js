@@ -12,7 +12,7 @@ SSB.events.on('SSB: loaded', function() {
     const aboutMsg = { type: 'about',
                        about: SSB.net.id,
                        name: 'arj' }
-    SSB.publish(aboutMsg, (err) => {
+    SSB.db.publish(aboutMsg, (err) => {
       SSB.db.onDrain('profile', () => {
         const profiles = SSB.db.getIndex('profiles').getProfiles()
         t.equal(profiles[SSB.net.id].name, aboutMsg.name)
