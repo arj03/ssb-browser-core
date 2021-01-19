@@ -1,7 +1,7 @@
 {
   "name": "ssb-browser-core",
   "description": "",
-  "version": "6.0.2",
+  "version": "6.0.3",
   "homepage": "https://github.com/arj03/ssb-browser-core",
   "repository": {
     "type": "git",
@@ -27,7 +27,7 @@
     "ssb-blob-files": "https://github.com/ssbc/ssb-blob-files#browser-support",
     "ssb-caps": "^1.1.0",
     "ssb-conn": "^0.19.1",
-    "ssb-db2": "^1.0.0",
+    "ssb-db2": "^1.1.0",
     "ssb-keys": "^8.0.1",
     "ssb-no-auth": "^1.0.0",
     "ssb-ref": "^2.14.3",
