@@ -27990,7 +27990,7 @@ module.exports = function (filename, opts) {
   function getLastGoodRecord(buffer, offset, cb) {
     for (var i = 0, lastOk = 0; i < buffer.length;) {
       var length = buffer.readUInt16LE(i)
-      if (length == 0)
+      if (length === 0)
         break
       else {
         if (i + 2 + length > blockSize) {
@@ -28067,9 +28067,9 @@ module.exports = function (filename, opts) {
 
     const nextLength = buffer.readUInt16LE(recordOffset + 2 + length)
     let nextOffset = recordOffset + 2 + length + blockIndex * blockSize
-    if (nextLength == 0 && getNextBlockIndex(offset) > since.value)
+    if (nextLength === 0 && getNextBlockIndex(offset) > since.value)
       nextOffset = -1
-    else if (nextLength == 0)
+    else if (nextLength === 0)
       nextOffset = 0
 
     if (data.every(x => x === 0))
@@ -28106,7 +28106,7 @@ module.exports = function (filename, opts) {
 
   function appendSingle(data) {
     let encodedData = codec.encode(data)
-    if (typeof encodedData == 'string')
+    if (typeof encodedData === 'string')
       encodedData = Buffer.from(encodedData)
 
     if (frameSize(encodedData) + 2 > blockSize)
@@ -28179,7 +28179,7 @@ module.exports = function (filename, opts) {
           drainsBefore[i]()
 
         let drainsAfter = waitingDrain.get(blockIndex) || []
-        if (drainsBefore.length == drainsAfter.length)
+        if (drainsBefore.length === drainsAfter.length)
           waitingDrain.delete(blockIndex)
         else if (drainsAfter.length === 0)
           waitingDrain.delete(blockIndex)
@@ -28303,10 +28303,10 @@ Stream.prototype._ready = function () {
   if (this.opts.gt >= 0)
     this.skipFirst = true
 
-  if (!this.live && this.cursor === 0 && this.blocks.since.value == -1)
+  if (!this.live && this.cursor === 0 && this.blocks.since.value === -1)
     this.ended = true
 
-  if (this.live && this.cursor === 0 && this.blocks.since.value == -1)
+  if (this.live && this.cursor === 0 && this.blocks.since.value === -1)
     this.cursor = -1
 
   this.resume()
@@ -28323,18 +28323,18 @@ Stream.prototype._writeToSink = function (data) {
 
 Stream.prototype._handleBlock = function(block) {
   while (true) {
-    const result = this.blocks.getDataNextOffset(block, this.cursor)
+    const [offset, data] = this.blocks.getDataNextOffset(block, this.cursor)
     const o = this.cursor
 
     if (this.skipFirst) {
       this.skipFirst = false
 
-      if (result[0] > 0) {
-        this.cursor = result[0]
+      if (offset > 0) {
+        this.cursor = offset
         continue
-      } else if (result[0] == 0) {
+      } else if (offset === 0) {
         return true // get next block
-      } else if (result[0] == -1) {
+      } else if (offset === -1) {
         if (this.live === true)
           this.writing = false
         return false
@@ -28347,13 +28347,13 @@ Stream.prototype._handleBlock = function(block) {
       (this.min === null || this.min < o || this.min_inclusive === o) &&
       (this.max === null || this.max > o || this.max_inclusive === o)
     ) {
-      this._writeToSink(result[1])
+      this._writeToSink(data)
 
-      if (result[0] > 0)
-        this.cursor = result[0]
-      else if (result[0] == 0) {
+      if (offset > 0)
+        this.cursor = offset
+      else if (offset === 0) {
         return true // get next block
-      } else if (result[0] == -1) {
+      } else if (offset === -1) {
         if (this.live === true)
           this.writing = false
         return false
@@ -28372,7 +28372,7 @@ Stream.prototype._resume = function () {
   if (this.ended && !this.sink.ended) {
     if (this.ended === true && !this.live)
       return this.abort()
-    else
+    else if (this.sink.end)
       return this.sink.end(this.ended === true ? null : this.ended)
   }
 
@@ -28393,6 +28393,7 @@ Stream.prototype._resume = function () {
       this.cursor = this.blocks.getNextBlockIndex(this.cursor)
       this._next()
     }
+    else if (this.sink.paused) return
     else if (this.live !== true)
       this.abort()
   })
@@ -37531,7 +37532,33 @@ CipherBase.prototype._toString = function (value, enc, fin) {
 
 module.exports = CipherBase
 
-},{"inherits":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/inherits/inherits_browser.js","safe-buffer":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/safe-buffer/index.js","stream":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/stream-browserify/index.js","string_decoder":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/string_decoder/lib/string_decoder.js"}],"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/create-ecdh/browser.js":[function(require,module,exports){
+},{"inherits":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/inherits/inherits_browser.js","safe-buffer":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/safe-buffer/index.js","stream":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/stream-browserify/index.js","string_decoder":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/string_decoder/lib/string_decoder.js"}],"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/cpu-percentage/index.js":[function(require,module,exports){
+(function (process){(function (){
+'use strict';
+
+module.exports = getUsage;
+
+function getUsage(oldUsage) {
+  var usage;
+  if (oldUsage && oldUsage._start) {
+    usage = Object.assign({}, process.cpuUsage(oldUsage._start.cpuUsage));
+    usage.time = Date.now() - oldUsage._start.time;
+  } else {
+    usage = Object.assign({}, process.cpuUsage());
+    usage.time = process.uptime() * 1000; // s to ms
+  }
+  usage.percent = (usage.system + usage.user) / (usage.time * 10);
+  Object.defineProperty(usage, '_start', {
+    value: {
+      cpuUsage: process.cpuUsage(),
+      time: Date.now()
+    }
+  });
+  return usage;
+}
+
+}).call(this)}).call(this,require('_process'))
+},{"_process":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/process/browser.js"}],"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/create-ecdh/browser.js":[function(require,module,exports){
 (function (Buffer){(function (){
 var elliptic = require('elliptic')
 var BN = require('bn.js')
@@ -52103,7 +52130,10 @@ const FIELD_SIZE = 4 // bytes
  */
 
 function saveTypedArrayFile(filename, version, offset, count, tarr, cb) {
-  if (!cb) cb = () => {}
+  if (!cb)
+    cb = (err) => {
+      if (err) console.error(err)
+    }
 
   const dataBuffer = toBuffer(tarr)
   // we try to save an extra 10% so we don't have to immediately grow
@@ -52144,7 +52174,8 @@ function loadTypedArrayFile(filename, Type, cb) {
 
 function saveBitsetFile(filename, version, offset, bitset, cb) {
   bitset.trim()
-  saveTypedArrayFile(filename, version, offset, bitset.count, bitset.words, cb)
+  const count = bitset.words.length
+  saveTypedArrayFile(filename, version, offset, count, bitset.words, cb)
 }
 
 function loadBitsetFile(filename, cb) {
@@ -52154,7 +52185,6 @@ function loadBitsetFile(filename, cb) {
       const { version, offset, count, tarr } = data
       const bitset = new TypedFastBitSet()
       bitset.words = tarr
-      bitset.count = count
       cb(null, { version, offset, bitset })
     }
   })
@@ -52262,7 +52292,7 @@ module.exports = function (log, indexesPath) {
     }
 
     isReady = true
-    for (var i = 0; i < waiting.length; ++i) waiting[i]()
+    for (let i = 0; i < waiting.length; ++i) waiting[i]()
     waiting = []
   })
 
@@ -52397,8 +52427,9 @@ module.exports = function (log, indexesPath) {
 
   function updateSeqIndex(seq, offset) {
     if (seq > indexes['seq'].count - 1) {
-      if (seq > indexes['seq'].tarr.length)
+      if (seq > indexes['seq'].tarr.length - 1) {
         growTarrIndex(indexes['seq'], Uint32Array)
+      }
 
       indexes['seq'].offset = offset
       indexes['seq'].tarr[seq] = offset
@@ -52409,7 +52440,7 @@ module.exports = function (log, indexesPath) {
 
   function updateTimestampIndex(seq, offset, buffer) {
     if (seq > indexes['timestamp'].count - 1) {
-      if (seq > indexes['timestamp'].tarr.length)
+      if (seq > indexes['timestamp'].tarr.length - 1)
         growTarrIndex(indexes['timestamp'], Float64Array)
 
       indexes['timestamp'].offset = offset
@@ -52431,7 +52462,7 @@ module.exports = function (log, indexesPath) {
 
   function updateSequenceIndex(seq, offset, buffer) {
     if (seq > indexes['sequence'].count - 1) {
-      if (seq > indexes['sequence'].tarr.length)
+      if (seq > indexes['sequence'].tarr.length - 1)
         growTarrIndex(indexes['sequence'], Uint32Array)
 
       indexes['sequence'].offset = offset
@@ -52492,7 +52523,7 @@ module.exports = function (log, indexesPath) {
 
   function updatePrefixIndex(opData, index, buffer, seq, offset) {
     if (seq > index.count - 1) {
-      if (seq > index.tarr.length) growTarrIndex(index, Uint32Array)
+      if (seq > index.tarr.length - 1) growTarrIndex(index, Uint32Array)
 
       const fieldStart = opData.seek(buffer)
       if (fieldStart) {
@@ -52741,15 +52772,15 @@ module.exports = function (log, indexesPath) {
       if (op.data.indexName === 'sequence') {
         const bitset = new TypedFastBitSet()
         const { tarr, count } = indexes['sequence']
-        for (var i = 0; i < count; ++i) {
-          if (filterCheck(tarr[i], op)) bitset.add(i)
+        for (let seq = 0; seq < count; ++seq) {
+          if (filterCheck(tarr[seq], op)) bitset.add(seq)
         }
         cb(bitset)
       } else if (op.data.indexName === 'timestamp') {
         const bitset = new TypedFastBitSet()
         const { tarr, count } = indexes['timestamp']
-        for (var i = 0; i < count; ++i) {
-          if (filterCheck(tarr[i], op)) bitset.add(i)
+        for (let seq = 0; seq < count; ++seq) {
+          if (filterCheck(tarr[seq], op)) bitset.add(seq)
         }
         cb(bitset)
       } else {
@@ -52762,7 +52793,7 @@ module.exports = function (log, indexesPath) {
     ensureIndexSync({ data: { indexName: 'sequence' } }, () => {
       const bitset = new TypedFastBitSet()
       const { count } = indexes['sequence']
-      for (var i = 0; i < count; ++i) bitset.add(i)
+      bitset.addRange(0, count)
       cb(bitset)
     })
   }
@@ -52772,8 +52803,8 @@ module.exports = function (log, indexesPath) {
     opOffsets.sort((x, y) => x - y)
     const opOffsetsLen = opOffsets.length
     const { tarr } = indexes['seq']
-    for (var s = 0, len = tarr.length; s < len; ++s) {
-      if (bsb.eq(opOffsets, tarr[s]) !== -1) seqs.push(s)
+    for (let seq = 0, len = tarr.length; seq < len; ++seq) {
+      if (bsb.eq(opOffsets, tarr[seq]) !== -1) seqs.push(seq)
       if (seqs.length === opOffsetsLen) break
     }
     cb(new TypedFastBitSet(seqs))
@@ -52786,10 +52817,10 @@ module.exports = function (log, indexesPath) {
     const tarr = prefixIndex.tarr
     const bitset = new TypedFastBitSet()
     const done = multicb({ pluck: 1 })
-    for (let o = 0; o < count; ++o) {
-      if (tarr[o] === targetPrefix) {
-        bitset.add(o)
-        getRecord(o, done())
+    for (let seq = 0; seq < count; ++seq) {
+      if (tarr[seq] === targetPrefix) {
+        bitset.add(seq)
+        getRecord(seq, done())
       }
     }
     done((err, recs) => {
@@ -52934,7 +52965,7 @@ module.exports = function (log, indexesPath) {
   }
 
   function isValueOk(ops, value, isOr) {
-    for (var i = 0; i < ops.length; ++i) {
+    for (let i = 0; i < ops.length; ++i) {
       const op = ops[i]
       let ok = false
       if (op.type === 'EQUAL') ok = checkEqual(op.data, value)
@@ -52964,7 +52995,7 @@ module.exports = function (log, indexesPath) {
   function getRecord(seq, cb) {
     const offset = indexes['seq'].tarr[seq]
     log.get(offset, (err, value) => {
-      if (err && err.code === 'flumelog:deleted') cb()
+      if (err && err.code === 'flumelog:deleted') cb(null, { seq, offset })
       else cb(err, { offset, value, seq })
     })
   }
@@ -52973,10 +53004,10 @@ module.exports = function (log, indexesPath) {
     updateCacheWithLog()
     const order = descending ? 'descending' : 'ascending'
     if (sortedCache[order].has(bitset)) return sortedCache[order].get(bitset)
-    const timestamped = bitset.array().map((s) => {
+    const timestamped = bitset.array().map((seq) => {
       return {
-        seq: s,
-        timestamp: indexes['timestamp'].tarr[s],
+        seq,
+        timestamp: indexes['timestamp'].tarr[seq],
       }
     })
     const sorted = timestamped.sort((a, b) => {
@@ -53114,9 +53145,9 @@ module.exports = function (log, indexesPath) {
         if (seqStream) {
           recordStream = pull(
             seqStream,
-            pull.asyncMap((o, cb) => {
+            pull.asyncMap((seq, cb) => {
               ensureSeqIndexSync(() => {
-                getRecord(o, cb)
+                getRecord(seq, cb)
               })
             })
           )
@@ -53159,42 +53190,28 @@ const pullAwaitable = require('pull-awaitable')
 const cat = require('pull-cat')
 const { safeFilename } = require('./files')
 
-function query(...cbs) {
-  let res = cbs[0]
-  for (let i = 1, n = cbs.length; i < n; i++) if (cbs[i]) res = cbs[i](res)
+//#region Helper functions and util operators
+
+function copyMeta(orig, dest) {
+  if (orig.meta) {
+    dest.meta = orig.meta
+  }
+}
+
+function updateMeta(orig, key, value) {
+  const res = Object.assign({}, orig)
+  res.meta[key] = value
   return res
 }
 
-function fromDB(db) {
-  return {
-    meta: { db },
-  }
+function extractMeta(orig) {
+  const meta = orig.meta
+  return meta
 }
 
 function toBufferOrFalsy(value) {
   if (!value) return value
   return Buffer.isBuffer(value) ? value : Buffer.from(value)
-}
-
-function seqs(values) {
-  return {
-    type: 'SEQS',
-    seqs: values,
-  }
-}
-
-function liveSeqs(pullStream) {
-  return {
-    type: 'LIVESEQS',
-    stream: pullStream,
-  }
-}
-
-function offsets(values) {
-  return {
-    type: 'OFFSETS',
-    offsets: values,
-  }
 }
 
 function seekFromDesc(desc) {
@@ -53209,6 +53226,40 @@ function seekFromDesc(desc) {
     return p
   }
 }
+
+function query(...cbs) {
+  let res = cbs[0]
+  for (let i = 1, n = cbs.length; i < n; i++) if (cbs[i]) res = cbs[i](res)
+  return res
+}
+
+function debug() {
+  return (ops) => {
+    const meta = JSON.stringify(ops.meta, (key, val) =>
+      key === 'db' ? void 0 : val
+    )
+    console.log(
+      'debug',
+      JSON.stringify(
+        ops,
+        (key, val) => {
+          if (key === 'meta') return void 0
+          else if (key === 'task' && typeof val === 'function')
+            return '[Function]'
+          else if (key === 'value' && val.type === 'Buffer')
+            return Buffer.from(val.data).toString()
+          else return val
+        },
+        2
+      ),
+      meta === '{}' ? '' : 'meta: ' + meta
+    )
+    return ops
+  }
+}
+
+//#endregion
+//#region "Unit operators": they create objects that JITDB interprets
 
 function slowEqual(seekDesc, target, opts) {
   opts = opts || {}
@@ -53302,13 +53353,6 @@ function includes(seek, target, opts) {
   }
 }
 
-function not(ops) {
-  return {
-    type: 'NOT',
-    data: [ops],
-  }
-}
-
 function gt(value, indexName) {
   if (typeof value !== 'number') throw new Error('gt() needs a number arg')
   return {
@@ -53353,6 +53397,27 @@ function lte(value, indexName) {
   }
 }
 
+function seqs(values) {
+  return {
+    type: 'SEQS',
+    seqs: values,
+  }
+}
+
+function liveSeqs(pullStream) {
+  return {
+    type: 'LIVESEQS',
+    stream: pullStream,
+  }
+}
+
+function offsets(values) {
+  return {
+    type: 'OFFSETS',
+    offsets: values,
+  }
+}
+
 function deferred(task) {
   return {
     type: 'DEFERRED',
@@ -53360,55 +53425,23 @@ function deferred(task) {
   }
 }
 
-function debug() {
-  return (ops) => {
-    const meta = JSON.stringify(ops.meta, (key, val) =>
-      key === 'db' ? void 0 : val
-    )
-    console.log(
-      'debug',
-      JSON.stringify(
-        ops,
-        (key, val) => {
-          if (key === 'meta') return void 0
-          else if (key === 'task' && typeof val === 'function')
-            return '[Function]'
-          else if (key === 'value' && val.type === 'Buffer')
-            return Buffer.from(val.data).toString()
-          else return val
-        },
-        2
-      ),
-      meta === '{}' ? '' : 'meta: ' + meta
-    )
-    return ops
+//#endregion
+//#region "Combinator operators": they build composite operations
+
+function not(ops) {
+  return {
+    type: 'NOT',
+    data: [ops],
   }
-}
-
-function copyMeta(orig, dest) {
-  if (orig.meta) {
-    dest.meta = orig.meta
-  }
-}
-
-function updateMeta(orig, key, value) {
-  const res = Object.assign({}, orig)
-  res.meta[key] = value
-  return res
-}
-
-function extractMeta(orig) {
-  const meta = orig.meta
-  return meta
 }
 
 function and(...args) {
-  const rhs = args
-    .map((arg) => (typeof arg === 'function' ? arg() : arg))
-    .filter((arg) => !!arg)
-  return (ops) => {
+  return (ops, isSpecialOps) => {
+    const rhs = args
+      .map((arg) => (typeof arg === 'function' ? arg(ops, true) : arg))
+      .filter((arg) => !!arg)
     const res =
-      ops && ops.type
+      ops && ops.type && !isSpecialOps
         ? {
             type: 'AND',
             data: [ops, ...rhs],
@@ -53425,12 +53458,12 @@ function and(...args) {
 }
 
 function or(...args) {
-  const rhs = args
-    .map((arg) => (typeof arg === 'function' ? arg() : arg))
-    .filter((arg) => !!arg)
-  return (ops) => {
+  return (ops, isSpecialOps) => {
+    const rhs = args
+      .map((arg) => (typeof arg === 'function' ? arg(ops, true) : arg))
+      .filter((arg) => !!arg)
     const res =
-      ops && ops.type
+      ops && ops.type && !isSpecialOps
         ? {
             type: 'OR',
             data: [ops, ...rhs],
@@ -53443,6 +53476,15 @@ function or(...args) {
         : rhs[0]
     if (ops) copyMeta(ops, res)
     return res
+  }
+}
+
+//#endregion
+//#region "Special operators": they only update meta
+
+function fromDB(db) {
+  return {
+    meta: { db },
   }
 }
 
@@ -53462,6 +53504,9 @@ function startFrom(seq) {
 function paginate(pageSize) {
   return (ops) => updateMeta(ops, 'pageSize', pageSize)
 }
+
+//#endregion
+//#region "Consumer operators": they execute the query tree
 
 async function executeDeferredOps(ops, meta) {
   // Collect all deferred tasks and their object-traversal paths
@@ -53571,6 +53616,8 @@ function toAsyncIter() {
     for await (let x of pullAwaitable(ps)) yield x
   }
 }
+
+//#endregion
 
 module.exports = {
   fromDB,
@@ -78162,6 +78209,7 @@ const validate = require('ssb-validate')
 const Obv = require('obz')
 const promisify = require('promisify-4loc')
 const jitdbOperators = require('jitdb/operators')
+const operators = require('./operators')
 const JITDb = require('jitdb')
 const Debug = require('debug')
 const DeferredPromise = require('p-defer')
@@ -78169,16 +78217,9 @@ const DeferredPromise = require('p-defer')
 const { indexesPath } = require('./defaults')
 const Log = require('./log')
 const BaseIndex = require('./indexes/base')
-const Private = require('./indexes/private')
+const PrivateIndex = require('./indexes/private')
 
-const {
-  and,
-  fromDB,
-  key,
-  author,
-  deferred,
-  toCallback,
-} = require('./operators')
+const { and, fromDB, key, author, deferred, toCallback } = operators
 
 function getId(msg) {
   return '%' + hash(JSON.stringify(msg, null, 2))
@@ -78186,7 +78227,7 @@ function getId(msg) {
 
 exports.name = 'db'
 
-exports.version = '0.18.0'
+exports.version = '1.2.0'
 
 exports.manifest = {
   get: 'async',
@@ -78208,10 +78249,10 @@ exports.manifest = {
 
 exports.init = function (sbot, config) {
   const dir = config.path
-  const private = Private(dir, config.keys)
-  const log = Log(dir, config, private)
+  const privateIndex = PrivateIndex(dir, config.keys)
+  const log = Log(dir, config, privateIndex)
   const jitdb = JITDb(log, indexesPath(dir))
-  const baseIndex = BaseIndex(log, dir, private)
+  const baseIndex = BaseIndex(log, dir, privateIndex)
 
   const debug = Debug('ssb:db2')
 
@@ -78469,7 +78510,7 @@ exports.init = function (sbot, config) {
 
   function onIndexesStateLoaded(cb) {
     if (!onIndexesStateLoaded.promise) {
-      const stateLoadedPromises = [private.stateLoaded]
+      const stateLoadedPromises = [privateIndex.stateLoaded]
       for (const indexName in indexes) {
         stateLoadedPromises.push(indexes[indexName].stateLoaded)
       }
@@ -78495,25 +78536,32 @@ exports.init = function (sbot, config) {
 
   // override query() from jitdb to implicitly call fromDB()
   function query(first, ...rest) {
-    const waitForMigrateAndDrain = and(
-      deferred((meta, cb) => {
-        if (sbot.db2migrate) {
-          sbot.db2migrate.synchronized((isSynced) => {
-            if (isSynced) {
-              log.onDrain(cb)
-            }
-          })
-        } else {
-          log.onDrain(cb)
-        }
-      })
-    )
+    // Before running the query, the log needs to be migrated/synced with the
+    // old log and it should be 'drained'
+    const waitUntilReady = deferred((meta, cb) => {
+      if (sbot.db2migrate) {
+        sbot.db2migrate.synchronized((isSynced) => {
+          if (isSynced) {
+            log.onDrain(cb)
+          }
+        })
+      } else {
+        log.onDrain(cb)
+      }
+    })
+
+    if (rest.length === 0) {
+      const ops = fromDB(jitdb)
+      ops.meta.db2 = this
+      return jitdbOperators.query(ops, and(waitUntilReady), first)
+    }
+
     if (!first.meta) {
       const ops = fromDB(jitdb)
       ops.meta.db2 = this
-      return jitdbOperators.query(ops, waitForMigrateAndDrain, first, ...rest)
+      return jitdbOperators.query(ops, and(waitUntilReady, first), ...rest)
     } else {
-      return jitdbOperators.query(first, waitForMigrateAndDrain, ...rest)
+      return jitdbOperators.query(first, and(waitUntilReady), ...rest)
     }
   }
 
@@ -78529,6 +78577,7 @@ exports.init = function (sbot, config) {
     addOOO,
     addOOOStrictOrder,
     getStatus,
+    operators,
 
     // needed primarily internally by other plugins in this project:
     post,
@@ -79133,10 +79182,12 @@ module.exports.reEncrypt = function (msg) {
 (function (Buffer){(function (){
 const OffsetLog = require('async-append-only-log')
 const bipf = require('bipf')
+const TooHot = require('too-hot')
 const { BLOCK_SIZE, newLogPath } = require('./defaults')
 
 module.exports = function (dir, config, privateIndex) {
   config = config || {}
+  config.db2 = config.db2 || {}
 
   const log = OffsetLog(newLogPath(dir), {
     blockSize: BLOCK_SIZE,
@@ -79164,8 +79215,7 @@ module.exports = function (dir, config, privateIndex) {
     })
   }
 
-  // add automatic decrypt
-
+  // monkey-patch log.get to decrypt the msg
   const originalGet = log.get
   log.get = function (offset, cb) {
     originalGet(offset, (err, buffer) => {
@@ -79177,13 +79227,30 @@ module.exports = function (dir, config, privateIndex) {
     })
   }
 
+  // monkey-patch log.stream to temporarily pause when the CPU is too busy,
+  // and to decrypt the msg
   const originalStream = log.stream
   log.stream = function (opts) {
+    const tooHot = config.db2.maxCpu
+      ? TooHot({ ceiling: config.db2.maxCpu, maxPause: 1000 })
+      : () => false
     const s = originalStream(opts)
     const originalPipe = s.pipe.bind(s)
     s.pipe = function pipe(o) {
       let originalWrite = o.write
-      o.write = (record) => originalWrite(privateIndex.decrypt(record, true))
+      o.write = (record) => {
+        const hot = tooHot()
+        if (hot && !s.sink.paused) {
+          s.sink.paused = true
+          hot.then(() => {
+            originalWrite(privateIndex.decrypt(record, true))
+            s.sink.paused = false
+            s.resume()
+          })
+        } else {
+          originalWrite(privateIndex.decrypt(record, true))
+        }
+      }
       return originalPipe(o)
     }
     return s
@@ -79193,7 +79260,7 @@ module.exports = function (dir, config, privateIndex) {
 }
 
 }).call(this)}).call(this,require("buffer").Buffer)
-},{"./defaults":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/ssb-db2/defaults.js","async-append-only-log":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/async-append-only-log/index.js","bipf":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/bipf/index.js","buffer":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browserify/node_modules/buffer/index.js"}],"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/ssb-db2/operators/full-mentions.js":[function(require,module,exports){
+},{"./defaults":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/ssb-db2/defaults.js","async-append-only-log":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/async-append-only-log/index.js","bipf":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/bipf/index.js","buffer":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browserify/node_modules/buffer/index.js","too-hot":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/too-hot/index.js"}],"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/ssb-db2/operators/full-mentions.js":[function(require,module,exports){
 const { deferred } = require('jitdb/operators')
 
 module.exports = function mentions(key) {
@@ -79239,6 +79306,7 @@ function type(value) {
 
 function author(value) {
   return equal(seekAuthor, value, {
+    prefix: 32,
     indexType: 'value_author',
   })
 }
@@ -83030,7 +83098,41 @@ function toSpaceCase(string) {
   }).trim()
 }
 
-},{"to-no-case":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/to-no-case/index.js"}],"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/traverse/index.js":[function(require,module,exports){
+},{"to-no-case":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/to-no-case/index.js"}],"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/too-hot/index.js":[function(require,module,exports){
+var usage = require('cpu-percentage');
+
+module.exports = function TooHot(opts) {
+  var _opts = opts || {ceiling: 88, wait: 144, maxPause: Infinity};
+  var ceiling = _opts.ceiling || 88;
+  var wait = _opts.wait || 144;
+  var maxPause = _opts.maxPause || Infinity;
+  var start = (stats = usage());
+  var lastResume = Date.now();
+  var step = 2,
+    i = 0;
+
+  return function tooHot() {
+    if (i++ % step) return false;
+
+    stats = usage(start);
+    if (
+      stats.percent < ceiling || // "CPU is cold enough"
+      Date.now() - lastResume > maxPause || // "remained paused for too long"
+      stats.time < 20 // "we just now began draining"
+    ) {
+      step = step << 1 || 1;
+      lastResume = Date.now();
+      return false;
+    } else {
+      step = step >> 1 || 1;
+      return new Promise((resolve) => {
+        setTimeout(resolve, wait);
+      });
+    }
+  };
+};
+
+},{"cpu-percentage":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/cpu-percentage/index.js"}],"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/traverse/index.js":[function(require,module,exports){
 var traverse = module.exports = function (obj) {
     return new Traverse(obj);
 };
@@ -85873,7 +85975,7 @@ module.exports = function typedarrayToBuffer (arr) {
  * like typed arrays.
  *
  * Simple usage :
- *  var b = new TypedFastBitSet();// initially empty
+ *  const b = new TypedFastBitSet();// initially empty
  *         // will throw exception if typed arrays are not supported
  *  b.add(1);// add the value "1"
  *  b.has(1); // check that the value is present! (will return true)
@@ -85882,21 +85984,23 @@ module.exports = function typedarrayToBuffer (arr) {
  *  b.add(10);
  *  b.array(); // would return [1,2,10]
  *
- *  var c = new TypedFastBitSet([1,2,3,10]); // create bitset initialized with values 1,2,3,10
- *  c.difference(b); // from c, remove elements that are in b
- *  var su = c.union_size(b);// compute the size of the union (bitsets are unchanged)
- * c.union(b); // c will contain all elements that are in c and b
- * var s1 = c.intersection_size(b);// compute the size of the intersection (bitsets are unchanged)
- * c.intersection(b); // c will only contain elements that are in both c and b
- * c = b.clone(); // create a (deep) copy of b and assign it to c.
- * c.equals(b); // check whether c and b are equal
- *
+ *  let c = new FastBitSet([1,2,3,10]); // create bitset initialized with values 1,2,3,10
+ *  c.difference(b); // from c, remove elements that are in b (modifies c)
+ *  c.difference2(b); // from c, remove elements that are in b (modifies b)
+ *  c.change(b); // c will contain elements that are in b or in c, but not both
+ *  const su = c.union_size(b);// compute the size of the union (bitsets are unchanged)
+ *  c.union(b); // c will contain all elements that are in c and b
+ *  const s1 = c.intersection_size(b);// compute the size of the intersection (bitsets are unchanged)
+ *  c.intersection(b); // c will only contain elements that are in both c and b
+ *  c = b.clone(); // create a (deep) copy of b and assign it to c.
+ *  c.equals(b); // check whether c and b are equal
+
  *   See README.md file for a more complete description.
  *
  * You can install the library under node with the command line
- *   npm install fastbitset
+ *   npm install typedfastbitset
  */
-'use strict';
+"use strict";
 
 function isIterable(obj) {
   if (obj == null) {
@@ -85907,43 +86011,43 @@ function isIterable(obj) {
 // you can provide an iterable
 // an exception is thrown if typed arrays are not supported
 function TypedFastBitSet(iterable) {
-  this.count = 0 | 0;
   this.words = new Uint32Array(8);
   if (isIterable(iterable)) {
-    for (var key of iterable) {
+    for (const key of iterable) {
       this.add(key);
     }
   }
 }
 
+// Returns a new TypedFastBitset given a Uint32Array
+// of words
+TypedFastBitSet.fromWords = function (words) {
+  const bs = Object.create(TypedFastBitSet.prototype);
+  bs.words = words;
+  return bs;
+};
+
 // Add the value (Set the bit at index to true)
-TypedFastBitSet.prototype.add = function(index) {
-  if ((this.count << 5) <= index) {
-    this.resize(index);
-  }
-  this.words[index >>> 5] |= 1 << index ;
+TypedFastBitSet.prototype.add = function (index) {
+  this.resize(index);
+  this.words[index >>> 5] |= 1 << index;
 };
 
 // If the value was not in the set, add it, otherwise remove it (flip bit at index)
-TypedFastBitSet.prototype.flip = function(index) {
-  if ((this.count << 5) <= index) {
-    this.resize(index);
-  }
-  this.words[index >>> 5] ^= 1 << index ;
+TypedFastBitSet.prototype.flip = function (index) {
+  this.resize(index);
+  this.words[index >>> 5] ^= 1 << index;
 };
 
 // Remove all values, reset memory usage
-TypedFastBitSet.prototype.clear = function() {
-  this.count = 0 | 0;
-  this.words = new Uint32Array(this.count);
+TypedFastBitSet.prototype.clear = function () {
+  this.words = new Uint32Array(8);
 };
 
 // Set the bit at index to false
-TypedFastBitSet.prototype.remove = function(index) {
-  if ((this.count  << 5) <= index) {
-    this.resize(index);
-  }
-  this.words[index  >>> 5] &= ~(1 << index);
+TypedFastBitSet.prototype.remove = function (index) {
+  this.resize(index);
+  this.words[index >>> 5] &= ~(1 << index);
 };
 
 // Set bits from start (inclusive) to end (exclusive)
@@ -85952,12 +86056,12 @@ TypedFastBitSet.prototype.addRange = function (start, end) {
     return;
   }
 
-  if ((this.count << 5) <= end) {
+  if (this.words.length << 5 <= end) {
     this.resize(end);
   }
 
-  var firstword = start >> 5;
-  var endword = (end - 1) >> 5;
+  const firstword = start >> 5;
+  const endword = (end - 1) >> 5;
 
   if (firstword === endword) {
     this.words[firstword] |= (~0 << start) & (~0 >>> -end);
@@ -85970,14 +86074,14 @@ TypedFastBitSet.prototype.addRange = function (start, end) {
 
 // Remove bits from start (inclusive) to end (exclusive)
 TypedFastBitSet.prototype.removeRange = function (start, end) {
-  start = Math.min(start, (this.count << 5) - 1);
-  end = Math.min(end, (this.count << 5) - 1);
+  start = Math.min(start, (this.words.length << 5) - 1);
+  end = Math.min(end, (this.words.length << 5) - 1);
 
   if (start >= end) {
     return;
   }
-  var firstword = start >> 5;
-  var endword = (end - 1) >> 5;
+  const firstword = start >> 5;
+  const endword = (end - 1) >> 5;
 
   if (firstword === endword) {
     this.words[firstword] &= ~((~0 << start) & (~0 >>> -end));
@@ -85989,79 +86093,102 @@ TypedFastBitSet.prototype.removeRange = function (start, end) {
 };
 
 // Return true if no bit is set
-TypedFastBitSet.prototype.isEmpty = function(index) {
-  var c = this.count;
-  for (var  i = 0; i < c; i++) {
+TypedFastBitSet.prototype.isEmpty = function (index) {
+  const c = this.words.length;
+  for (let i = 0; i < c; i++) {
     if (this.words[i] !== 0) return false;
   }
   return true;
 };
 
-// Tries to add the value (Set the bit at index to true), return 1 if the
-// value was added, return 0 if the value was already present
-TypedFastBitSet.prototype.checkedAdd = function(index) {
-  this.resize(index);
-  var word = this.words[index  >>> 5]
-  var newword = word | (1 << index)
-  this.words[index >>> 5] = newword
-  return (newword ^ word) >>> index
+// Is the value contained in the set? Is the bit at index true or false? Returns a boolean
+TypedFastBitSet.prototype.has = function (index) {
+  return (this.words[index >>> 5] & (1 << index)) !== 0;
 };
 
-// Is the value contained in the set? Is the bit at index true or false? Returns a boolean
-TypedFastBitSet.prototype.has = function(index) {
-  return (this.words[index  >>> 5] & (1 << index)) !== 0;
+// Tries to add the value (Set the bit at index to true), return 1 if the
+// value was added, return 0 if the value was already present
+TypedFastBitSet.prototype.checkedAdd = function (index) {
+  this.resize(index);
+  const word = this.words[index >>> 5];
+  const newword = word | (1 << index);
+  this.words[index >>> 5] = newword;
+  return (newword ^ word) >>> index;
 };
 
 // Reduce the memory usage to a minimum
-TypedFastBitSet.prototype.trim = function() {
-  var nl = this.words.length
-  while ((nl > 0) && (this.words[nl - 1] === 0)) {
-      nl--;
+TypedFastBitSet.prototype.trim = function () {
+  var nl = this.words.length;
+  while (nl > 0 && this.words[nl - 1] === 0) {
+    nl--;
   }
-  this.count = nl
-  this.words = this.words.slice(0,this.count);
+  this.words = this.words.slice(0, nl);
 };
 
 // Resize the bitset so that we can write a value at index
-TypedFastBitSet.prototype.resize = function(index) {
-  if ((this.count  << 5) > index) {
-    return; //nothing to do
-  }
-  this.count = (index + 32) >>> 5;// just what is needed
-  if ((this.words.length  << 5) <= index) {
-    var newwords = new Uint32Array(this.count << 1);
-    newwords.set(this.words);// hopefully, this copy is fast
-    this.words = newwords;
-  }
+TypedFastBitSet.prototype.resize = function (index) {
+  if (this.words.length << 5 > index) return;
+  const count = (index + 32) >>> 5; // just what is needed
+  const newwords = new Uint32Array(count << 1);
+  newwords.set(this.words); // hopefully, this copy is fast
+  this.words = newwords;
 };
 
 // fast function to compute the Hamming weight of a 32-bit unsigned integer
-TypedFastBitSet.prototype.hammingWeight = function(v) {
-  v -= ((v >>> 1) & 0x55555555);// works with signed or unsigned shifts
+TypedFastBitSet.prototype.hammingWeight = function (v) {
+  v -= (v >>> 1) & 0x55555555; // works with signed or unsigned shifts
   v = (v & 0x33333333) + ((v >>> 2) & 0x33333333);
-  return ((v + (v >>> 4) & 0xF0F0F0F) * 0x1010101) >>> 24;
+  return (((v + (v >>> 4)) & 0xf0f0f0f) * 0x1010101) >>> 24;
 };
 
+// fast function to compute the Hamming weight of four 32-bit unsigned integers
+TypedFastBitSet.prototype.hammingWeight4 = function (v1, v2, v3, v4) {
+  v1 -= (v1 >>> 1) & 0x55555555; // works with signed or unsigned shifts
+  v2 -= (v2 >>> 1) & 0x55555555; // works with signed or unsigned shifts
+  v3 -= (v3 >>> 1) & 0x55555555; // works with signed or unsigned shifts
+  v4 -= (v4 >>> 1) & 0x55555555; // works with signed or unsigned shifts
+
+  v1 = (v1 & 0x33333333) + ((v1 >>> 2) & 0x33333333);
+  v2 = (v2 & 0x33333333) + ((v2 >>> 2) & 0x33333333);
+  v3 = (v3 & 0x33333333) + ((v3 >>> 2) & 0x33333333);
+  v4 = (v4 & 0x33333333) + ((v4 >>> 2) & 0x33333333);
+
+  v1 = (v1 + (v1 >>> 4)) & 0xf0f0f0f;
+  v2 = (v2 + (v2 >>> 4)) & 0xf0f0f0f;
+  v3 = (v3 + (v3 >>> 4)) & 0xf0f0f0f;
+  v4 = (v4 + (v4 >>> 4)) & 0xf0f0f0f;
+  return ((v1 + v2 + v3 + v4) * 0x1010101) >>> 24;
+};
 
 // How many values stored in the set? How many set bits?
-TypedFastBitSet.prototype.size = function() {
-  var answer = 0;
-  var c = this.count;
-  for (var i = 0; i < c; i++) {
-    answer += this.hammingWeight(this.words[i] | 0);
+TypedFastBitSet.prototype.size = function () {
+  let answer = 0;
+  const c = this.words.length;
+  let k = 0 | 0;
+  for (; k + 4 < c; k += 4) {
+    answer += this.hammingWeight4(
+      this.words[k] | 0,
+      this.words[k + 1] | 0,
+      this.words[k + 2] | 0,
+      this.words[k + 3] | 0
+    );
+  }
+
+  for (; k < c; ++k) {
+    answer += this.hammingWeight(this.words[k] | 0);
   }
   return answer;
 };
 
 // Return an array with the set bit locations (values)
-TypedFastBitSet.prototype.array = function() {
-  var answer = new Array(this.size());
-  var pos = 0 | 0;
-  var c = this.count | 0;
-  for (var k = 0; k < c; ++k) {
-    var w =  this.words[k];
+TypedFastBitSet.prototype.array = function () {
+  const answer = new Array(this.size());
+  let pos = 0 | 0;
+  const c = this.words.length;
+  for (let k = 0; k < c; ++k) {
+    let w = this.words[k];
     while (w != 0) {
-      var t = w & -w;
+      const t = w & -w;
       answer[pos++] = (k << 5) + this.hammingWeight((t - 1) | 0);
       w ^= t;
     }
@@ -86069,33 +86196,44 @@ TypedFastBitSet.prototype.array = function() {
   return answer;
 };
 
-
-// Execute fnc on each value stored in bitset
-TypedFastBitSet.prototype.forEach = function(fnc) {
-  var c = this.count | 0;
-  for (var k = 0; k < c; ++k) {
-    var w =  this.words[k];
+// Return an array with the set bit locations (values)
+TypedFastBitSet.prototype.forEach = function (fnc) {
+  const c = this.words.length;
+  for (let k = 0; k < c; ++k) {
+    let w = this.words[k];
     while (w != 0) {
-      var t = w & -w;
-      fnc((k << 5) + this.hammingWeight(t - 1));
+      const t = w & -w;
+      fnc(((k << 5) + this.hammingWeight(t - 1)) | 0);
+      w ^= t;
+    }
+  }
+};
+
+// Returns an iterator of set bit locations (values)
+TypedFastBitSet.prototype[Symbol.iterator] = function* () {
+  const c = this.words.length;
+  for (let k = 0; k < c; ++k) {
+    let w = this.words[k];
+    while (w != 0) {
+      const t = w & -w;
+      yield (k << 5) + this.hammingWeight((t - 1) | 0);
       w ^= t;
     }
   }
 };
 
 // Creates a copy of this bitmap
-TypedFastBitSet.prototype.clone = function() {
-  var clone = Object.create(TypedFastBitSet.prototype);
-  clone.count = this.count;
+TypedFastBitSet.prototype.clone = function () {
+  const clone = Object.create(TypedFastBitSet.prototype);
   clone.words = new Uint32Array(this.words);
   return clone;
 };
 
 // Check if this bitset intersects with another one,
 // no bitmap is modified
-TypedFastBitSet.prototype.intersects = function(otherbitmap) {
-  var newcount = Math.min(this.count,otherbitmap.count);
-  for (var k = 0 | 0; k < newcount; ++k) {
+TypedFastBitSet.prototype.intersects = function (otherbitmap) {
+  const newcount = Math.min(this.words.length, otherbitmap.words.length);
+  for (let k = 0 | 0; k < newcount; ++k) {
     if ((this.words[k] & otherbitmap.words[k]) !== 0) return true;
   }
   return false;
@@ -86103,9 +86241,9 @@ TypedFastBitSet.prototype.intersects = function(otherbitmap) {
 
 // Computes the intersection between this bitset and another one,
 // the current bitmap is modified  (and returned by the function)
-TypedFastBitSet.prototype.intersection = function(otherbitmap) {
-  var newcount = Math.min(this.count,otherbitmap.count);
-  var k = 0 | 0;
+TypedFastBitSet.prototype.intersection = function (otherbitmap) {
+  const newcount = Math.min(this.words.length, otherbitmap.words.length);
+  let k = 0 | 0;
   for (; k + 7 < newcount; k += 8) {
     this.words[k] &= otherbitmap.words[k];
     this.words[k + 1] &= otherbitmap.words[k + 1];
@@ -86119,19 +86257,18 @@ TypedFastBitSet.prototype.intersection = function(otherbitmap) {
   for (; k < newcount; ++k) {
     this.words[k] &= otherbitmap.words[k];
   }
-  var c = this.count;
-  for (var k = newcount; k < c; ++k) {
+  const c = this.words.length;
+  for (let k = newcount; k < c; ++k) {
     this.words[k] = 0;
   }
-  this.count = newcount;
   return this;
 };
 
 // Computes the size of the intersection between this bitset and another one
-TypedFastBitSet.prototype.intersection_size = function(otherbitmap) {
-  var newcount = Math.min(this.count,otherbitmap.count);
-  var answer = 0 | 0;
-  for (var k = 0 | 0; k < newcount; ++k) {
+TypedFastBitSet.prototype.intersection_size = function (otherbitmap) {
+  const newcount = Math.min(this.words.length, otherbitmap.words.length);
+  let answer = 0 | 0;
+  for (let k = 0 | 0; k < newcount; ++k) {
     answer += this.hammingWeight(this.words[k] & otherbitmap.words[k]);
   }
   return answer;
@@ -86139,31 +86276,42 @@ TypedFastBitSet.prototype.intersection_size = function(otherbitmap) {
 
 // Computes the intersection between this bitset and another one,
 // a new bitmap is generated
-TypedFastBitSet.prototype.new_intersection = function(otherbitmap) {
-  var answer = Object.create(TypedFastBitSet.prototype);
-  answer.count = Math.min(this.count,otherbitmap.count);
-  answer.words = new Uint32Array(answer.count);
-  var c = answer.count;
-  for (var k = 0 | 0; k < c; ++k) {
+TypedFastBitSet.prototype.new_intersection = function (otherbitmap) {
+  const answer = Object.create(TypedFastBitSet.prototype);
+  const count = Math.min(this.words.length, otherbitmap.words.length);
+  answer.words = new Uint32Array(count);
+  let k = 0 | 0;
+  for (; k + 7 < count; k += 8) {
+    answer.words[k] = this.words[k] & otherbitmap.words[k];
+    answer.words[k + 1] = this.words[k + 1] & otherbitmap.words[k + 1];
+    answer.words[k + 2] = this.words[k + 2] & otherbitmap.words[k + 2];
+    answer.words[k + 3] = this.words[k + 3] & otherbitmap.words[k + 3];
+    answer.words[k + 4] = this.words[k + 4] & otherbitmap.words[k + 4];
+    answer.words[k + 5] = this.words[k + 5] & otherbitmap.words[k + 5];
+    answer.words[k + 6] = this.words[k + 6] & otherbitmap.words[k + 6];
+    answer.words[k + 7] = this.words[k + 7] & otherbitmap.words[k + 7];
+  }
+  for (; k < count; ++k) {
     answer.words[k] = this.words[k] & otherbitmap.words[k];
   }
   return answer;
 };
 
-// Check whether this bitset and another one are equal
-TypedFastBitSet.prototype.equals = function(otherbitmap) {
-  var mcount = Math.min(this.count , otherbitmap.count);
-  for (var k = 0 | 0; k < mcount; ++k) {
+// Computes the intersection between this bitset and another one,
+// the current bitmap is modified
+TypedFastBitSet.prototype.equals = function (otherbitmap) {
+  const mcount = Math.min(this.words.length, otherbitmap.words.length);
+  for (let k = 0 | 0; k < mcount; ++k) {
     if (this.words[k] != otherbitmap.words[k]) return false;
   }
-  if (this.count < otherbitmap.count) {
-    var c = otherbitmap.count;
-    for (var k = this.count; k < c; ++k) {
+  if (this.words.length < otherbitmap.words.length) {
+    const c = otherbitmap.words.length;
+    for (let k = this.words.length; k < c; ++k) {
       if (otherbitmap.words[k] != 0) return false;
     }
-  } else if (otherbitmap.count < this.count) {
-    var c = this.count;
-    for (var k = otherbitmap.count; k < c; ++k) {
+  } else if (otherbitmap.words.length < this.words.length) {
+    const c = this.words.length;
+    for (let k = otherbitmap.words.length; k < c; ++k) {
       if (this.words[k] != 0) return false;
     }
   }
@@ -86172,9 +86320,9 @@ TypedFastBitSet.prototype.equals = function(otherbitmap) {
 
 // Computes the difference between this bitset and another one,
 // the current bitset is modified (and returned by the function)
-TypedFastBitSet.prototype.difference = function(otherbitmap) {
-  var newcount = Math.min(this.count,otherbitmap.count);
-  var k = 0 | 0;
+TypedFastBitSet.prototype.difference = function (otherbitmap) {
+  const newcount = Math.min(this.words.length, otherbitmap.words.length);
+  let k = 0 | 0;
   for (; k + 7 < newcount; k += 8) {
     this.words[k] &= ~otherbitmap.words[k];
     this.words[k + 1] &= ~otherbitmap.words[k + 1];
@@ -86191,32 +86339,143 @@ TypedFastBitSet.prototype.difference = function(otherbitmap) {
   return this;
 };
 
-// Computes the size of the difference between this bitset and another one
-TypedFastBitSet.prototype.difference_size = function(otherbitmap) {
-  var newcount = Math.min(this.count,otherbitmap.count);
-  var answer = 0 | 0;
-  var k = 0 | 0;
-  for (; k < newcount; ++k) {
-    answer += this.hammingWeight(this.words[k] & (~otherbitmap.words[k]));
+// Computes the difference between this bitset and another one,
+// the other bitset is modified (and returned by the function)
+// (for this set A and other set B,
+//   this computes B = A - B  and returns B)
+TypedFastBitSet.prototype.difference2 = function (otherbitmap) {
+  const mincount = Math.min(this.words.length, otherbitmap.words.length);
+  otherbitmap.resize((this.words.length << 5) - 1);
+  let k = 0 | 0;
+  for (; k + 7 < mincount; k += 8) {
+    otherbitmap.words[k] = this.words[k] & ~otherbitmap.words[k];
+    otherbitmap.words[k + 1] = this.words[k + 1] & ~otherbitmap.words[k + 1];
+    otherbitmap.words[k + 2] = this.words[k + 2] & ~otherbitmap.words[k + 2];
+    otherbitmap.words[k + 3] = this.words[k + 3] & ~otherbitmap.words[k + 3];
+    otherbitmap.words[k + 4] = this.words[k + 4] & ~otherbitmap.words[k + 4];
+    otherbitmap.words[k + 5] = this.words[k + 5] & ~otherbitmap.words[k + 5];
+    otherbitmap.words[k + 6] = this.words[k + 6] & ~otherbitmap.words[k + 6];
+    otherbitmap.words[k + 7] = this.words[k + 7] & ~otherbitmap.words[k + 7];
   }
-  var c = this.count;
+  for (; k < mincount; ++k) {
+    otherbitmap.words[k] = this.words[k] & ~otherbitmap.words[k];
+  }
+  // remaining words are all part of difference
+  for (; k < this.words.length; ++k) {
+    otherbitmap.words[k] = this.words[k];
+  }
+  otherbitmap.words.fill(0, k);
+  return otherbitmap;
+};
+
+// Computes the difference between this bitset and another one,
+// a new bitmap is generated
+TypedFastBitSet.prototype.new_difference = function (otherbitmap) {
+  return this.clone().difference(otherbitmap); // should be fast enough
+};
+
+// Computes the size of the difference between this bitset and another one
+TypedFastBitSet.prototype.difference_size = function (otherbitmap) {
+  const newcount = Math.min(this.words.length, otherbitmap.words.length);
+  let answer = 0 | 0;
+  let k = 0 | 0;
+  for (; k < newcount; ++k) {
+    answer += this.hammingWeight(this.words[k] & ~otherbitmap.words[k]);
+  }
+  const c = this.words.length;
   for (; k < c; ++k) {
     answer += this.hammingWeight(this.words[k]);
   }
   return answer;
 };
 
+// Computes the changed elements (XOR) between this bitset and another one,
+// the current bitset is modified (and returned by the function)
+TypedFastBitSet.prototype.change = function (otherbitmap) {
+  const mincount = Math.min(this.words.length, otherbitmap.words.length);
+  this.resize((otherbitmap.words.length << 5) - 1);
+  let k = 0 | 0;
+  for (; k + 7 < mincount; k += 8) {
+    this.words[k] ^= otherbitmap.words[k];
+    this.words[k + 1] ^= otherbitmap.words[k + 1];
+    this.words[k + 2] ^= otherbitmap.words[k + 2];
+    this.words[k + 3] ^= otherbitmap.words[k + 3];
+    this.words[k + 4] ^= otherbitmap.words[k + 4];
+    this.words[k + 5] ^= otherbitmap.words[k + 5];
+    this.words[k + 6] ^= otherbitmap.words[k + 6];
+    this.words[k + 7] ^= otherbitmap.words[k + 7];
+  }
+  for (; k < mincount; ++k) {
+    this.words[k] ^= otherbitmap.words[k];
+  }
+  // remaining words are all part of change
+  for (; k < otherbitmap.words.length; ++k) {
+    this.words[k] = otherbitmap.words[k];
+  }
+  return this;
+};
+
+// Computes the change between this bitset and another one,
+// a new bitmap is generated
+TypedFastBitSet.prototype.new_change = function (otherbitmap) {
+  const answer = Object.create(TypedFastBitSet.prototype);
+  const count = Math.max(this.words.length, otherbitmap.words.length);
+  answer.words = new Uint32Array(count);
+  const mcount = Math.min(this.words.length, otherbitmap.words.length);
+  let k = 0;
+  for (; k + 7 < mcount; k += 8) {
+    answer.words[k] = this.words[k] ^ otherbitmap.words[k];
+    answer.words[k + 1] = this.words[k + 1] ^ otherbitmap.words[k + 1];
+    answer.words[k + 2] = this.words[k + 2] ^ otherbitmap.words[k + 2];
+    answer.words[k + 3] = this.words[k + 3] ^ otherbitmap.words[k + 3];
+    answer.words[k + 4] = this.words[k + 4] ^ otherbitmap.words[k + 4];
+    answer.words[k + 5] = this.words[k + 5] ^ otherbitmap.words[k + 5];
+    answer.words[k + 6] = this.words[k + 6] ^ otherbitmap.words[k + 6];
+    answer.words[k + 7] = this.words[k + 7] ^ otherbitmap.words[k + 7];
+  }
+  for (; k < mcount; ++k) {
+    answer.words[k] = this.words[k] ^ otherbitmap.words[k];
+  }
+
+  const c = this.words.length;
+  for (k = mcount; k < c; ++k) {
+    answer.words[k] = this.words[k];
+  }
+  const c2 = otherbitmap.words.length;
+  for (k = mcount; k < c2; ++k) {
+    answer.words[k] = otherbitmap.words[k];
+  }
+  return answer;
+};
+
+// Computes the number of changed elements between this bitset and another one
+TypedFastBitSet.prototype.change_size = function (otherbitmap) {
+  const mincount = Math.min(this.words.length, otherbitmap.words.length);
+  let answer = 0 | 0;
+  let k = 0 | 0;
+  for (; k < mincount; ++k) {
+    answer += this.hammingWeight(this.words[k] ^ otherbitmap.words[k]);
+  }
+  const longer =
+    this.words.length > otherbitmap.words.length ? this : otherbitmap;
+  const c = longer.words.length;
+  for (; k < c; ++k) {
+    answer += this.hammingWeight(longer.words[k]);
+  }
+  return answer;
+};
+
 // Returns a string representation
-TypedFastBitSet.prototype.toString = function() {
-  return '{' + this.array().join(',') + '}';
+TypedFastBitSet.prototype.toString = function () {
+  return "{" + this.array().join(",") + "}";
 };
 
 // Computes the union between this bitset and another one,
 // the current bitset is modified  (and returned by the function)
-TypedFastBitSet.prototype.union = function(otherbitmap) {
-  var mcount = Math.min(this.count,otherbitmap.count);
-  var k = 0 | 0;
-  for (; k + 7  < mcount; k += 8) {
+TypedFastBitSet.prototype.union = function (otherbitmap) {
+  const mcount = Math.min(this.words.length, otherbitmap.words.length);
+  let k = 0 | 0;
+  for (; k + 7 < mcount; k += 8) {
     this.words[k] |= otherbitmap.words[k];
     this.words[k + 1] |= otherbitmap.words[k + 1];
     this.words[k + 2] |= otherbitmap.words[k + 2];
@@ -86229,59 +86488,52 @@ TypedFastBitSet.prototype.union = function(otherbitmap) {
   for (; k < mcount; ++k) {
     this.words[k] |= otherbitmap.words[k];
   }
-  if (this.count < otherbitmap.count) {
-    this.resize((otherbitmap.count  << 5) - 1);
-    var c = otherbitmap.count;
-    for (var k = mcount; k < c; ++k) {
+  if (this.words.length < otherbitmap.words.length) {
+    this.resize((otherbitmap.words.length << 5) - 1);
+    const c = otherbitmap.words.length;
+    for (let k = mcount; k < c; ++k) {
       this.words[k] = otherbitmap.words[k];
     }
-    this.count = otherbitmap.count;
   }
   return this;
 };
 
 // Computes the union between this bitset and another one,
 // a new bitmap is generated
-TypedFastBitSet.prototype.new_union = function(otherbitmap) {
-  var answer = Object.create(TypedFastBitSet.prototype);
-  answer.count = Math.max(this.count,otherbitmap.count);
-  answer.words = new Uint32Array(answer.count);
-  var mcount = Math.min(this.count,otherbitmap.count)
-  for (var k = 0; k < mcount; ++k) {
-      answer.words[k] = this.words[k] | otherbitmap.words[k];
+TypedFastBitSet.prototype.new_union = function (otherbitmap) {
+  const answer = Object.create(TypedFastBitSet.prototype);
+  const count = Math.max(this.words.length, otherbitmap.words.length);
+  answer.words = new Uint32Array(count);
+  const mcount = Math.min(this.words.length, otherbitmap.words.length);
+  for (let k = 0; k < mcount; ++k) {
+    answer.words[k] = this.words[k] | otherbitmap.words[k];
   }
-  var c = this.count;
-  for (var k = mcount; k < c; ++k) {
-      answer.words[k] = this.words[k] ;
+  const c = this.words.length;
+  for (let k = mcount; k < c; ++k) {
+    answer.words[k] = this.words[k];
   }
-  var c2 = otherbitmap.count;
-  for (var k = mcount; k < c2; ++k) {
-      answer.words[k] = otherbitmap.words[k] ;
+  const c2 = otherbitmap.words.length;
+  for (let k = mcount; k < c2; ++k) {
+    answer.words[k] = otherbitmap.words[k];
   }
   return answer;
 };
 
-// Computes the difference between this bitset and another one,
-// a new bitmap is generated
-TypedFastBitSet.prototype.new_difference = function(otherbitmap) {
-  return this.clone().difference(otherbitmap);// should be fast enough
-};
-
-// Computes the size of the union between this bitset and another one
-TypedFastBitSet.prototype.union_size = function(otherbitmap) {
-  var mcount = Math.min(this.count,otherbitmap.count);
-  var answer = 0 | 0;
-  for (var k = 0 | 0; k < mcount; ++k) {
+// Computes the size union between this bitset and another one
+TypedFastBitSet.prototype.union_size = function (otherbitmap) {
+  const mcount = Math.min(this.words.length, otherbitmap.words.length);
+  let answer = 0 | 0;
+  for (let k = 0 | 0; k < mcount; ++k) {
     answer += this.hammingWeight(this.words[k] | otherbitmap.words[k]);
   }
-  if (this.count < otherbitmap.count) {
-    var c = otherbitmap.count;
-    for (var k = this.count ; k < c; ++k) {
+  if (this.words.length < otherbitmap.words.length) {
+    const c = otherbitmap.words.length;
+    for (let k = this.words.length; k < c; ++k) {
       answer += this.hammingWeight(otherbitmap.words[k] | 0);
     }
   } else {
-    var c = this.count;
-    for (var k = otherbitmap.count ; k < c; ++k) {
+    const c = this.words.length;
+    for (let k = otherbitmap.words.length; k < c; ++k) {
       answer += this.hammingWeight(this.words[k] | 0);
     }
   }
