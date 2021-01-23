@@ -67,6 +67,11 @@ exports.init = function(dir, overwriteConfig) {
   .use(require('ssb-room/tunnel/client'))
   .use(require('ssb-no-auth'))
   .use(require("./simple-blobs"))
+  .use(require('ssb-social-index')({
+    namespace: 'about',
+    type: 'about',
+    destField: 'about'
+  }))
   ()
 
   r.sync = function(rpc) {
