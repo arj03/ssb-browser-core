@@ -44,7 +44,7 @@ exports.init = function (dir, config) {
     })
 
     // helper for rooms to allow connecting to friends directly
-    /*SSB.net.friends = {
+    SSB.net.friends = {
       hops: function(cb) {
         net.db.getIndex('contacts').getGraphForFeed(SSB.net.id, (err, graph) => {
           let hops = {}
@@ -53,7 +53,7 @@ exports.init = function (dir, config) {
           cb(err, hops)
         })
       }
-    }*/
+    }
 
     SSB.net.conn.start()
 
