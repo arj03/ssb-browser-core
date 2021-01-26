@@ -46,6 +46,7 @@
     "uglifyify": "^5.0.2"
   },
   "scripts": {
+    "postinstall": "pushd node_modules/ssb-dht-invite; npm install; npm run compile; popd; pushd node_modules/reconnecting-websocket; sed -i '/reconnecting-websocket-mjs.js/d' package.json; popd; pushd node_modules/ssb-dht-invite/node_modules/reconnecting-websocket; sed -i '/reconnecting-websocket-mjs.js/d' package.json; popd",
     "build": "mkdir -p dist && browserify --full-paths browser.js > dist/bundle-core.js",
     "release": "mkdir -p dist && browserify -g uglifyify browser.js > dist/bundle-core.js",
     "test": "set -e; for t in test/*.js; do tape $t | tap-spec; done"
