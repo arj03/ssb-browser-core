@@ -13,6 +13,7 @@
     "bipf": "^1.4.0",
     "epidemic-broadcast-trees": "^8.0.0",
     "gossip-query": "^2.0.2",
+    "p-defer": "^3.0.0",
     "polyraf": "^1.1.0",
     "promisify-4loc": "^1.0.0",
     "pull-cont": "^0.1.1",

@@ -2,7 +2,7 @@
 var pull = require('pull-stream');
 var toPull = require('stream-to-pull-stream');
 var datDefaults = require('dat-swarm-defaults');
-var swarm = require('hyperswarm-web');
+var swarm = require('hyperswarm');
 var crypto = require('crypto');
 
 function createPeer(_opts) {
@@ -10,9 +10,10 @@ function createPeer(_opts) {
   delete swarmOpts.key;
   delete swarmOpts.keys;
 
-  swarmOpts.bootstrap = ['ws://hyperswarm.mauve.moe']
+  //swarmOpts.bootstrap = ['ws://hyperswarm.mauve.moe']
+  //swarmOpts.bootstrap = ['ws://localhost:4977']
 
-  var sw = swarm(datDefaults(swarmOpts));
+  var sw = swarm(swarmOpts) //swarm(datDefaults(swarmOpts));
   return sw;
 }
 
@@ -39,7 +40,7 @@ function updateChannelsToHost(onError, serverCfg) {
     newChannels.forEach(channel => {
       if (!oldChannels.has(channel)) {
         serverCfg.channels.add(channel);
-        serverCfg.peer.join(crypto.createHash('sha256').update(channel).digest(), { lookup: false, announce: true });
+        serverCfg.peer.join(crypto.createHash('sha256').update(channel).digest(), { lookup: true, announce: true });
       }
     });
 
@@ -155,7 +156,7 @@ module.exports = function makePlugin(opts) {
           cb(err);
         }
       };
-      clientPeer.join(crypto.createHash('sha256').update(channel).digest(), { lookup: true, announce: false });
+      clientPeer.join(crypto.createHash('sha256').update(channel).digest(), { lookup: true, announce: true });
       clientPeer.on('connection', listener);
       clientPeer.on('connection-closed', (conn, info) => {
         if (connected) {
@@ -186,7 +187,7 @@ module.exports = function makePlugin(opts) {
   };
 };
 
-},{"crypto":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/crypto-browserify/index.js","dat-swarm-defaults":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/dat-swarm-defaults/index.js","hyperswarm-web":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/hyperswarm-web/index.js","pull-stream":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/pull-stream/index.js","stream-to-pull-stream":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/stream-to-pull-stream/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/core-util-is/lib/util.js":[function(require,module,exports){
+},{"crypto":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/crypto-browserify/index.js","dat-swarm-defaults":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/dat-swarm-defaults/index.js","hyperswarm":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/hyperswarm-web/index.js","pull-stream":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/pull-stream/index.js","stream-to-pull-stream":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/stream-to-pull-stream/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/core-util-is/lib/util.js":[function(require,module,exports){
 (function (Buffer){(function (){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -3810,7 +3811,75 @@ function simpleWrite(buf) {
 function simpleEnd(buf) {
   return buf && buf.length ? this.write(buf) : '';
 }
-},{"safe-buffer":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/safe-buffer/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/emittery/index.js":[function(require,module,exports){
+},{"safe-buffer":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/safe-buffer/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/index.js":[function(require,module,exports){
+'use strict';
+const Duplex = require('readable-stream').Duplex;
+
+const kCallback = Symbol('Callback');
+const kOtherSide = Symbol('Other');
+
+class DuplexSocket extends Duplex {
+  constructor(options) {
+    super(options);
+    this[kCallback] = null;
+    this[kOtherSide] = null;
+  }
+
+  _read() {
+    const callback = this[kCallback];
+    if (callback) {
+      this[kCallback] = null;
+      callback();
+    }
+  }
+
+  _write(chunk, encoding, callback) {
+    this[kOtherSide][kCallback] = callback;
+    this[kOtherSide].push(chunk);
+  }
+
+  _final(callback) {
+    this[kOtherSide].on('end', callback);
+    this[kOtherSide].push(null);
+  }
+}
+
+class DuplexPair {
+  constructor(options) {
+    this.socket1 = new DuplexSocket(options);
+    this.socket2 = new DuplexSocket(options);
+    this.socket1[kOtherSide] = this.socket2;
+    this.socket2[kOtherSide] = this.socket1;
+  }
+}
+
+module.exports = DuplexPair;
+
+},{"readable-stream":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/readable-stream/readable-browser.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/isarray/index.js":[function(require,module,exports){
+arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/isarray/index.js"][0].apply(exports,arguments)
+},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/readable-stream/lib/_stream_duplex.js":[function(require,module,exports){
+arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/_stream_duplex.js"][0].apply(exports,arguments)
+},{"./_stream_readable":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/readable-stream/lib/_stream_readable.js","./_stream_writable":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/readable-stream/lib/_stream_writable.js","core-util-is":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/core-util-is/lib/util.js","inherits":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/inherits/inherits_browser.js","process-nextick-args":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/process-nextick-args/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/readable-stream/lib/_stream_passthrough.js":[function(require,module,exports){
+arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/_stream_passthrough.js"][0].apply(exports,arguments)
+},{"./_stream_transform":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/readable-stream/lib/_stream_transform.js","core-util-is":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/core-util-is/lib/util.js","inherits":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/inherits/inherits_browser.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/readable-stream/lib/_stream_readable.js":[function(require,module,exports){
+arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/_stream_readable.js"][0].apply(exports,arguments)
+},{"./_stream_duplex":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/readable-stream/lib/_stream_duplex.js","./internal/streams/BufferList":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/readable-stream/lib/internal/streams/BufferList.js","./internal/streams/destroy":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/readable-stream/lib/internal/streams/destroy.js","./internal/streams/stream":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/readable-stream/lib/internal/streams/stream-browser.js","_process":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/process/browser.js","core-util-is":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/core-util-is/lib/util.js","events":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/events/events.js","inherits":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/inherits/inherits_browser.js","isarray":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/isarray/index.js","process-nextick-args":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/process-nextick-args/index.js","safe-buffer":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/safe-buffer/index.js","string_decoder/":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/string_decoder/lib/string_decoder.js","util":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browser-resolve/empty.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/readable-stream/lib/_stream_transform.js":[function(require,module,exports){
+arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/_stream_transform.js"][0].apply(exports,arguments)
+},{"./_stream_duplex":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/readable-stream/lib/_stream_duplex.js","core-util-is":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/core-util-is/lib/util.js","inherits":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/inherits/inherits_browser.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/readable-stream/lib/_stream_writable.js":[function(require,module,exports){
+arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/_stream_writable.js"][0].apply(exports,arguments)
+},{"./_stream_duplex":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/readable-stream/lib/_stream_duplex.js","./internal/streams/destroy":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/readable-stream/lib/internal/streams/destroy.js","./internal/streams/stream":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/readable-stream/lib/internal/streams/stream-browser.js","_process":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/process/browser.js","core-util-is":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/core-util-is/lib/util.js","inherits":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/inherits/inherits_browser.js","process-nextick-args":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/process-nextick-args/index.js","safe-buffer":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/safe-buffer/index.js","timers":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/timers-browserify/main.js","util-deprecate":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/util-deprecate/browser.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/readable-stream/lib/internal/streams/BufferList.js":[function(require,module,exports){
+arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/internal/streams/BufferList.js"][0].apply(exports,arguments)
+},{"safe-buffer":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/safe-buffer/index.js","util":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browser-resolve/empty.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/readable-stream/lib/internal/streams/destroy.js":[function(require,module,exports){
+arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/internal/streams/destroy.js"][0].apply(exports,arguments)
+},{"process-nextick-args":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/process-nextick-args/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/readable-stream/lib/internal/streams/stream-browser.js":[function(require,module,exports){
+arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/internal/streams/stream-browser.js"][0].apply(exports,arguments)
+},{"events":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/events/events.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/readable-stream/readable-browser.js":[function(require,module,exports){
+arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/readable-browser.js"][0].apply(exports,arguments)
+},{"./lib/_stream_duplex.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/readable-stream/lib/_stream_duplex.js","./lib/_stream_passthrough.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/readable-stream/lib/_stream_passthrough.js","./lib/_stream_readable.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/readable-stream/lib/_stream_readable.js","./lib/_stream_transform.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/readable-stream/lib/_stream_transform.js","./lib/_stream_writable.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/readable-stream/lib/_stream_writable.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/safe-buffer/index.js":[function(require,module,exports){
+arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/safe-buffer/index.js"][0].apply(exports,arguments)
+},{"buffer":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browserify/node_modules/buffer/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/string_decoder/lib/string_decoder.js":[function(require,module,exports){
+arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/string_decoder/lib/string_decoder.js"][0].apply(exports,arguments)
+},{"safe-buffer":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/node_modules/safe-buffer/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/emittery/index.js":[function(require,module,exports){
 'use strict';
 
 const anyMap = new WeakMap();
@@ -5556,21 +5625,38 @@ module.exports = class ProxyStream extends Duplex {
 const { EventEmitter } = require('events')
 const webRTCSwarm = require('@geut/discovery-swarm-webrtc')
 const HyperswarmClient = require('hyperswarm-proxy-ws/client')
+const DuplexPair = require('duplexpair')
 
-const DEFAULT_WEBRTC_BOOTSTRAP = ['https://geut-webrtc-signal.herokuapp.com/']
+const DEFAULT_WEBRTC_BOOTSTRAP = ['wss://geut-webrtc-signal-v3.herokuapp.com', 'wss://signal.dat-web.eu', 'wss://geut-webrtc-signal-v3.glitch.me']
 const DEFAULT_PROXY_SERVER = 'wss://hyperswarm.mauve.moe'
 
 module.exports = function swarm (opts) {
   return new HyperswarmWeb(opts)
 }
 
+function getBootstrapUrls(path, defaultUrls = [], specificUrls = []) {
+  let urls = defaultUrls.map(url => {
+    if (url.endsWith('/')) {
+      url = url.slice(0, -1)
+    }
+
+    return `${url}/${path}`
+  })
+
+  urls = urls.concat(specificUrls)
+
+  if (urls.length === 0) return
+  return urls
+}
+
 class HyperswarmWeb extends EventEmitter {
   constructor (opts = {}) {
     super()
     const {
-      maxPeers,
+      bootstrap,
       webrtcBootstrap,
       wsProxy,
+      maxPeers,
       simplePeer,
       wsReconnectDelay
     } = opts
@@ -5578,11 +5664,11 @@ class HyperswarmWeb extends EventEmitter {
     this.webrtcOpts = {
       maxPeers,
       simplePeer,
-      bootstrap: webrtcBootstrap || DEFAULT_WEBRTC_BOOTSTRAP,
+      bootstrap: getBootstrapUrls('signal', bootstrap, webrtcBootstrap) || DEFAULT_WEBRTC_BOOTSTRAP
     }
     this.wsOpts = {
       maxPeers,
-      proxy: wsProxy || DEFAULT_PROXY_SERVER
+      proxy: getBootstrapUrls('proxy', bootstrap, wsProxy) || DEFAULT_PROXY_SERVER
     }
 
     if (wsReconnectDelay) {
@@ -5597,10 +5683,22 @@ class HyperswarmWeb extends EventEmitter {
     this.emit('connection', connection, info)
   }
 
-  _handleWebRTC (connection, discoveryInfo) {
-  	const info = new WebRTCInfo(discoveryInfo)
+  _handleWebRTC (connection, info) {
+    const { id, channel, initiator } = info
 
-    this.emit('connection', connection, info)
+    const peerInfo = {
+      type: 'webrtc',
+      client: initiator,
+      peer: {
+        port: 0,
+        host: id,
+        topic: channel
+      },
+      // TODO: Add deduplication to WebRTC logic
+      deduplicate: () => false
+    }
+
+    this.emit('connection', connection, peerInfo)
   }
 
   address () {
@@ -5665,36 +5763,14 @@ class HyperswarmWeb extends EventEmitter {
 
   destroy (cb) {
     this.destroyed = true
-    this.ws.destroy(() => {
-      this.webrtc.close().then(cb, cb)
+    this.webrtc.close(() => {
+      this.ws.destroy(cb)
     })
   }
 }
 
-class WebRTCInfo {
-	constructor({ id, channel, initiator}) {
-		this.type = 'webrtc'
-		this.client = initiator
-		this.peer = {
-			port: 0,
-			host: id,
-			topic: channel
-		}
-	}
-
-	// Can't backoff with WebRTC
-	backoff () {
-		return false
-	}
-
-	// Can't easily deduplicate yet
-	deduplicate() {
-		return false
-	}
-}
-
 }).call(this)}).call(this,require('_process'))
-},{"@geut/discovery-swarm-webrtc":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/hyperswarm-web/node_modules/@geut/discovery-swarm-webrtc/index.js","_process":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/process/browser.js","events":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/events/events.js","hyperswarm-proxy-ws/client":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/hyperswarm-proxy-ws/client.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/hyperswarm-web/node_modules/@geut/discovery-swarm-webrtc/index.js":[function(require,module,exports){
+},{"@geut/discovery-swarm-webrtc":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/hyperswarm-web/node_modules/@geut/discovery-swarm-webrtc/index.js","_process":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/process/browser.js","duplexpair":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexpair/index.js","events":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/events/events.js","hyperswarm-proxy-ws/client":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/hyperswarm-proxy-ws/client.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/hyperswarm-web/node_modules/@geut/discovery-swarm-webrtc/index.js":[function(require,module,exports){
 (function (process,Buffer){(function (){
 const { EventEmitter } = require('events')
 const crypto = require('crypto')
@@ -17623,6 +17699,9 @@ exports.init = function (dir, config) {
 
     SSB.net.conn.start()
 
+    // Also listen for DHT connections.
+    SSB.net.dhtInvite.start((err, success) => { })
+
     SSB.events.emit("SSB: loaded")
   })
 }
@@ -18179,7 +18258,8 @@ exports.init = function(dir, overwriteConfig) {
     keys,
     connections: {
       incoming: {
-	tunnel: [{ scope: 'public', transform: 'shs' }]
+	tunnel: [{ scope: 'public', transform: 'shs' }],
+	dht: [{ scope: 'public', transform: 'shs' }]
       },
       outgoing: {
 	net: [{ transform: 'shs' }],
