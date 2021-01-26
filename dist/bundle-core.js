@@ -186,1390 +186,7 @@ module.exports = function makePlugin(opts) {
   };
 };
 
-},{"crypto":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/crypto-browserify/index.js","dat-swarm-defaults":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/dat-swarm-defaults/index.js","hyperswarm-web":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/hyperswarm-web/index.js","pull-stream":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/pull-stream/index.js","stream-to-pull-stream":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/stream-to-pull-stream/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/@geut/discovery-swarm-webrtc/index.js":[function(require,module,exports){
-(function (Buffer){(function (){
-const { EventEmitter } = require('events')
-const { Readable } = require('stream')
-const crypto = require('crypto')
-
-const pump = require('pump')
-const MMST = require('mostly-minimal-spanning-tree')
-const debounce = require('p-debounce')
-
-const log = require('debug')('discovery-swarm-webrtc')
-const SignalClient = require('./lib/signal-client')
-const Peer = require('./lib/peer')
-const Scheduler = require('./lib/scheduler')
-const { toHex, SwarmError, callbackPromise, resolveCallback } = require('./lib/utils')
-
-const ERR_MAX_PEERS_REACHED = 'ERR_MAX_PEERS_REACHED'
-const ERR_INVALID_CHANNEL = 'ERR_INVALID_CHANNEL'
-const ERR_CONNECTION_DUPLICATED = 'ERR_CONNECTION_DUPLICATED'
-const ERR_REMOTE_MAX_PEERS_REACHED = 'ERR_REMOTE_MAX_PEERS_REACHED'
-const ERR_REMOTE_INVALID_CHANNEL = 'ERR_REMOTE_INVALID_CHANNEL'
-const ERR_REMOTE_CONNECTION_DUPLICATED = 'ERR_REMOTE_CONNECTION_DUPLICATED'
-
-class DiscoverySwarmWebrtc extends EventEmitter {
-  constructor (opts = {}) {
-    super()
-    log('opts', opts)
-
-    console.assert(Array.isArray(opts.bootstrap) && opts.bootstrap.length > 0, 'The `bootstrap` options is required.')
-    console.assert(!opts.id || Buffer.isBuffer(opts.id), 'The `id` option needs to be a Buffer.')
-
-    this._id = opts.id || crypto.randomBytes(32)
-
-    this._stream = opts.stream
-
-    this._simplePeer = opts.simplePeer
-
-    this._peers = new Set()
-
-    this._channels = new Map()
-
-    this._mmsts = new Map()
-
-    this._candidates = new Map()
-
-    this._scheduler = new Scheduler()
-
-    this._destroyed = false
-
-    this._maxPeers = opts.maxPeers
-
-    this.signal = new SignalClient({
-      bootstrap: opts.bootstrap,
-      connectionTimeout: opts.connectionTimeout || 10 * 1000,
-      requestTimeout: opts.requestTimeout || 5 * 1000
-    })
-
-    this._updateCandidates = debounce(this._updateCandidates, 500)
-    this._initialize(opts)
-  }
-
-  get id () {
-    return this._id
-  }
-
-  get connecting () {
-    return this.getPeers().filter(peer => !peer.connected).length
-  }
-
-  get connected () {
-    return this.getPeers().filter(peer => peer.connected).length
-  }
-
-  listen () {
-    // Empty method to respect the API of discovery-swarm
-  }
-
-  getPeers (channel) {
-    console.assert(!channel || Buffer.isBuffer(channel))
-
-    const peers = Array.from(this._peers.values())
-
-    if (channel) {
-      return peers.filter(peer => peer.channel.equals(channel))
-    }
-
-    return peers
-  }
-
-  getCandidates (channel) {
-    console.assert(!channel || Buffer.isBuffer(channel))
-    return this._candidates.get(toHex(channel)) || { list: [], lastUpdate: 0 }
-  }
-
-  join (channel) {
-    console.assert(Buffer.isBuffer(channel))
-
-    // Account for buffers being passed in
-    const channelStr = toHex(channel)
-    if (this._channels.has(channelStr)) {
-      return
-    }
-
-    this._channels.set(channelStr, channel)
-
-    const mmst = new MMST({
-      id: this._id,
-      lookup: () => this._lookup(channel),
-      connect: (to) => this._createConnection(to, channel),
-      maxPeers: this._maxPeers,
-      lookupTimeout: 5 * 1000
-    })
-
-    this._mmsts.set(channelStr, mmst)
-
-    this._scheduler.addTask(channelStr, async (task) => {
-      if (this._isClosed(channel)) return task.destroy()
-
-      await this._run(channel)
-
-      const connected = this.getPeers(channel)
-      const { list } = this.getCandidates(channel)
-      if (list.length === 0 || connected.length === list.length) return 30 * 1000
-    }, 10 * 1000)
-
-    if (this.signal.connected) {
-      this.signal.discover(this._id, channel)
-    }
-  }
-
-  leave (channel, cb = callbackPromise()) {
-    resolveCallback(this._leave(channel), cb)
-    return cb.promise
-  }
-
-  close (cb = callbackPromise()) {
-    resolveCallback(this._close(), cb)
-    return cb.promise
-  }
-
-  info (...args) {
-    return this.signal.info(...args)
-  }
-
-  async _leave (channel) {
-    console.assert(Buffer.isBuffer(channel))
-
-    // Account for buffers being passed in
-    const channelStr = toHex(channel)
-
-    this._scheduler.deleteTask(channelStr)
-    this._mmsts.get(channelStr).destroy()
-    this._mmsts.delete(channelStr)
-    this._channels.delete(channelStr)
-    this._candidates.delete(channelStr)
-
-    // We need to notify to the signal that we our leaving
-    try {
-      await this.signal.leave(this._id, channel)
-    } catch (err) {
-      // Nothing to do.
-    }
-
-    await Promise.all(this.getPeers(channel).map(async peer => this._disconnectPeer(peer)))
-    this.emit('leave', channel)
-  }
-
-  async _close () {
-    if (this._destroyed) return
-    this._destroyed = true
-
-    await this.signal.disconnect()
-    this._scheduler.clearTasks()
-    this._mmsts.forEach(mmst => mmst.destroy())
-    this._mmsts.clear()
-    this._channels.clear()
-    this._candidates.clear()
-
-    await Promise.all(this.getPeers().map(async peer => this._disconnectPeer(peer)))
-
-    this.emit('close')
-  }
-
-  _initialize () {
-    const signal = this.signal
-
-    // It would log the errors and prevent of throw it.
-    this.on('error', (...args) => log('error', ...args))
-
-    signal.on('error', err => this.emit('error', err))
-
-    signal.on('discover', async ({ peers, channel }) => {
-      log('discover', { channel })
-
-      if (this._isClosed(channel)) return
-
-      await this._updateCandidates(channel, peers)
-      await this._run(channel)
-      this._scheduler.startTask(toHex(channel))
-    })
-
-    signal.on('request', async (request) => {
-      const { initiator: id, channel } = request
-
-      try {
-        await this._createConnection(id, channel, request)
-      } catch (err) {
-        // nothing to do
-      }
-    })
-
-    signal.on('info', data => this.emit('info', data))
-
-    signal.on('connect', () => {
-      this._channels.forEach(channel => {
-        signal.discover(this._id, channel)
-      })
-    })
-  }
-
-  async _disconnectPeer (peer) {
-    await peer.disconnect()
-    this._peers.delete(peer)
-  }
-
-  _isClosed (channel) {
-    return !this._channels.has(toHex(channel))
-  }
-
-  async _createConnection (id, channel, request) {
-    const peer = new Peer(id, channel, {
-      connectionId: request && request.connectionId,
-      initiator: !request
-    })
-
-    this._peers.add(peer)
-
-    log(`createConnection from ${request ? 'request' : 'connect'}`, { request, info: peer.printInfo() })
-
-    try {
-      const mmst = this._getMMST(peer.channel)
-
-      if (this._isClosed(peer.channel)) {
-        request && request.reject({ code: ERR_REMOTE_INVALID_CHANNEL })
-        throw new SwarmError(ERR_INVALID_CHANNEL)
-      }
-
-      if (request && !mmst.shouldHandleIncoming()) {
-        request.reject({ code: ERR_REMOTE_MAX_PEERS_REACHED })
-        throw new SwarmError(ERR_MAX_PEERS_REACHED)
-      }
-
-      const duplicate = this._checkForDuplicate(peer)
-      if (duplicate) {
-        request && request.reject({ code: ERR_REMOTE_CONNECTION_DUPLICATED })
-        throw new SwarmError(ERR_CONNECTION_DUPLICATED)
-      }
-
-      let socket = null
-      if (request) {
-        mmst.addConnection(peer.id, peer)
-        socket = await request.accept({}, this._simplePeer) // Accept the incoming request
-      } else {
-        socket = await this.signal.connect(peer, this._simplePeer)
-      }
-
-      await peer.setSocket(socket)
-
-      if (this._isClosed(peer.channel)) {
-        throw new SwarmError(ERR_INVALID_CHANNEL)
-      }
-
-      this._bindSocketEvents(peer)
-
-      return peer
-    } catch (err) {
-      if (err.code === ERR_REMOTE_INVALID_CHANNEL) {
-        // Remove a candidate.
-        const candidates = this.getCandidates(peer.channel)
-        candidates.list = candidates.filter(candidate => !candidate.equals(peer.id))
-      }
-
-      this.emit('connect-failed', err, peer.getInfo())
-      await this._disconnectPeer(peer).catch(err => this.emit('error', err, peer.getInfo()))
-      this.emit('error', err, peer.getInfo())
-      throw err
-    }
-  }
-
-  _bindSocketEvents (peer) {
-    const { socket } = peer
-    const info = peer.getInfo()
-
-    socket.on('error', err => {
-      log('error', err)
-      this.emit('connection-error', err, info)
-    })
-
-    socket.on('connect', () => {
-      log('connect', { peer })
-      if (this._isClosed(peer.channel)) {
-        peer.disconnect()
-        return
-      }
-
-      if (socket.destroyed) {
-        return
-      }
-
-      if (!this._stream) {
-        this._handleConnection(socket, info)
-        return
-      }
-
-      const conn = this._stream(info)
-      this.emit('handshaking', conn, info)
-      conn.on('handshake', this._handshake.bind(this, conn, info))
-      pump(socket, conn, socket)
-    })
-
-    socket.on('close', () => {
-      log('close', { peer })
-
-      this._peers.delete(peer)
-
-      this.emit('connection-closed', socket, info)
-    })
-  }
-
-  _handshake (conn, info) {
-    this._handleConnection(conn, info)
-  }
-
-  _handleConnection (conn, info) {
-    this.emit('connection', conn, info)
-  }
-
-  async _updateCandidates (channel, peers) {
-    if (!this.signal.connected) return
-
-    // We try to minimize how many times we get candidates from the signal.
-    const { lastUpdate } = this.getCandidates(channel)
-    const newUpdate = Date.now()
-    if (newUpdate - lastUpdate < 5 * 1000) return
-
-    let list = []
-    if (peers) {
-      list = peers
-    } else {
-      list = await this.signal.candidates(this.id, channel)
-    }
-
-    list = list.filter(id => !id.equals(this._id))
-
-    this._candidates.set(toHex(channel), { lastUpdate: Date.now(), list })
-
-    this.emit('candidates-updated', channel, list)
-  }
-
-  async _run (channel) {
-    if (!this.signal.connected) return
-    if (this.getPeers(channel).filter(p => p.initiator).length > 0) return
-
-    try {
-      if (!this._isClosed(channel)) {
-        await this._getMMST(channel).run()
-      }
-    } catch (err) {
-      // nothing to do
-      log('run error', err.message)
-    }
-  }
-
-  _getMMST (channel) {
-    return this._mmsts.get(toHex(channel))
-  }
-
-  _lookup (channel) {
-    const stream = new Readable({
-      read () {},
-      objectMode: true
-    })
-
-    this._updateCandidates(channel).then(() => {
-      stream.push(this.getCandidates(channel).list)
-      stream.push(null)
-    }).catch(() => {
-      stream.push(this.getCandidates(channel).list)
-      stream.push(null)
-    })
-
-    return stream
-  }
-
-  _checkForDuplicate (peer) {
-    const oldPeer = this.getPeers(peer.channel).find(p => p.id.equals(peer.id) && !p.connectionId.equals(peer.connectionId))
-    if (!oldPeer) {
-      return
-    }
-
-    const connections = [peer, oldPeer]
-
-    /**
-     * The first case is to have duplicate connections from the same origin (remote or local).
-     * In this case we do a sort by connectionId and destroy the first one.
-     */
-    if ((peer.initiator && oldPeer.initiator) || (!peer.initiator && !oldPeer.initiator)) {
-      return connections.sort((a, b) => Buffer.compare(a.connectionId, b.connectionId))[0]
-    }
-
-    /**
-     * The second case is to have duplicate connections where each connection is started from different origins.
-     * In this case we do a sort by peer id and destroy the first one.
-     */
-    const toDestroy = [this._id, peer.id].sort(Buffer.compare)[0]
-    return connections.find(p => p.id.equals(toDestroy))
-  }
-}
-
-module.exports = (...args) => new DiscoverySwarmWebrtc(...args)
-
-}).call(this)}).call(this,require("buffer").Buffer)
-},{"./lib/peer":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/@geut/discovery-swarm-webrtc/lib/peer.js","./lib/scheduler":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/@geut/discovery-swarm-webrtc/lib/scheduler.js","./lib/signal-client":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/@geut/discovery-swarm-webrtc/lib/signal-client.js","./lib/utils":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/@geut/discovery-swarm-webrtc/lib/utils.js","buffer":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browserify/node_modules/buffer/index.js","crypto":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/crypto-browserify/index.js","debug":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/debug/src/browser.js","events":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/events/events.js","mostly-minimal-spanning-tree":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/mostly-minimal-spanning-tree/index.js","p-debounce":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/p-debounce/index.js","pump":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/pump/index.js","stream":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/stream-browserify/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/@geut/discovery-swarm-webrtc/lib/peer.js":[function(require,module,exports){
-(function (Buffer){(function (){
-const { EventEmitter } = require('events')
-const crypto = require('crypto')
-
-const { toHex, SwarmError } = require('./utils')
-
-class Peer extends EventEmitter {
-  constructor (id, channel, opts = {}) {
-    super()
-
-    console.assert(Buffer.isBuffer(id))
-    console.assert(Buffer.isBuffer(channel))
-
-    const { socket, connectionId = crypto.randomBytes(32), initiator = true } = opts
-
-    this.id = id
-    this.channel = channel
-    this.socket = socket
-    this.connectionId = connectionId
-    this.initiator = initiator
-
-    this._destroyed = false
-  }
-
-  get connected () {
-    return !!(this.socket && this.socket.connected)
-  }
-
-  async setSocket (socket) {
-    this.socket = socket
-
-    if (this.socket.destroyed) {
-      await this.disconnect()
-      throw new Error(new SwarmError('ERR_CONNECTION_CLOSED'))
-    }
-
-    if (this._destroyed) {
-      if (!this.socket.destroyed) this.socket.destroy()
-      throw new Error(new SwarmError('ERR_CONNECTION_CLOSED'))
-    }
-
-    this.socket.once('close', () => {
-      this._handleClose()
-    })
-  }
-
-  async disconnect (err) {
-    if (this._destroyed) return
-    this._destroyed = true
-
-    if (!this.socket) {
-      this._handleClose()
-      return
-    }
-
-    return new Promise((resolve) => {
-      if (this.socket.destroyed) {
-        return resolve()
-      }
-
-      this.socket.once('close', () => {
-        resolve()
-      })
-
-      this.socket.destroy(err)
-    })
-  }
-
-  close () {
-    this.disconnect().then(() => {}).catch(() => {})
-  }
-
-  getInfo () {
-    return {
-      id: this.id,
-      channel: this.channel,
-      initiator: this.initiator
-    }
-  }
-
-  printInfo () {
-    return {
-      id: toHex(this.id),
-      channel: toHex(this.channel),
-      initiator: this.initiator
-    }
-  }
-
-  _handleClose () {
-    this.emit('close')
-    this.emit('end')
-  }
-}
-
-module.exports = Peer
-
-}).call(this)}).call(this,{"isBuffer":require("../../../../../ssb-browser-core/node_modules/is-buffer/index.js")})
-},{"../../../../../ssb-browser-core/node_modules/is-buffer/index.js":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/is-buffer/index.js","./utils":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/@geut/discovery-swarm-webrtc/lib/utils.js","crypto":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/crypto-browserify/index.js","events":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/events/events.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/@geut/discovery-swarm-webrtc/lib/scheduler.js":[function(require,module,exports){
-const { EventEmitter } = require('events')
-const delay = require('delay')
-const pForever = require('p-forever')
-
-class Task extends EventEmitter {
-  constructor (id, job, ms) {
-    super()
-    this._id = id
-    this._job = task => job(task)
-    this._ms = ms
-    this._started = false
-    this._destroyed = false
-    this._delayedPromise = null
-  }
-
-  start () {
-    if (this._started || this._destroyed) return
-    let ms = this._ms
-
-    pForever(async () => {
-      try {
-        if (this._destroyed) return pForever.end
-
-        this._delayedPromise = delay(ms)
-
-        await this._delayedPromise
-
-        if (this._destroyed) return pForever.end
-
-        const newMS = await this._job(this)
-
-        if (Number.isInteger(newMS)) {
-          ms = newMS
-        } else {
-          ms = this._ms
-        }
-      } catch (err) {
-        console.warn(`Error in Task ${this._id}`, err.message)
-      }
-    }).finally(() => {
-      this.emit('destroy')
-    })
-
-    this._started = true
-  }
-
-  destroy () {
-    if (this._destroyed) return
-    this._destroyed = true
-    if (this._delayedPromise) this._delayedPromise.clear()
-  }
-}
-
-class Scheduler {
-  constructor () {
-    this._tasks = new Map()
-  }
-
-  addTask (id, job, ms) {
-    const task = new Task(id, job, ms)
-    this._tasks.set(id, task)
-    task.on('destroy', () => {
-      if (this._tasks.has(id)) {
-        this._tasks.delete(id)
-      }
-    })
-    return task
-  }
-
-  startTask (id) {
-    const task = this._tasks.get(id)
-    if (task) {
-      task.start()
-    }
-  }
-
-  deleteTask (id) {
-    const task = this._tasks.get(id)
-    if (task) {
-      task.destroy()
-    }
-  }
-
-  clearTasks () {
-    this._tasks.forEach(task => {
-      task.destroy()
-    })
-  }
-}
-
-module.exports = Scheduler
-
-},{"delay":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/delay/index.js","events":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/events/events.js","p-forever":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/p-forever/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/@geut/discovery-swarm-webrtc/lib/signal-client.js":[function(require,module,exports){
-const crypto = require('crypto')
-const { EventEmitter } = require('events')
-const SimpleSignalClient = require('simple-signal-client')
-const io = require('socket.io-client')
-const parseUrl = require('socket.io-client/lib/url')
-
-const { SwarmError, toHex, toBuffer } = require('./utils')
-
-const ERR_TRANSACTION_TIMEOUT = 'ERR_TRANSACTION_TIMEOUT'
-
-class Request {
-  constructor (simpleRequest) {
-    this._simpleRequest = simpleRequest
-  }
-
-  get initiator () {
-    return toBuffer(this._simpleRequest.initiator)
-  }
-
-  get channel () {
-    return toBuffer(this._simpleRequest.metadata.channel)
-  }
-
-  get connectionId () {
-    return toBuffer(this._simpleRequest.metadata.connectionId)
-  }
-
-  async accept (data, simplePeer) {
-    try {
-      const { peer: socket } = await this._simpleRequest.accept(data, simplePeer)
-      return socket
-    } catch (err) {
-      throw SignalClient.parseMetadataError(err)
-    }
-  }
-
-  async reject (data) {
-    return this._simpleRequest.reject(data)
-  }
-}
-
-class SignalClient extends EventEmitter {
-  static parseMetadataError (err) {
-    if (err instanceof Error) {
-      return err
-    }
-
-    if (!err.metadata || !err.metadata.code) {
-      return new SwarmError(JSON.stringify(err))
-    }
-
-    const { message, code } = err.metadata
-    return new SwarmError(message || code, code)
-  }
-
-  constructor (options = {}) {
-    super()
-
-    const { bootstrap, requestTimeout, ...opts } = options
-
-    this._urls = bootstrap.map(url => parseUrl(url).source)
-    this._simpleSignal = new SimpleSignalClient(io(this._urls[0]), opts)
-    this._transactions = new Map()
-    this._requestTimeout = requestTimeout
-    this._destroyed = false
-
-    this._initialize()
-  }
-
-  get socket () {
-    return this._simpleSignal.socket
-  }
-
-  get connected () {
-    return this.socket.connected
-  }
-
-  async candidates (id, channel) {
-    return this._emitTransaction('simple-signal[candidates]', { id: toHex(id), channel: toHex(channel) }, ({ peers = [] }) => {
-      return peers.map(id => toBuffer(id))
-    })
-  }
-
-  async leave (id, channel) {
-    return this._emitTransaction('simple-signal[leave]', { id: toHex(id), channel: toHex(channel) })
-  }
-
-  info (discoveryData = {}) {
-    return this.socket.emit('simple-signal[info]', { discoveryData })
-  }
-
-  discover (id, channel) {
-    return this._simpleSignal.discover({ id: toHex(id), channel: toHex(channel) })
-  }
-
-  async connect (peer, simplePeer) {
-    try {
-      const { peer: socket } = await this._simpleSignal.connect(
-        toHex(peer.id),
-        { channel: toHex(peer.channel), connectionId: toHex(peer.connectionId) },
-        simplePeer
-      )
-      return socket
-    } catch (err) {
-      throw SignalClient.parseMetadataError(err)
-    }
-  }
-
-  async disconnect () {
-    if (this._destroyed) return
-    this._destroyed = true
-
-    return new Promise(resolve => {
-      if (this.socket.disconnected) {
-        this._simpleSignal.destroy()
-        resolve()
-      }
-
-      this.socket.once('disconnect', resolve)
-      this._simpleSignal.destroy()
-    })
-  }
-
-  _initialize () {
-    this.socket.on('connect', () => this.emit('connect'))
-    this.socket.on('connect_error', err => this.emit('error', new SwarmError(err.message, 'socket-connect-error', err.stack)))
-    this.socket.on('connect_timeout', timeout => this.emit('error', new SwarmError(`connect-timeout ${timeout}`, 'socket-connect-timeout')))
-    this.socket.on('error', err => this.emit('error', new SwarmError(err.message, 'socket-error', err.stack)))
-    this.socket.on('reconnect_failed', () => this.emit('error', new SwarmError('socket-reconnect-failed')))
-
-    this.socket.on('reconnect_error', err => {
-      this.emit('error', new SwarmError(err.message, 'socket-reconnect-error', err.stack))
-      const lastUrl = this.socket.io.uri
-      const lastIdx = this._urls.indexOf(lastUrl)
-      const nextIdx = lastIdx === (this._urls.length - 1) ? 0 : lastIdx + 1
-      this.socket.io.uri = this._urls[nextIdx]
-    })
-
-    this._simpleSignal.on('discover', ({ channel, peers = [] }) => this.emit('discover', {
-      channel: toBuffer(channel),
-      peers: peers.map(id => toBuffer(id))
-    }))
-
-    this._simpleSignal.on('request', request => this.emit('request', new Request(request)))
-
-    this.socket.on('simple-signal[info]', (data = {}) => this.emit('info', data))
-  }
-
-  async _emitTransaction (event, discoveryData, map = data => data) {
-    const transactionId = crypto.randomBytes(12).toString('hex')
-
-    const promise = new Promise((resolve, reject) => {
-      this._transactions.set(transactionId, { resolve, reject })
-      this.socket.emit(event, { transactionId, discoveryData }, data => {
-        if (this._transactions.has(transactionId)) {
-          resolve(data.discoveryData)
-        }
-      })
-    })
-
-    const timer = setTimeout(() => {
-      if (this._transactions.has(transactionId)) {
-        const { reject } = this._transactions.get(transactionId)
-        reject(new SwarmError(`Timeout on event transaction: ${event}`, ERR_TRANSACTION_TIMEOUT))
-      }
-    }, this._requestTimeout)
-
-    return promise
-      .then(data => {
-        clearTimeout(timer)
-        this._transactions.delete(transactionId)
-        return map(data)
-      })
-      .catch(err => {
-        clearTimeout(timer)
-        this._transactions.delete(transactionId)
-        throw err
-      })
-  }
-}
-
-module.exports = SignalClient
-
-},{"./utils":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/@geut/discovery-swarm-webrtc/lib/utils.js","crypto":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/crypto-browserify/index.js","events":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/events/events.js","simple-signal-client":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/simple-signal-client/src/index.js","socket.io-client":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/lib/index.js","socket.io-client/lib/url":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/lib/url.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/@geut/discovery-swarm-webrtc/lib/utils.js":[function(require,module,exports){
-(function (Buffer){(function (){
-const toHex = buff => {
-  if (typeof buff === 'string') {
-    return buff
-  }
-
-  if (Buffer.isBuffer(buff)) {
-    return buff.toString('hex')
-  }
-
-  throw new Error('Cannot convert the buffer to hex: ', buff)
-}
-
-const toBuffer = str => {
-  if (Buffer.isBuffer(str)) {
-    return str
-  }
-
-  if (typeof str === 'string') {
-    return Buffer.from(str, 'hex')
-  }
-
-  throw new Error('Cannot convert the string to buffer: ', str)
-}
-
-class SwarmError extends Error {
-  constructor (message, code, stack) {
-    super(message)
-
-    this.code = code || message
-
-    if (typeof Error.captureStackTrace === 'function') {
-      Error.captureStackTrace(this, this.constructor)
-    } else {
-      this.stack = stack || (new Error(this.message)).stack
-    }
-  }
-}
-
-const callbackPromise = () => {
-  let callback
-
-  const promise = new Promise((resolve, reject) => {
-    callback = (err, value) => {
-      if (err) reject(err)
-      else resolve(value)
-    }
-  })
-
-  callback.promise = promise
-  return callback
-}
-
-const resolveCallback = (promise, cb) => {
-  if (!promise.then) {
-    promise = Promise.resolve()
-  }
-
-  return promise.then(result => cb(null, result)).catch(cb)
-}
-
-module.exports = { toHex, toBuffer, SwarmError, callbackPromise, resolveCallback }
-
-}).call(this)}).call(this,require("buffer").Buffer)
-},{"buffer":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browserify/node_modules/buffer/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/after/index.js":[function(require,module,exports){
-module.exports = after
-
-function after(count, callback, err_cb) {
-    var bail = false
-    err_cb = err_cb || noop
-    proxy.count = count
-
-    return (count === 0) ? callback() : proxy
-
-    function proxy(err, result) {
-        if (proxy.count <= 0) {
-            throw new Error('after called too many times')
-        }
-        --proxy.count
-
-        // after first error, rest are passed to err_cb
-        if (err) {
-            bail = true
-            callback(err)
-            // future error callbacks will go to error handler
-            callback = err_cb
-        } else if (proxy.count === 0 && !bail) {
-            callback(null, result)
-        }
-    }
-}
-
-function noop() {}
-
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/arraybuffer.slice/index.js":[function(require,module,exports){
-/**
- * An abstraction for slicing an arraybuffer even when
- * ArrayBuffer.prototype.slice is not supported
- *
- * @api public
- */
-
-module.exports = function(arraybuffer, start, end) {
-  var bytes = arraybuffer.byteLength;
-  start = start || 0;
-  end = end || bytes;
-
-  if (arraybuffer.slice) { return arraybuffer.slice(start, end); }
-
-  if (start < 0) { start += bytes; }
-  if (end < 0) { end += bytes; }
-  if (end > bytes) { end = bytes; }
-
-  if (start >= bytes || start >= end || bytes === 0) {
-    return new ArrayBuffer(0);
-  }
-
-  var abv = new Uint8Array(arraybuffer);
-  var result = new Uint8Array(end - start);
-  for (var i = start, ii = 0; i < end; i++, ii++) {
-    result[ii] = abv[i];
-  }
-  return result.buffer;
-};
-
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/backo2/index.js":[function(require,module,exports){
-
-/**
- * Expose `Backoff`.
- */
-
-module.exports = Backoff;
-
-/**
- * Initialize backoff timer with `opts`.
- *
- * - `min` initial timeout in milliseconds [100]
- * - `max` max timeout [10000]
- * - `jitter` [0]
- * - `factor` [2]
- *
- * @param {Object} opts
- * @api public
- */
-
-function Backoff(opts) {
-  opts = opts || {};
-  this.ms = opts.min || 100;
-  this.max = opts.max || 10000;
-  this.factor = opts.factor || 2;
-  this.jitter = opts.jitter > 0 && opts.jitter <= 1 ? opts.jitter : 0;
-  this.attempts = 0;
-}
-
-/**
- * Return the backoff duration.
- *
- * @return {Number}
- * @api public
- */
-
-Backoff.prototype.duration = function(){
-  var ms = this.ms * Math.pow(this.factor, this.attempts++);
-  if (this.jitter) {
-    var rand =  Math.random();
-    var deviation = Math.floor(rand * this.jitter * ms);
-    ms = (Math.floor(rand * 10) & 1) == 0  ? ms - deviation : ms + deviation;
-  }
-  return Math.min(ms, this.max) | 0;
-};
-
-/**
- * Reset the number of attempts.
- *
- * @api public
- */
-
-Backoff.prototype.reset = function(){
-  this.attempts = 0;
-};
-
-/**
- * Set the minimum duration
- *
- * @api public
- */
-
-Backoff.prototype.setMin = function(min){
-  this.ms = min;
-};
-
-/**
- * Set the maximum duration
- *
- * @api public
- */
-
-Backoff.prototype.setMax = function(max){
-  this.max = max;
-};
-
-/**
- * Set the jitter
- *
- * @api public
- */
-
-Backoff.prototype.setJitter = function(jitter){
-  this.jitter = jitter;
-};
-
-
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/base64-arraybuffer/lib/base64-arraybuffer.js":[function(require,module,exports){
-/*
- * base64-arraybuffer
- * https://github.com/niklasvh/base64-arraybuffer
- *
- * Copyright (c) 2012 Niklas von Hertzen
- * Licensed under the MIT license.
- */
-(function(chars){
-  "use strict";
-
-  exports.encode = function(arraybuffer) {
-    var bytes = new Uint8Array(arraybuffer),
-    i, len = bytes.length, base64 = "";
-
-    for (i = 0; i < len; i+=3) {
-      base64 += chars[bytes[i] >> 2];
-      base64 += chars[((bytes[i] & 3) << 4) | (bytes[i + 1] >> 4)];
-      base64 += chars[((bytes[i + 1] & 15) << 2) | (bytes[i + 2] >> 6)];
-      base64 += chars[bytes[i + 2] & 63];
-    }
-
-    if ((len % 3) === 2) {
-      base64 = base64.substring(0, base64.length - 1) + "=";
-    } else if (len % 3 === 1) {
-      base64 = base64.substring(0, base64.length - 2) + "==";
-    }
-
-    return base64;
-  };
-
-  exports.decode =  function(base64) {
-    var bufferLength = base64.length * 0.75,
-    len = base64.length, i, p = 0,
-    encoded1, encoded2, encoded3, encoded4;
-
-    if (base64[base64.length - 1] === "=") {
-      bufferLength--;
-      if (base64[base64.length - 2] === "=") {
-        bufferLength--;
-      }
-    }
-
-    var arraybuffer = new ArrayBuffer(bufferLength),
-    bytes = new Uint8Array(arraybuffer);
-
-    for (i = 0; i < len; i+=4) {
-      encoded1 = chars.indexOf(base64[i]);
-      encoded2 = chars.indexOf(base64[i+1]);
-      encoded3 = chars.indexOf(base64[i+2]);
-      encoded4 = chars.indexOf(base64[i+3]);
-
-      bytes[p++] = (encoded1 << 2) | (encoded2 >> 4);
-      bytes[p++] = ((encoded2 & 15) << 4) | (encoded3 >> 2);
-      bytes[p++] = ((encoded3 & 3) << 6) | (encoded4 & 63);
-    }
-
-    return arraybuffer;
-  };
-})("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/");
-
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/blob/index.js":[function(require,module,exports){
-/**
- * Create a blob builder even when vendor prefixes exist
- */
-
-var BlobBuilder = typeof BlobBuilder !== 'undefined' ? BlobBuilder :
-  typeof WebKitBlobBuilder !== 'undefined' ? WebKitBlobBuilder :
-  typeof MSBlobBuilder !== 'undefined' ? MSBlobBuilder :
-  typeof MozBlobBuilder !== 'undefined' ? MozBlobBuilder : 
-  false;
-
-/**
- * Check if Blob constructor is supported
- */
-
-var blobSupported = (function() {
-  try {
-    var a = new Blob(['hi']);
-    return a.size === 2;
-  } catch(e) {
-    return false;
-  }
-})();
-
-/**
- * Check if Blob constructor supports ArrayBufferViews
- * Fails in Safari 6, so we need to map to ArrayBuffers there.
- */
-
-var blobSupportsArrayBufferView = blobSupported && (function() {
-  try {
-    var b = new Blob([new Uint8Array([1,2])]);
-    return b.size === 2;
-  } catch(e) {
-    return false;
-  }
-})();
-
-/**
- * Check if BlobBuilder is supported
- */
-
-var blobBuilderSupported = BlobBuilder
-  && BlobBuilder.prototype.append
-  && BlobBuilder.prototype.getBlob;
-
-/**
- * Helper function that maps ArrayBufferViews to ArrayBuffers
- * Used by BlobBuilder constructor and old browsers that didn't
- * support it in the Blob constructor.
- */
-
-function mapArrayBufferViews(ary) {
-  return ary.map(function(chunk) {
-    if (chunk.buffer instanceof ArrayBuffer) {
-      var buf = chunk.buffer;
-
-      // if this is a subarray, make a copy so we only
-      // include the subarray region from the underlying buffer
-      if (chunk.byteLength !== buf.byteLength) {
-        var copy = new Uint8Array(chunk.byteLength);
-        copy.set(new Uint8Array(buf, chunk.byteOffset, chunk.byteLength));
-        buf = copy.buffer;
-      }
-
-      return buf;
-    }
-
-    return chunk;
-  });
-}
-
-function BlobBuilderConstructor(ary, options) {
-  options = options || {};
-
-  var bb = new BlobBuilder();
-  mapArrayBufferViews(ary).forEach(function(part) {
-    bb.append(part);
-  });
-
-  return (options.type) ? bb.getBlob(options.type) : bb.getBlob();
-};
-
-function BlobConstructor(ary, options) {
-  return new Blob(mapArrayBufferViews(ary), options || {});
-};
-
-if (typeof Blob !== 'undefined') {
-  BlobBuilderConstructor.prototype = Blob.prototype;
-  BlobConstructor.prototype = Blob.prototype;
-}
-
-module.exports = (function() {
-  if (blobSupported) {
-    return blobSupportsArrayBufferView ? Blob : BlobConstructor;
-  } else if (blobBuilderSupported) {
-    return BlobBuilderConstructor;
-  } else {
-    return undefined;
-  }
-})();
-
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/component-bind/index.js":[function(require,module,exports){
-/**
- * Slice reference.
- */
-
-var slice = [].slice;
-
-/**
- * Bind `obj` to `fn`.
- *
- * @param {Object} obj
- * @param {Function|String} fn or string
- * @return {Function}
- * @api public
- */
-
-module.exports = function(obj, fn){
-  if ('string' == typeof fn) fn = obj[fn];
-  if ('function' != typeof fn) throw new Error('bind() requires a function');
-  var args = slice.call(arguments, 2);
-  return function(){
-    return fn.apply(obj, args.concat(slice.call(arguments)));
-  }
-};
-
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/component-emitter/index.js":[function(require,module,exports){
-
-/**
- * Expose `Emitter`.
- */
-
-if (typeof module !== 'undefined') {
-  module.exports = Emitter;
-}
-
-/**
- * Initialize a new `Emitter`.
- *
- * @api public
- */
-
-function Emitter(obj) {
-  if (obj) return mixin(obj);
-};
-
-/**
- * Mixin the emitter properties.
- *
- * @param {Object} obj
- * @return {Object}
- * @api private
- */
-
-function mixin(obj) {
-  for (var key in Emitter.prototype) {
-    obj[key] = Emitter.prototype[key];
-  }
-  return obj;
-}
-
-/**
- * Listen on the given `event` with `fn`.
- *
- * @param {String} event
- * @param {Function} fn
- * @return {Emitter}
- * @api public
- */
-
-Emitter.prototype.on =
-Emitter.prototype.addEventListener = function(event, fn){
-  this._callbacks = this._callbacks || {};
-  (this._callbacks['$' + event] = this._callbacks['$' + event] || [])
-    .push(fn);
-  return this;
-};
-
-/**
- * Adds an `event` listener that will be invoked a single
- * time then automatically removed.
- *
- * @param {String} event
- * @param {Function} fn
- * @return {Emitter}
- * @api public
- */
-
-Emitter.prototype.once = function(event, fn){
-  function on() {
-    this.off(event, on);
-    fn.apply(this, arguments);
-  }
-
-  on.fn = fn;
-  this.on(event, on);
-  return this;
-};
-
-/**
- * Remove the given callback for `event` or all
- * registered callbacks.
- *
- * @param {String} event
- * @param {Function} fn
- * @return {Emitter}
- * @api public
- */
-
-Emitter.prototype.off =
-Emitter.prototype.removeListener =
-Emitter.prototype.removeAllListeners =
-Emitter.prototype.removeEventListener = function(event, fn){
-  this._callbacks = this._callbacks || {};
-
-  // all
-  if (0 == arguments.length) {
-    this._callbacks = {};
-    return this;
-  }
-
-  // specific event
-  var callbacks = this._callbacks['$' + event];
-  if (!callbacks) return this;
-
-  // remove all handlers
-  if (1 == arguments.length) {
-    delete this._callbacks['$' + event];
-    return this;
-  }
-
-  // remove specific handler
-  var cb;
-  for (var i = 0; i < callbacks.length; i++) {
-    cb = callbacks[i];
-    if (cb === fn || cb.fn === fn) {
-      callbacks.splice(i, 1);
-      break;
-    }
-  }
-
-  // Remove event specific arrays for event types that no
-  // one is subscribed for to avoid memory leak.
-  if (callbacks.length === 0) {
-    delete this._callbacks['$' + event];
-  }
-
-  return this;
-};
-
-/**
- * Emit `event` with the given args.
- *
- * @param {String} event
- * @param {Mixed} ...
- * @return {Emitter}
- */
-
-Emitter.prototype.emit = function(event){
-  this._callbacks = this._callbacks || {};
-
-  var args = new Array(arguments.length - 1)
-    , callbacks = this._callbacks['$' + event];
-
-  for (var i = 1; i < arguments.length; i++) {
-    args[i - 1] = arguments[i];
-  }
-
-  if (callbacks) {
-    callbacks = callbacks.slice(0);
-    for (var i = 0, len = callbacks.length; i < len; ++i) {
-      callbacks[i].apply(this, args);
-    }
-  }
-
-  return this;
-};
-
-/**
- * Return array of callbacks for `event`.
- *
- * @param {String} event
- * @return {Array}
- * @api public
- */
-
-Emitter.prototype.listeners = function(event){
-  this._callbacks = this._callbacks || {};
-  return this._callbacks['$' + event] || [];
-};
-
-/**
- * Check if this emitter has `event` handlers.
- *
- * @param {String} event
- * @return {Boolean}
- * @api public
- */
-
-Emitter.prototype.hasListeners = function(event){
-  return !! this.listeners(event).length;
-};
-
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/component-inherit/index.js":[function(require,module,exports){
-
-module.exports = function(a, b){
-  var fn = function(){};
-  fn.prototype = b.prototype;
-  a.prototype = new fn;
-  a.prototype.constructor = a;
-};
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/core-util-is/lib/util.js":[function(require,module,exports){
+},{"crypto":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/crypto-browserify/index.js","dat-swarm-defaults":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/dat-swarm-defaults/index.js","hyperswarm-web":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/hyperswarm-web/index.js","pull-stream":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/pull-stream/index.js","stream-to-pull-stream":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/stream-to-pull-stream/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/core-util-is/lib/util.js":[function(require,module,exports){
 (function (Buffer){(function (){
 // Copyright Joyent, Inc. and other Node contributors.
 //
@@ -1680,133 +297,7 @@ function objectToString(o) {
 }
 
 }).call(this)}).call(this,{"isBuffer":require("../../../../ssb-browser-core/node_modules/is-buffer/index.js")})
-},{"../../../../ssb-browser-core/node_modules/is-buffer/index.js":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/is-buffer/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/cuid/index.js":[function(require,module,exports){
-/**
- * cuid.js
- * Collision-resistant UID generator for browsers and node.
- * Sequential for fast db lookups and recency sorting.
- * Safe for element IDs and server-side lookups.
- *
- * Extracted from CLCTR
- *
- * Copyright (c) Eric Elliott 2012
- * MIT License
- */
-
-var fingerprint = require('./lib/fingerprint.js');
-var pad = require('./lib/pad.js');
-var getRandomValue = require('./lib/getRandomValue.js');
-
-var c = 0,
-  blockSize = 4,
-  base = 36,
-  discreteValues = Math.pow(base, blockSize);
-
-function randomBlock () {
-  return pad((getRandomValue() *
-    discreteValues << 0)
-    .toString(base), blockSize);
-}
-
-function safeCounter () {
-  c = c < discreteValues ? c : 0;
-  c++; // this is not subliminal
-  return c - 1;
-}
-
-function cuid () {
-  // Starting with a lowercase letter makes
-  // it HTML element ID friendly.
-  var letter = 'c', // hard-coded allows for sequential access
-
-    // timestamp
-    // warning: this exposes the exact date and time
-    // that the uid was created.
-    timestamp = (new Date().getTime()).toString(base),
-
-    // Prevent same-machine collisions.
-    counter = pad(safeCounter().toString(base), blockSize),
-
-    // A few chars to generate distinct ids for different
-    // clients (so different computers are far less
-    // likely to generate the same id)
-    print = fingerprint(),
-
-    // Grab some more chars from Math.random()
-    random = randomBlock() + randomBlock();
-
-  return letter + timestamp + counter + print + random;
-}
-
-cuid.slug = function slug () {
-  var date = new Date().getTime().toString(36),
-    counter = safeCounter().toString(36).slice(-4),
-    print = fingerprint().slice(0, 1) +
-      fingerprint().slice(-1),
-    random = randomBlock().slice(-2);
-
-  return date.slice(-2) +
-    counter + print + random;
-};
-
-cuid.isCuid = function isCuid (stringToCheck) {
-  if (typeof stringToCheck !== 'string') return false;
-  if (stringToCheck.startsWith('c')) return true;
-  return false;
-};
-
-cuid.isSlug = function isSlug (stringToCheck) {
-  if (typeof stringToCheck !== 'string') return false;
-  var stringLength = stringToCheck.length;
-  if (stringLength >= 7 && stringLength <= 10) return true;
-  return false;
-};
-
-cuid.fingerprint = fingerprint;
-
-module.exports = cuid;
-
-},{"./lib/fingerprint.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/cuid/lib/fingerprint.browser.js","./lib/getRandomValue.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/cuid/lib/getRandomValue.browser.js","./lib/pad.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/cuid/lib/pad.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/cuid/lib/fingerprint.browser.js":[function(require,module,exports){
-var pad = require('./pad.js');
-
-var env = typeof window === 'object' ? window : self;
-var globalCount = Object.keys(env).length;
-var mimeTypesLength = navigator.mimeTypes ? navigator.mimeTypes.length : 0;
-var clientId = pad((mimeTypesLength +
-  navigator.userAgent.length).toString(36) +
-  globalCount.toString(36), 4);
-
-module.exports = function fingerprint () {
-  return clientId;
-};
-
-},{"./pad.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/cuid/lib/pad.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/cuid/lib/getRandomValue.browser.js":[function(require,module,exports){
-
-var getRandomValue;
-
-var crypto = typeof window !== 'undefined' &&
-  (window.crypto || window.msCrypto) ||
-  typeof self !== 'undefined' &&
-  self.crypto;
-
-if (crypto) {
-    var lim = Math.pow(2, 32) - 1;
-    getRandomValue = function () {
-        return Math.abs(crypto.getRandomValues(new Uint32Array(1))[0] / lim);
-    };
-} else {
-    getRandomValue = Math.random;
-}
-
-module.exports = getRandomValue;
-
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/cuid/lib/pad.js":[function(require,module,exports){
-module.exports = function pad (num, size) {
-  var s = '000000000' + num;
-  return s.substr(s.length - size);
-};
-
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/dat-swarm-defaults/index.js":[function(require,module,exports){
+},{"../../../../ssb-browser-core/node_modules/is-buffer/index.js":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/is-buffer/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/dat-swarm-defaults/index.js":[function(require,module,exports){
 var extend = require('xtend')
 
 var DAT_DOMAIN = 'dat.local'
@@ -3886,7 +2377,7 @@ function indexOf(xs, x) {
   return -1;
 }
 }).call(this)}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
-},{"./_stream_duplex":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/_stream_duplex.js","./internal/streams/BufferList":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/internal/streams/BufferList.js","./internal/streams/destroy":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/internal/streams/destroy.js","./internal/streams/stream":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/internal/streams/stream-browser.js","_process":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/process/browser.js","core-util-is":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/core-util-is/lib/util.js","events":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/events/events.js","inherits":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/inherits/inherits_browser.js","isarray":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/isarray/index.js","process-nextick-args":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/process-nextick-args/index.js","safe-buffer":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/safe-buffer/index.js","string_decoder/":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/string_decoder/lib/string_decoder.js","util":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browser-resolve/empty.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/_stream_transform.js":[function(require,module,exports){
+},{"./_stream_duplex":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/_stream_duplex.js","./internal/streams/BufferList":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/internal/streams/BufferList.js","./internal/streams/destroy":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/internal/streams/destroy.js","./internal/streams/stream":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/internal/streams/stream-browser.js","_process":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/process/browser.js","core-util-is":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/core-util-is/lib/util.js","events":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/events/events.js","inherits":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/inherits/inherits_browser.js","isarray":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/isarray/index.js","process-nextick-args":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/process-nextick-args/index.js","safe-buffer":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/safe-buffer/index.js","string_decoder/":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/string_decoder/lib/string_decoder.js","util":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browser-resolve/empty.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/_stream_transform.js":[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -4791,7 +3282,7 @@ Writable.prototype._destroy = function (err, cb) {
   cb(err);
 };
 }).call(this)}).call(this,require('_process'),typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {},require("timers").setImmediate)
-},{"./_stream_duplex":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/_stream_duplex.js","./internal/streams/destroy":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/internal/streams/destroy.js","./internal/streams/stream":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/internal/streams/stream-browser.js","_process":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/process/browser.js","core-util-is":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/core-util-is/lib/util.js","inherits":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/inherits/inherits_browser.js","process-nextick-args":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/process-nextick-args/index.js","safe-buffer":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/safe-buffer/index.js","timers":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/timers-browserify/main.js","util-deprecate":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/util-deprecate/browser.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/internal/streams/BufferList.js":[function(require,module,exports){
+},{"./_stream_duplex":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/_stream_duplex.js","./internal/streams/destroy":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/internal/streams/destroy.js","./internal/streams/stream":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/internal/streams/stream-browser.js","_process":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/process/browser.js","core-util-is":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/core-util-is/lib/util.js","inherits":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/inherits/inherits_browser.js","process-nextick-args":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/process-nextick-args/index.js","safe-buffer":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/safe-buffer/index.js","timers":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/timers-browserify/main.js","util-deprecate":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/util-deprecate/browser.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/internal/streams/BufferList.js":[function(require,module,exports){
 'use strict';
 
 function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
@@ -4871,7 +3362,7 @@ if (util && util.inspect && util.inspect.custom) {
     return this.constructor.name + ' ' + obj;
   };
 }
-},{"safe-buffer":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/safe-buffer/index.js","util":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browser-resolve/empty.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/internal/streams/destroy.js":[function(require,module,exports){
+},{"safe-buffer":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/safe-buffer/index.js","util":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browser-resolve/empty.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/internal/streams/destroy.js":[function(require,module,exports){
 'use strict';
 
 /*<replacement>*/
@@ -4958,7 +3449,71 @@ exports.Duplex = require('./lib/_stream_duplex.js');
 exports.Transform = require('./lib/_stream_transform.js');
 exports.PassThrough = require('./lib/_stream_passthrough.js');
 
-},{"./lib/_stream_duplex.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/_stream_duplex.js","./lib/_stream_passthrough.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/_stream_passthrough.js","./lib/_stream_readable.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/_stream_readable.js","./lib/_stream_transform.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/_stream_transform.js","./lib/_stream_writable.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/_stream_writable.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/string_decoder/lib/string_decoder.js":[function(require,module,exports){
+},{"./lib/_stream_duplex.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/_stream_duplex.js","./lib/_stream_passthrough.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/_stream_passthrough.js","./lib/_stream_readable.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/_stream_readable.js","./lib/_stream_transform.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/_stream_transform.js","./lib/_stream_writable.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/_stream_writable.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/safe-buffer/index.js":[function(require,module,exports){
+/* eslint-disable node/no-deprecated-api */
+var buffer = require('buffer')
+var Buffer = buffer.Buffer
+
+// alternative to using Object.keys for old browsers
+function copyProps (src, dst) {
+  for (var key in src) {
+    dst[key] = src[key]
+  }
+}
+if (Buffer.from && Buffer.alloc && Buffer.allocUnsafe && Buffer.allocUnsafeSlow) {
+  module.exports = buffer
+} else {
+  // Copy properties from require('buffer')
+  copyProps(buffer, exports)
+  exports.Buffer = SafeBuffer
+}
+
+function SafeBuffer (arg, encodingOrOffset, length) {
+  return Buffer(arg, encodingOrOffset, length)
+}
+
+// Copy static methods from Buffer
+copyProps(Buffer, SafeBuffer)
+
+SafeBuffer.from = function (arg, encodingOrOffset, length) {
+  if (typeof arg === 'number') {
+    throw new TypeError('Argument must not be a number')
+  }
+  return Buffer(arg, encodingOrOffset, length)
+}
+
+SafeBuffer.alloc = function (size, fill, encoding) {
+  if (typeof size !== 'number') {
+    throw new TypeError('Argument must be a number')
+  }
+  var buf = Buffer(size)
+  if (fill !== undefined) {
+    if (typeof encoding === 'string') {
+      buf.fill(fill, encoding)
+    } else {
+      buf.fill(fill)
+    }
+  } else {
+    buf.fill(0)
+  }
+  return buf
+}
+
+SafeBuffer.allocUnsafe = function (size) {
+  if (typeof size !== 'number') {
+    throw new TypeError('Argument must be a number')
+  }
+  return Buffer(size)
+}
+
+SafeBuffer.allocUnsafeSlow = function (size) {
+  if (typeof size !== 'number') {
+    throw new TypeError('Argument must be a number')
+  }
+  return buffer.SlowBuffer(size)
+}
+
+},{"buffer":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browserify/node_modules/buffer/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/string_decoder/lib/string_decoder.js":[function(require,module,exports){
 // Copyright Joyent, Inc. and other Node contributors.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a
@@ -5255,7 +3810,396 @@ function simpleWrite(buf) {
 function simpleEnd(buf) {
   return buf && buf.length ? this.write(buf) : '';
 }
-},{"safe-buffer":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/safe-buffer/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/end-of-stream-promise/index.js":[function(require,module,exports){
+},{"safe-buffer":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/safe-buffer/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/emittery/index.js":[function(require,module,exports){
+'use strict';
+
+const anyMap = new WeakMap();
+const eventsMap = new WeakMap();
+const producersMap = new WeakMap();
+const anyProducer = Symbol('anyProducer');
+const resolvedPromise = Promise.resolve();
+
+const listenerAdded = Symbol('listenerAdded');
+const listenerRemoved = Symbol('listenerRemoved');
+
+function assertEventName(eventName) {
+	if (typeof eventName !== 'string' && typeof eventName !== 'symbol') {
+		throw new TypeError('eventName must be a string or a symbol');
+	}
+}
+
+function assertListener(listener) {
+	if (typeof listener !== 'function') {
+		throw new TypeError('listener must be a function');
+	}
+}
+
+function getListeners(instance, eventName) {
+	const events = eventsMap.get(instance);
+	if (!events.has(eventName)) {
+		events.set(eventName, new Set());
+	}
+
+	return events.get(eventName);
+}
+
+function getEventProducers(instance, eventName) {
+	const key = typeof eventName === 'string' ? eventName : anyProducer;
+	const producers = producersMap.get(instance);
+	if (!producers.has(key)) {
+		producers.set(key, new Set());
+	}
+
+	return producers.get(key);
+}
+
+function enqueueProducers(instance, eventName, eventData) {
+	const producers = producersMap.get(instance);
+	if (producers.has(eventName)) {
+		for (const producer of producers.get(eventName)) {
+			producer.enqueue(eventData);
+		}
+	}
+
+	if (producers.has(anyProducer)) {
+		const item = Promise.all([eventName, eventData]);
+		for (const producer of producers.get(anyProducer)) {
+			producer.enqueue(item);
+		}
+	}
+}
+
+function iterator(instance, eventName) {
+	let isFinished = false;
+	let flush = () => {};
+	let queue = [];
+
+	const producer = {
+		enqueue(item) {
+			queue.push(item);
+			flush();
+		},
+		finish() {
+			isFinished = true;
+			flush();
+		}
+	};
+
+	getEventProducers(instance, eventName).add(producer);
+
+	return {
+		async next() {
+			if (!queue) {
+				return {done: true};
+			}
+
+			if (queue.length === 0) {
+				if (isFinished) {
+					queue = undefined;
+					return this.next();
+				}
+
+				await new Promise(resolve => {
+					flush = resolve;
+				});
+
+				return this.next();
+			}
+
+			return {
+				done: false,
+				value: await queue.shift()
+			};
+		},
+
+		async return(value) {
+			queue = undefined;
+			getEventProducers(instance, eventName).delete(producer);
+			flush();
+
+			return arguments.length > 0 ?
+				{done: true, value: await value} :
+				{done: true};
+		},
+
+		[Symbol.asyncIterator]() {
+			return this;
+		}
+	};
+}
+
+function defaultMethodNamesOrAssert(methodNames) {
+	if (methodNames === undefined) {
+		return allEmitteryMethods;
+	}
+
+	if (!Array.isArray(methodNames)) {
+		throw new TypeError('`methodNames` must be an array of strings');
+	}
+
+	for (const methodName of methodNames) {
+		if (!allEmitteryMethods.includes(methodName)) {
+			if (typeof methodName !== 'string') {
+				throw new TypeError('`methodNames` element must be a string');
+			}
+
+			throw new Error(`${methodName} is not Emittery method`);
+		}
+	}
+
+	return methodNames;
+}
+
+const isListenerSymbol = symbol => symbol === listenerAdded || symbol === listenerRemoved;
+
+class Emittery {
+	static mixin(emitteryPropertyName, methodNames) {
+		methodNames = defaultMethodNamesOrAssert(methodNames);
+		return target => {
+			if (typeof target !== 'function') {
+				throw new TypeError('`target` must be function');
+			}
+
+			for (const methodName of methodNames) {
+				if (target.prototype[methodName] !== undefined) {
+					throw new Error(`The property \`${methodName}\` already exists on \`target\``);
+				}
+			}
+
+			function getEmitteryProperty() {
+				Object.defineProperty(this, emitteryPropertyName, {
+					enumerable: false,
+					value: new Emittery()
+				});
+				return this[emitteryPropertyName];
+			}
+
+			Object.defineProperty(target.prototype, emitteryPropertyName, {
+				enumerable: false,
+				get: getEmitteryProperty
+			});
+
+			const emitteryMethodCaller = methodName => function (...args) {
+				return this[emitteryPropertyName][methodName](...args);
+			};
+
+			for (const methodName of methodNames) {
+				Object.defineProperty(target.prototype, methodName, {
+					enumerable: false,
+					value: emitteryMethodCaller(methodName)
+				});
+			}
+
+			return target;
+		};
+	}
+
+	constructor() {
+		anyMap.set(this, new Set());
+		eventsMap.set(this, new Map());
+		producersMap.set(this, new Map());
+	}
+
+	on(eventName, listener) {
+		assertEventName(eventName);
+		assertListener(listener);
+		getListeners(this, eventName).add(listener);
+
+		if (!isListenerSymbol(eventName)) {
+			this.emit(listenerAdded, {eventName, listener});
+		}
+
+		return this.off.bind(this, eventName, listener);
+	}
+
+	off(eventName, listener) {
+		assertEventName(eventName);
+		assertListener(listener);
+
+		if (!isListenerSymbol(eventName)) {
+			this.emit(listenerRemoved, {eventName, listener});
+		}
+
+		getListeners(this, eventName).delete(listener);
+	}
+
+	once(eventName) {
+		return new Promise(resolve => {
+			assertEventName(eventName);
+			const off = this.on(eventName, data => {
+				off();
+				resolve(data);
+			});
+		});
+	}
+
+	events(eventName) {
+		assertEventName(eventName);
+		return iterator(this, eventName);
+	}
+
+	async emit(eventName, eventData) {
+		assertEventName(eventName);
+
+		enqueueProducers(this, eventName, eventData);
+
+		const listeners = getListeners(this, eventName);
+		const anyListeners = anyMap.get(this);
+		const staticListeners = [...listeners];
+		const staticAnyListeners = isListenerSymbol(eventName) ? [] : [...anyListeners];
+
+		await resolvedPromise;
+		return Promise.all([
+			...staticListeners.map(async listener => {
+				if (listeners.has(listener)) {
+					return listener(eventData);
+				}
+			}),
+			...staticAnyListeners.map(async listener => {
+				if (anyListeners.has(listener)) {
+					return listener(eventName, eventData);
+				}
+			})
+		]);
+	}
+
+	async emitSerial(eventName, eventData) {
+		assertEventName(eventName);
+
+		const listeners = getListeners(this, eventName);
+		const anyListeners = anyMap.get(this);
+		const staticListeners = [...listeners];
+		const staticAnyListeners = [...anyListeners];
+
+		await resolvedPromise;
+		/* eslint-disable no-await-in-loop */
+		for (const listener of staticListeners) {
+			if (listeners.has(listener)) {
+				await listener(eventData);
+			}
+		}
+
+		for (const listener of staticAnyListeners) {
+			if (anyListeners.has(listener)) {
+				await listener(eventName, eventData);
+			}
+		}
+		/* eslint-enable no-await-in-loop */
+	}
+
+	onAny(listener) {
+		assertListener(listener);
+		anyMap.get(this).add(listener);
+		this.emit(listenerAdded, {listener});
+		return this.offAny.bind(this, listener);
+	}
+
+	anyEvent() {
+		return iterator(this);
+	}
+
+	offAny(listener) {
+		assertListener(listener);
+		this.emit(listenerRemoved, {listener});
+		anyMap.get(this).delete(listener);
+	}
+
+	clearListeners(eventName) {
+		if (typeof eventName === 'string') {
+			getListeners(this, eventName).clear();
+
+			const producers = getEventProducers(this, eventName);
+
+			for (const producer of producers) {
+				producer.finish();
+			}
+
+			producers.clear();
+		} else {
+			anyMap.get(this).clear();
+
+			for (const listeners of eventsMap.get(this).values()) {
+				listeners.clear();
+			}
+
+			for (const producers of producersMap.get(this).values()) {
+				for (const producer of producers) {
+					producer.finish();
+				}
+
+				producers.clear();
+			}
+		}
+	}
+
+	listenerCount(eventName) {
+		if (typeof eventName === 'string') {
+			return anyMap.get(this).size + getListeners(this, eventName).size +
+				getEventProducers(this, eventName).size + getEventProducers(this).size;
+		}
+
+		if (typeof eventName !== 'undefined') {
+			assertEventName(eventName);
+		}
+
+		let count = anyMap.get(this).size;
+
+		for (const value of eventsMap.get(this).values()) {
+			count += value.size;
+		}
+
+		for (const value of producersMap.get(this).values()) {
+			count += value.size;
+		}
+
+		return count;
+	}
+
+	bindMethods(target, methodNames) {
+		if (typeof target !== 'object' || target === null) {
+			throw new TypeError('`target` must be an object');
+		}
+
+		methodNames = defaultMethodNamesOrAssert(methodNames);
+
+		for (const methodName of methodNames) {
+			if (target[methodName] !== undefined) {
+				throw new Error(`The property \`${methodName}\` already exists on \`target\``);
+			}
+
+			Object.defineProperty(target, methodName, {
+				enumerable: false,
+				value: this[methodName].bind(this)
+			});
+		}
+	}
+}
+
+const allEmitteryMethods = Object.getOwnPropertyNames(Emittery.prototype).filter(v => v !== 'constructor');
+
+// Subclass used to encourage TS users to type their events.
+Emittery.Typed = class extends Emittery {};
+Object.defineProperty(Emittery.Typed, 'Typed', {
+	enumerable: false,
+	value: undefined
+});
+
+Object.defineProperty(Emittery, 'listenerAdded', {
+	value: listenerAdded,
+	writable: false,
+	enumerable: true,
+	configurable: false
+});
+Object.defineProperty(Emittery, 'listenerRemoved', {
+	value: listenerRemoved,
+	writable: false,
+	enumerable: true,
+	configurable: false
+});
+
+module.exports = Emittery;
+
+},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/end-of-stream-promise/index.js":[function(require,module,exports){
 var eos = require('end-of-stream')
 
 module.exports = function eosp (stream, opts = {}) {
@@ -5367,3660 +4311,7 @@ var eos = function(stream, opts, callback) {
 module.exports = eos;
 
 }).call(this)}).call(this,require('_process'))
-},{"_process":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/process/browser.js","once":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/once/once.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/lib/globalThis.browser.js":[function(require,module,exports){
-module.exports = (function () {
-  if (typeof self !== 'undefined') {
-    return self;
-  } else if (typeof window !== 'undefined') {
-    return window;
-  } else {
-    return Function('return this')(); // eslint-disable-line no-new-func
-  }
-})();
-
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/lib/index.js":[function(require,module,exports){
-
-module.exports = require('./socket');
-
-/**
- * Exports parser
- *
- * @api public
- *
- */
-module.exports.parser = require('engine.io-parser');
-
-},{"./socket":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/lib/socket.js","engine.io-parser":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-parser/lib/browser.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/lib/socket.js":[function(require,module,exports){
-/**
- * Module dependencies.
- */
-
-var transports = require('./transports/index');
-var Emitter = require('component-emitter');
-var debug = require('debug')('engine.io-client:socket');
-var index = require('indexof');
-var parser = require('engine.io-parser');
-var parseuri = require('parseuri');
-var parseqs = require('parseqs');
-
-/**
- * Module exports.
- */
-
-module.exports = Socket;
-
-/**
- * Socket constructor.
- *
- * @param {String|Object} uri or options
- * @param {Object} options
- * @api public
- */
-
-function Socket (uri, opts) {
-  if (!(this instanceof Socket)) return new Socket(uri, opts);
-
-  opts = opts || {};
-
-  if (uri && 'object' === typeof uri) {
-    opts = uri;
-    uri = null;
-  }
-
-  if (uri) {
-    uri = parseuri(uri);
-    opts.hostname = uri.host;
-    opts.secure = uri.protocol === 'https' || uri.protocol === 'wss';
-    opts.port = uri.port;
-    if (uri.query) opts.query = uri.query;
-  } else if (opts.host) {
-    opts.hostname = parseuri(opts.host).host;
-  }
-
-  this.secure = null != opts.secure ? opts.secure
-    : (typeof location !== 'undefined' && 'https:' === location.protocol);
-
-  if (opts.hostname && !opts.port) {
-    // if no port is specified manually, use the protocol default
-    opts.port = this.secure ? '443' : '80';
-  }
-
-  this.agent = opts.agent || false;
-  this.hostname = opts.hostname ||
-    (typeof location !== 'undefined' ? location.hostname : 'localhost');
-  this.port = opts.port || (typeof location !== 'undefined' && location.port
-      ? location.port
-      : (this.secure ? 443 : 80));
-  this.query = opts.query || {};
-  if ('string' === typeof this.query) this.query = parseqs.decode(this.query);
-  this.upgrade = false !== opts.upgrade;
-  this.path = (opts.path || '/engine.io').replace(/\/$/, '') + '/';
-  this.forceJSONP = !!opts.forceJSONP;
-  this.jsonp = false !== opts.jsonp;
-  this.forceBase64 = !!opts.forceBase64;
-  this.enablesXDR = !!opts.enablesXDR;
-  this.withCredentials = false !== opts.withCredentials;
-  this.timestampParam = opts.timestampParam || 't';
-  this.timestampRequests = opts.timestampRequests;
-  this.transports = opts.transports || ['polling', 'websocket'];
-  this.transportOptions = opts.transportOptions || {};
-  this.readyState = '';
-  this.writeBuffer = [];
-  this.prevBufferLen = 0;
-  this.policyPort = opts.policyPort || 843;
-  this.rememberUpgrade = opts.rememberUpgrade || false;
-  this.binaryType = null;
-  this.onlyBinaryUpgrades = opts.onlyBinaryUpgrades;
-  this.perMessageDeflate = false !== opts.perMessageDeflate ? (opts.perMessageDeflate || {}) : false;
-
-  if (true === this.perMessageDeflate) this.perMessageDeflate = {};
-  if (this.perMessageDeflate && null == this.perMessageDeflate.threshold) {
-    this.perMessageDeflate.threshold = 1024;
-  }
-
-  // SSL options for Node.js client
-  this.pfx = opts.pfx || null;
-  this.key = opts.key || null;
-  this.passphrase = opts.passphrase || null;
-  this.cert = opts.cert || null;
-  this.ca = opts.ca || null;
-  this.ciphers = opts.ciphers || null;
-  this.rejectUnauthorized = opts.rejectUnauthorized === undefined ? true : opts.rejectUnauthorized;
-  this.forceNode = !!opts.forceNode;
-
-  // detect ReactNative environment
-  this.isReactNative = (typeof navigator !== 'undefined' && typeof navigator.product === 'string' && navigator.product.toLowerCase() === 'reactnative');
-
-  // other options for Node.js or ReactNative client
-  if (typeof self === 'undefined' || this.isReactNative) {
-    if (opts.extraHeaders && Object.keys(opts.extraHeaders).length > 0) {
-      this.extraHeaders = opts.extraHeaders;
-    }
-
-    if (opts.localAddress) {
-      this.localAddress = opts.localAddress;
-    }
-  }
-
-  // set on handshake
-  this.id = null;
-  this.upgrades = null;
-  this.pingInterval = null;
-  this.pingTimeout = null;
-
-  // set on heartbeat
-  this.pingIntervalTimer = null;
-  this.pingTimeoutTimer = null;
-
-  this.open();
-}
-
-Socket.priorWebsocketSuccess = false;
-
-/**
- * Mix in `Emitter`.
- */
-
-Emitter(Socket.prototype);
-
-/**
- * Protocol version.
- *
- * @api public
- */
-
-Socket.protocol = parser.protocol; // this is an int
-
-/**
- * Expose deps for legacy compatibility
- * and standalone browser access.
- */
-
-Socket.Socket = Socket;
-Socket.Transport = require('./transport');
-Socket.transports = require('./transports/index');
-Socket.parser = require('engine.io-parser');
-
-/**
- * Creates transport of the given type.
- *
- * @param {String} transport name
- * @return {Transport}
- * @api private
- */
-
-Socket.prototype.createTransport = function (name) {
-  debug('creating transport "%s"', name);
-  var query = clone(this.query);
-
-  // append engine.io protocol identifier
-  query.EIO = parser.protocol;
-
-  // transport name
-  query.transport = name;
-
-  // per-transport options
-  var options = this.transportOptions[name] || {};
-
-  // session id if we already have one
-  if (this.id) query.sid = this.id;
-
-  var transport = new transports[name]({
-    query: query,
-    socket: this,
-    agent: options.agent || this.agent,
-    hostname: options.hostname || this.hostname,
-    port: options.port || this.port,
-    secure: options.secure || this.secure,
-    path: options.path || this.path,
-    forceJSONP: options.forceJSONP || this.forceJSONP,
-    jsonp: options.jsonp || this.jsonp,
-    forceBase64: options.forceBase64 || this.forceBase64,
-    enablesXDR: options.enablesXDR || this.enablesXDR,
-    withCredentials: options.withCredentials || this.withCredentials,
-    timestampRequests: options.timestampRequests || this.timestampRequests,
-    timestampParam: options.timestampParam || this.timestampParam,
-    policyPort: options.policyPort || this.policyPort,
-    pfx: options.pfx || this.pfx,
-    key: options.key || this.key,
-    passphrase: options.passphrase || this.passphrase,
-    cert: options.cert || this.cert,
-    ca: options.ca || this.ca,
-    ciphers: options.ciphers || this.ciphers,
-    rejectUnauthorized: options.rejectUnauthorized || this.rejectUnauthorized,
-    perMessageDeflate: options.perMessageDeflate || this.perMessageDeflate,
-    extraHeaders: options.extraHeaders || this.extraHeaders,
-    forceNode: options.forceNode || this.forceNode,
-    localAddress: options.localAddress || this.localAddress,
-    requestTimeout: options.requestTimeout || this.requestTimeout,
-    protocols: options.protocols || void (0),
-    isReactNative: this.isReactNative
-  });
-
-  return transport;
-};
-
-function clone (obj) {
-  var o = {};
-  for (var i in obj) {
-    if (obj.hasOwnProperty(i)) {
-      o[i] = obj[i];
-    }
-  }
-  return o;
-}
-
-/**
- * Initializes transport to use and starts probe.
- *
- * @api private
- */
-Socket.prototype.open = function () {
-  var transport;
-  if (this.rememberUpgrade && Socket.priorWebsocketSuccess && this.transports.indexOf('websocket') !== -1) {
-    transport = 'websocket';
-  } else if (0 === this.transports.length) {
-    // Emit error on next tick so it can be listened to
-    var self = this;
-    setTimeout(function () {
-      self.emit('error', 'No transports available');
-    }, 0);
-    return;
-  } else {
-    transport = this.transports[0];
-  }
-  this.readyState = 'opening';
-
-  // Retry with the next transport if the transport is disabled (jsonp: false)
-  try {
-    transport = this.createTransport(transport);
-  } catch (e) {
-    this.transports.shift();
-    this.open();
-    return;
-  }
-
-  transport.open();
-  this.setTransport(transport);
-};
-
-/**
- * Sets the current transport. Disables the existing one (if any).
- *
- * @api private
- */
-
-Socket.prototype.setTransport = function (transport) {
-  debug('setting transport %s', transport.name);
-  var self = this;
-
-  if (this.transport) {
-    debug('clearing existing transport %s', this.transport.name);
-    this.transport.removeAllListeners();
-  }
-
-  // set up transport
-  this.transport = transport;
-
-  // set up transport listeners
-  transport
-  .on('drain', function () {
-    self.onDrain();
-  })
-  .on('packet', function (packet) {
-    self.onPacket(packet);
-  })
-  .on('error', function (e) {
-    self.onError(e);
-  })
-  .on('close', function () {
-    self.onClose('transport close');
-  });
-};
-
-/**
- * Probes a transport.
- *
- * @param {String} transport name
- * @api private
- */
-
-Socket.prototype.probe = function (name) {
-  debug('probing transport "%s"', name);
-  var transport = this.createTransport(name, { probe: 1 });
-  var failed = false;
-  var self = this;
-
-  Socket.priorWebsocketSuccess = false;
-
-  function onTransportOpen () {
-    if (self.onlyBinaryUpgrades) {
-      var upgradeLosesBinary = !this.supportsBinary && self.transport.supportsBinary;
-      failed = failed || upgradeLosesBinary;
-    }
-    if (failed) return;
-
-    debug('probe transport "%s" opened', name);
-    transport.send([{ type: 'ping', data: 'probe' }]);
-    transport.once('packet', function (msg) {
-      if (failed) return;
-      if ('pong' === msg.type && 'probe' === msg.data) {
-        debug('probe transport "%s" pong', name);
-        self.upgrading = true;
-        self.emit('upgrading', transport);
-        if (!transport) return;
-        Socket.priorWebsocketSuccess = 'websocket' === transport.name;
-
-        debug('pausing current transport "%s"', self.transport.name);
-        self.transport.pause(function () {
-          if (failed) return;
-          if ('closed' === self.readyState) return;
-          debug('changing transport and sending upgrade packet');
-
-          cleanup();
-
-          self.setTransport(transport);
-          transport.send([{ type: 'upgrade' }]);
-          self.emit('upgrade', transport);
-          transport = null;
-          self.upgrading = false;
-          self.flush();
-        });
-      } else {
-        debug('probe transport "%s" failed', name);
-        var err = new Error('probe error');
-        err.transport = transport.name;
-        self.emit('upgradeError', err);
-      }
-    });
-  }
-
-  function freezeTransport () {
-    if (failed) return;
-
-    // Any callback called by transport should be ignored since now
-    failed = true;
-
-    cleanup();
-
-    transport.close();
-    transport = null;
-  }
-
-  // Handle any error that happens while probing
-  function onerror (err) {
-    var error = new Error('probe error: ' + err);
-    error.transport = transport.name;
-
-    freezeTransport();
-
-    debug('probe transport "%s" failed because of error: %s', name, err);
-
-    self.emit('upgradeError', error);
-  }
-
-  function onTransportClose () {
-    onerror('transport closed');
-  }
-
-  // When the socket is closed while we're probing
-  function onclose () {
-    onerror('socket closed');
-  }
-
-  // When the socket is upgraded while we're probing
-  function onupgrade (to) {
-    if (transport && to.name !== transport.name) {
-      debug('"%s" works - aborting "%s"', to.name, transport.name);
-      freezeTransport();
-    }
-  }
-
-  // Remove all listeners on the transport and on self
-  function cleanup () {
-    transport.removeListener('open', onTransportOpen);
-    transport.removeListener('error', onerror);
-    transport.removeListener('close', onTransportClose);
-    self.removeListener('close', onclose);
-    self.removeListener('upgrading', onupgrade);
-  }
-
-  transport.once('open', onTransportOpen);
-  transport.once('error', onerror);
-  transport.once('close', onTransportClose);
-
-  this.once('close', onclose);
-  this.once('upgrading', onupgrade);
-
-  transport.open();
-};
-
-/**
- * Called when connection is deemed open.
- *
- * @api public
- */
-
-Socket.prototype.onOpen = function () {
-  debug('socket open');
-  this.readyState = 'open';
-  Socket.priorWebsocketSuccess = 'websocket' === this.transport.name;
-  this.emit('open');
-  this.flush();
-
-  // we check for `readyState` in case an `open`
-  // listener already closed the socket
-  if ('open' === this.readyState && this.upgrade && this.transport.pause) {
-    debug('starting upgrade probes');
-    for (var i = 0, l = this.upgrades.length; i < l; i++) {
-      this.probe(this.upgrades[i]);
-    }
-  }
-};
-
-/**
- * Handles a packet.
- *
- * @api private
- */
-
-Socket.prototype.onPacket = function (packet) {
-  if ('opening' === this.readyState || 'open' === this.readyState ||
-      'closing' === this.readyState) {
-    debug('socket receive: type "%s", data "%s"', packet.type, packet.data);
-
-    this.emit('packet', packet);
-
-    // Socket is live - any packet counts
-    this.emit('heartbeat');
-
-    switch (packet.type) {
-      case 'open':
-        this.onHandshake(JSON.parse(packet.data));
-        break;
-
-      case 'pong':
-        this.setPing();
-        this.emit('pong');
-        break;
-
-      case 'error':
-        var err = new Error('server error');
-        err.code = packet.data;
-        this.onError(err);
-        break;
-
-      case 'message':
-        this.emit('data', packet.data);
-        this.emit('message', packet.data);
-        break;
-    }
-  } else {
-    debug('packet received with socket readyState "%s"', this.readyState);
-  }
-};
-
-/**
- * Called upon handshake completion.
- *
- * @param {Object} handshake obj
- * @api private
- */
-
-Socket.prototype.onHandshake = function (data) {
-  this.emit('handshake', data);
-  this.id = data.sid;
-  this.transport.query.sid = data.sid;
-  this.upgrades = this.filterUpgrades(data.upgrades);
-  this.pingInterval = data.pingInterval;
-  this.pingTimeout = data.pingTimeout;
-  this.onOpen();
-  // In case open handler closes socket
-  if ('closed' === this.readyState) return;
-  this.setPing();
-
-  // Prolong liveness of socket on heartbeat
-  this.removeListener('heartbeat', this.onHeartbeat);
-  this.on('heartbeat', this.onHeartbeat);
-};
-
-/**
- * Resets ping timeout.
- *
- * @api private
- */
-
-Socket.prototype.onHeartbeat = function (timeout) {
-  clearTimeout(this.pingTimeoutTimer);
-  var self = this;
-  self.pingTimeoutTimer = setTimeout(function () {
-    if ('closed' === self.readyState) return;
-    self.onClose('ping timeout');
-  }, timeout || (self.pingInterval + self.pingTimeout));
-};
-
-/**
- * Pings server every `this.pingInterval` and expects response
- * within `this.pingTimeout` or closes connection.
- *
- * @api private
- */
-
-Socket.prototype.setPing = function () {
-  var self = this;
-  clearTimeout(self.pingIntervalTimer);
-  self.pingIntervalTimer = setTimeout(function () {
-    debug('writing ping packet - expecting pong within %sms', self.pingTimeout);
-    self.ping();
-    self.onHeartbeat(self.pingTimeout);
-  }, self.pingInterval);
-};
-
-/**
-* Sends a ping packet.
-*
-* @api private
-*/
-
-Socket.prototype.ping = function () {
-  var self = this;
-  this.sendPacket('ping', function () {
-    self.emit('ping');
-  });
-};
-
-/**
- * Called on `drain` event
- *
- * @api private
- */
-
-Socket.prototype.onDrain = function () {
-  this.writeBuffer.splice(0, this.prevBufferLen);
-
-  // setting prevBufferLen = 0 is very important
-  // for example, when upgrading, upgrade packet is sent over,
-  // and a nonzero prevBufferLen could cause problems on `drain`
-  this.prevBufferLen = 0;
-
-  if (0 === this.writeBuffer.length) {
-    this.emit('drain');
-  } else {
-    this.flush();
-  }
-};
-
-/**
- * Flush write buffers.
- *
- * @api private
- */
-
-Socket.prototype.flush = function () {
-  if ('closed' !== this.readyState && this.transport.writable &&
-    !this.upgrading && this.writeBuffer.length) {
-    debug('flushing %d packets in socket', this.writeBuffer.length);
-    this.transport.send(this.writeBuffer);
-    // keep track of current length of writeBuffer
-    // splice writeBuffer and callbackBuffer on `drain`
-    this.prevBufferLen = this.writeBuffer.length;
-    this.emit('flush');
-  }
-};
-
-/**
- * Sends a message.
- *
- * @param {String} message.
- * @param {Function} callback function.
- * @param {Object} options.
- * @return {Socket} for chaining.
- * @api public
- */
-
-Socket.prototype.write =
-Socket.prototype.send = function (msg, options, fn) {
-  this.sendPacket('message', msg, options, fn);
-  return this;
-};
-
-/**
- * Sends a packet.
- *
- * @param {String} packet type.
- * @param {String} data.
- * @param {Object} options.
- * @param {Function} callback function.
- * @api private
- */
-
-Socket.prototype.sendPacket = function (type, data, options, fn) {
-  if ('function' === typeof data) {
-    fn = data;
-    data = undefined;
-  }
-
-  if ('function' === typeof options) {
-    fn = options;
-    options = null;
-  }
-
-  if ('closing' === this.readyState || 'closed' === this.readyState) {
-    return;
-  }
-
-  options = options || {};
-  options.compress = false !== options.compress;
-
-  var packet = {
-    type: type,
-    data: data,
-    options: options
-  };
-  this.emit('packetCreate', packet);
-  this.writeBuffer.push(packet);
-  if (fn) this.once('flush', fn);
-  this.flush();
-};
-
-/**
- * Closes the connection.
- *
- * @api private
- */
-
-Socket.prototype.close = function () {
-  if ('opening' === this.readyState || 'open' === this.readyState) {
-    this.readyState = 'closing';
-
-    var self = this;
-
-    if (this.writeBuffer.length) {
-      this.once('drain', function () {
-        if (this.upgrading) {
-          waitForUpgrade();
-        } else {
-          close();
-        }
-      });
-    } else if (this.upgrading) {
-      waitForUpgrade();
-    } else {
-      close();
-    }
-  }
-
-  function close () {
-    self.onClose('forced close');
-    debug('socket closing - telling transport to close');
-    self.transport.close();
-  }
-
-  function cleanupAndClose () {
-    self.removeListener('upgrade', cleanupAndClose);
-    self.removeListener('upgradeError', cleanupAndClose);
-    close();
-  }
-
-  function waitForUpgrade () {
-    // wait for upgrade to finish since we can't send packets while pausing a transport
-    self.once('upgrade', cleanupAndClose);
-    self.once('upgradeError', cleanupAndClose);
-  }
-
-  return this;
-};
-
-/**
- * Called upon transport error
- *
- * @api private
- */
-
-Socket.prototype.onError = function (err) {
-  debug('socket error %j', err);
-  Socket.priorWebsocketSuccess = false;
-  this.emit('error', err);
-  this.onClose('transport error', err);
-};
-
-/**
- * Called upon transport close.
- *
- * @api private
- */
-
-Socket.prototype.onClose = function (reason, desc) {
-  if ('opening' === this.readyState || 'open' === this.readyState || 'closing' === this.readyState) {
-    debug('socket close with reason: "%s"', reason);
-    var self = this;
-
-    // clear timers
-    clearTimeout(this.pingIntervalTimer);
-    clearTimeout(this.pingTimeoutTimer);
-
-    // stop event from firing again for transport
-    this.transport.removeAllListeners('close');
-
-    // ensure transport won't stay open
-    this.transport.close();
-
-    // ignore further transport communication
-    this.transport.removeAllListeners();
-
-    // set ready state
-    this.readyState = 'closed';
-
-    // clear session id
-    this.id = null;
-
-    // emit close event
-    this.emit('close', reason, desc);
-
-    // clean buffers after, so users can still
-    // grab the buffers on `close` event
-    self.writeBuffer = [];
-    self.prevBufferLen = 0;
-  }
-};
-
-/**
- * Filters upgrades, returning only those matching client transports.
- *
- * @param {Array} server upgrades
- * @api private
- *
- */
-
-Socket.prototype.filterUpgrades = function (upgrades) {
-  var filteredUpgrades = [];
-  for (var i = 0, j = upgrades.length; i < j; i++) {
-    if (~index(this.transports, upgrades[i])) filteredUpgrades.push(upgrades[i]);
-  }
-  return filteredUpgrades;
-};
-
-},{"./transport":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/lib/transport.js","./transports/index":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/lib/transports/index.js","component-emitter":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/component-emitter/index.js","debug":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/node_modules/debug/src/browser.js","engine.io-parser":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-parser/lib/browser.js","indexof":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/indexof/index.js","parseqs":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/parseqs/index.js","parseuri":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/parseuri/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/lib/transport.js":[function(require,module,exports){
-/**
- * Module dependencies.
- */
-
-var parser = require('engine.io-parser');
-var Emitter = require('component-emitter');
-
-/**
- * Module exports.
- */
-
-module.exports = Transport;
-
-/**
- * Transport abstract constructor.
- *
- * @param {Object} options.
- * @api private
- */
-
-function Transport (opts) {
-  this.path = opts.path;
-  this.hostname = opts.hostname;
-  this.port = opts.port;
-  this.secure = opts.secure;
-  this.query = opts.query;
-  this.timestampParam = opts.timestampParam;
-  this.timestampRequests = opts.timestampRequests;
-  this.readyState = '';
-  this.agent = opts.agent || false;
-  this.socket = opts.socket;
-  this.enablesXDR = opts.enablesXDR;
-  this.withCredentials = opts.withCredentials;
-
-  // SSL options for Node.js client
-  this.pfx = opts.pfx;
-  this.key = opts.key;
-  this.passphrase = opts.passphrase;
-  this.cert = opts.cert;
-  this.ca = opts.ca;
-  this.ciphers = opts.ciphers;
-  this.rejectUnauthorized = opts.rejectUnauthorized;
-  this.forceNode = opts.forceNode;
-
-  // results of ReactNative environment detection
-  this.isReactNative = opts.isReactNative;
-
-  // other options for Node.js client
-  this.extraHeaders = opts.extraHeaders;
-  this.localAddress = opts.localAddress;
-}
-
-/**
- * Mix in `Emitter`.
- */
-
-Emitter(Transport.prototype);
-
-/**
- * Emits an error.
- *
- * @param {String} str
- * @return {Transport} for chaining
- * @api public
- */
-
-Transport.prototype.onError = function (msg, desc) {
-  var err = new Error(msg);
-  err.type = 'TransportError';
-  err.description = desc;
-  this.emit('error', err);
-  return this;
-};
-
-/**
- * Opens the transport.
- *
- * @api public
- */
-
-Transport.prototype.open = function () {
-  if ('closed' === this.readyState || '' === this.readyState) {
-    this.readyState = 'opening';
-    this.doOpen();
-  }
-
-  return this;
-};
-
-/**
- * Closes the transport.
- *
- * @api private
- */
-
-Transport.prototype.close = function () {
-  if ('opening' === this.readyState || 'open' === this.readyState) {
-    this.doClose();
-    this.onClose();
-  }
-
-  return this;
-};
-
-/**
- * Sends multiple packets.
- *
- * @param {Array} packets
- * @api private
- */
-
-Transport.prototype.send = function (packets) {
-  if ('open' === this.readyState) {
-    this.write(packets);
-  } else {
-    throw new Error('Transport not open');
-  }
-};
-
-/**
- * Called upon open
- *
- * @api private
- */
-
-Transport.prototype.onOpen = function () {
-  this.readyState = 'open';
-  this.writable = true;
-  this.emit('open');
-};
-
-/**
- * Called with data.
- *
- * @param {String} data
- * @api private
- */
-
-Transport.prototype.onData = function (data) {
-  var packet = parser.decodePacket(data, this.socket.binaryType);
-  this.onPacket(packet);
-};
-
-/**
- * Called with a decoded packet.
- */
-
-Transport.prototype.onPacket = function (packet) {
-  this.emit('packet', packet);
-};
-
-/**
- * Called upon close.
- *
- * @api private
- */
-
-Transport.prototype.onClose = function () {
-  this.readyState = 'closed';
-  this.emit('close');
-};
-
-},{"component-emitter":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/component-emitter/index.js","engine.io-parser":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-parser/lib/browser.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/lib/transports/index.js":[function(require,module,exports){
-/**
- * Module dependencies
- */
-
-var XMLHttpRequest = require('xmlhttprequest-ssl');
-var XHR = require('./polling-xhr');
-var JSONP = require('./polling-jsonp');
-var websocket = require('./websocket');
-
-/**
- * Export transports.
- */
-
-exports.polling = polling;
-exports.websocket = websocket;
-
-/**
- * Polling transport polymorphic constructor.
- * Decides on xhr vs jsonp based on feature detection.
- *
- * @api private
- */
-
-function polling (opts) {
-  var xhr;
-  var xd = false;
-  var xs = false;
-  var jsonp = false !== opts.jsonp;
-
-  if (typeof location !== 'undefined') {
-    var isSSL = 'https:' === location.protocol;
-    var port = location.port;
-
-    // some user agents have empty `location.port`
-    if (!port) {
-      port = isSSL ? 443 : 80;
-    }
-
-    xd = opts.hostname !== location.hostname || port !== opts.port;
-    xs = opts.secure !== isSSL;
-  }
-
-  opts.xdomain = xd;
-  opts.xscheme = xs;
-  xhr = new XMLHttpRequest(opts);
-
-  if ('open' in xhr && !opts.forceJSONP) {
-    return new XHR(opts);
-  } else {
-    if (!jsonp) throw new Error('JSONP disabled');
-    return new JSONP(opts);
-  }
-}
-
-},{"./polling-jsonp":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/lib/transports/polling-jsonp.js","./polling-xhr":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/lib/transports/polling-xhr.js","./websocket":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/lib/transports/websocket.js","xmlhttprequest-ssl":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/lib/xmlhttprequest.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/lib/transports/polling-jsonp.js":[function(require,module,exports){
-/**
- * Module requirements.
- */
-
-var Polling = require('./polling');
-var inherit = require('component-inherit');
-var globalThis = require('../globalThis');
-
-/**
- * Module exports.
- */
-
-module.exports = JSONPPolling;
-
-/**
- * Cached regular expressions.
- */
-
-var rNewline = /\n/g;
-var rEscapedNewline = /\\n/g;
-
-/**
- * Global JSONP callbacks.
- */
-
-var callbacks;
-
-/**
- * Noop.
- */
-
-function empty () { }
-
-/**
- * JSONP Polling constructor.
- *
- * @param {Object} opts.
- * @api public
- */
-
-function JSONPPolling (opts) {
-  Polling.call(this, opts);
-
-  this.query = this.query || {};
-
-  // define global callbacks array if not present
-  // we do this here (lazily) to avoid unneeded global pollution
-  if (!callbacks) {
-    // we need to consider multiple engines in the same page
-    callbacks = globalThis.___eio = (globalThis.___eio || []);
-  }
-
-  // callback identifier
-  this.index = callbacks.length;
-
-  // add callback to jsonp global
-  var self = this;
-  callbacks.push(function (msg) {
-    self.onData(msg);
-  });
-
-  // append to query string
-  this.query.j = this.index;
-
-  // prevent spurious errors from being emitted when the window is unloaded
-  if (typeof addEventListener === 'function') {
-    addEventListener('beforeunload', function () {
-      if (self.script) self.script.onerror = empty;
-    }, false);
-  }
-}
-
-/**
- * Inherits from Polling.
- */
-
-inherit(JSONPPolling, Polling);
-
-/*
- * JSONP only supports binary as base64 encoded strings
- */
-
-JSONPPolling.prototype.supportsBinary = false;
-
-/**
- * Closes the socket.
- *
- * @api private
- */
-
-JSONPPolling.prototype.doClose = function () {
-  if (this.script) {
-    this.script.parentNode.removeChild(this.script);
-    this.script = null;
-  }
-
-  if (this.form) {
-    this.form.parentNode.removeChild(this.form);
-    this.form = null;
-    this.iframe = null;
-  }
-
-  Polling.prototype.doClose.call(this);
-};
-
-/**
- * Starts a poll cycle.
- *
- * @api private
- */
-
-JSONPPolling.prototype.doPoll = function () {
-  var self = this;
-  var script = document.createElement('script');
-
-  if (this.script) {
-    this.script.parentNode.removeChild(this.script);
-    this.script = null;
-  }
-
-  script.async = true;
-  script.src = this.uri();
-  script.onerror = function (e) {
-    self.onError('jsonp poll error', e);
-  };
-
-  var insertAt = document.getElementsByTagName('script')[0];
-  if (insertAt) {
-    insertAt.parentNode.insertBefore(script, insertAt);
-  } else {
-    (document.head || document.body).appendChild(script);
-  }
-  this.script = script;
-
-  var isUAgecko = 'undefined' !== typeof navigator && /gecko/i.test(navigator.userAgent);
-
-  if (isUAgecko) {
-    setTimeout(function () {
-      var iframe = document.createElement('iframe');
-      document.body.appendChild(iframe);
-      document.body.removeChild(iframe);
-    }, 100);
-  }
-};
-
-/**
- * Writes with a hidden iframe.
- *
- * @param {String} data to send
- * @param {Function} called upon flush.
- * @api private
- */
-
-JSONPPolling.prototype.doWrite = function (data, fn) {
-  var self = this;
-
-  if (!this.form) {
-    var form = document.createElement('form');
-    var area = document.createElement('textarea');
-    var id = this.iframeId = 'eio_iframe_' + this.index;
-    var iframe;
-
-    form.className = 'socketio';
-    form.style.position = 'absolute';
-    form.style.top = '-1000px';
-    form.style.left = '-1000px';
-    form.target = id;
-    form.method = 'POST';
-    form.setAttribute('accept-charset', 'utf-8');
-    area.name = 'd';
-    form.appendChild(area);
-    document.body.appendChild(form);
-
-    this.form = form;
-    this.area = area;
-  }
-
-  this.form.action = this.uri();
-
-  function complete () {
-    initIframe();
-    fn();
-  }
-
-  function initIframe () {
-    if (self.iframe) {
-      try {
-        self.form.removeChild(self.iframe);
-      } catch (e) {
-        self.onError('jsonp polling iframe removal error', e);
-      }
-    }
-
-    try {
-      // ie6 dynamic iframes with target="" support (thanks Chris Lambacher)
-      var html = '<iframe src="javascript:0" name="' + self.iframeId + '">';
-      iframe = document.createElement(html);
-    } catch (e) {
-      iframe = document.createElement('iframe');
-      iframe.name = self.iframeId;
-      iframe.src = 'javascript:0';
-    }
-
-    iframe.id = self.iframeId;
-
-    self.form.appendChild(iframe);
-    self.iframe = iframe;
-  }
-
-  initIframe();
-
-  // escape \n to prevent it from being converted into \r\n by some UAs
-  // double escaping is required for escaped new lines because unescaping of new lines can be done safely on server-side
-  data = data.replace(rEscapedNewline, '\\\n');
-  this.area.value = data.replace(rNewline, '\\n');
-
-  try {
-    this.form.submit();
-  } catch (e) {}
-
-  if (this.iframe.attachEvent) {
-    this.iframe.onreadystatechange = function () {
-      if (self.iframe.readyState === 'complete') {
-        complete();
-      }
-    };
-  } else {
-    this.iframe.onload = complete;
-  }
-};
-
-},{"../globalThis":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/lib/globalThis.browser.js","./polling":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/lib/transports/polling.js","component-inherit":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/component-inherit/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/lib/transports/polling-xhr.js":[function(require,module,exports){
-/* global attachEvent */
-
-/**
- * Module requirements.
- */
-
-var XMLHttpRequest = require('xmlhttprequest-ssl');
-var Polling = require('./polling');
-var Emitter = require('component-emitter');
-var inherit = require('component-inherit');
-var debug = require('debug')('engine.io-client:polling-xhr');
-var globalThis = require('../globalThis');
-
-/**
- * Module exports.
- */
-
-module.exports = XHR;
-module.exports.Request = Request;
-
-/**
- * Empty function
- */
-
-function empty () {}
-
-/**
- * XHR Polling constructor.
- *
- * @param {Object} opts
- * @api public
- */
-
-function XHR (opts) {
-  Polling.call(this, opts);
-  this.requestTimeout = opts.requestTimeout;
-  this.extraHeaders = opts.extraHeaders;
-
-  if (typeof location !== 'undefined') {
-    var isSSL = 'https:' === location.protocol;
-    var port = location.port;
-
-    // some user agents have empty `location.port`
-    if (!port) {
-      port = isSSL ? 443 : 80;
-    }
-
-    this.xd = (typeof location !== 'undefined' && opts.hostname !== location.hostname) ||
-      port !== opts.port;
-    this.xs = opts.secure !== isSSL;
-  }
-}
-
-/**
- * Inherits from Polling.
- */
-
-inherit(XHR, Polling);
-
-/**
- * XHR supports binary
- */
-
-XHR.prototype.supportsBinary = true;
-
-/**
- * Creates a request.
- *
- * @param {String} method
- * @api private
- */
-
-XHR.prototype.request = function (opts) {
-  opts = opts || {};
-  opts.uri = this.uri();
-  opts.xd = this.xd;
-  opts.xs = this.xs;
-  opts.agent = this.agent || false;
-  opts.supportsBinary = this.supportsBinary;
-  opts.enablesXDR = this.enablesXDR;
-  opts.withCredentials = this.withCredentials;
-
-  // SSL options for Node.js client
-  opts.pfx = this.pfx;
-  opts.key = this.key;
-  opts.passphrase = this.passphrase;
-  opts.cert = this.cert;
-  opts.ca = this.ca;
-  opts.ciphers = this.ciphers;
-  opts.rejectUnauthorized = this.rejectUnauthorized;
-  opts.requestTimeout = this.requestTimeout;
-
-  // other options for Node.js client
-  opts.extraHeaders = this.extraHeaders;
-
-  return new Request(opts);
-};
-
-/**
- * Sends data.
- *
- * @param {String} data to send.
- * @param {Function} called upon flush.
- * @api private
- */
-
-XHR.prototype.doWrite = function (data, fn) {
-  var isBinary = typeof data !== 'string' && data !== undefined;
-  var req = this.request({ method: 'POST', data: data, isBinary: isBinary });
-  var self = this;
-  req.on('success', fn);
-  req.on('error', function (err) {
-    self.onError('xhr post error', err);
-  });
-  this.sendXhr = req;
-};
-
-/**
- * Starts a poll cycle.
- *
- * @api private
- */
-
-XHR.prototype.doPoll = function () {
-  debug('xhr poll');
-  var req = this.request();
-  var self = this;
-  req.on('data', function (data) {
-    self.onData(data);
-  });
-  req.on('error', function (err) {
-    self.onError('xhr poll error', err);
-  });
-  this.pollXhr = req;
-};
-
-/**
- * Request constructor
- *
- * @param {Object} options
- * @api public
- */
-
-function Request (opts) {
-  this.method = opts.method || 'GET';
-  this.uri = opts.uri;
-  this.xd = !!opts.xd;
-  this.xs = !!opts.xs;
-  this.async = false !== opts.async;
-  this.data = undefined !== opts.data ? opts.data : null;
-  this.agent = opts.agent;
-  this.isBinary = opts.isBinary;
-  this.supportsBinary = opts.supportsBinary;
-  this.enablesXDR = opts.enablesXDR;
-  this.withCredentials = opts.withCredentials;
-  this.requestTimeout = opts.requestTimeout;
-
-  // SSL options for Node.js client
-  this.pfx = opts.pfx;
-  this.key = opts.key;
-  this.passphrase = opts.passphrase;
-  this.cert = opts.cert;
-  this.ca = opts.ca;
-  this.ciphers = opts.ciphers;
-  this.rejectUnauthorized = opts.rejectUnauthorized;
-
-  // other options for Node.js client
-  this.extraHeaders = opts.extraHeaders;
-
-  this.create();
-}
-
-/**
- * Mix in `Emitter`.
- */
-
-Emitter(Request.prototype);
-
-/**
- * Creates the XHR object and sends the request.
- *
- * @api private
- */
-
-Request.prototype.create = function () {
-  var opts = { agent: this.agent, xdomain: this.xd, xscheme: this.xs, enablesXDR: this.enablesXDR };
-
-  // SSL options for Node.js client
-  opts.pfx = this.pfx;
-  opts.key = this.key;
-  opts.passphrase = this.passphrase;
-  opts.cert = this.cert;
-  opts.ca = this.ca;
-  opts.ciphers = this.ciphers;
-  opts.rejectUnauthorized = this.rejectUnauthorized;
-
-  var xhr = this.xhr = new XMLHttpRequest(opts);
-  var self = this;
-
-  try {
-    debug('xhr open %s: %s', this.method, this.uri);
-    xhr.open(this.method, this.uri, this.async);
-    try {
-      if (this.extraHeaders) {
-        xhr.setDisableHeaderCheck && xhr.setDisableHeaderCheck(true);
-        for (var i in this.extraHeaders) {
-          if (this.extraHeaders.hasOwnProperty(i)) {
-            xhr.setRequestHeader(i, this.extraHeaders[i]);
-          }
-        }
-      }
-    } catch (e) {}
-
-    if ('POST' === this.method) {
-      try {
-        if (this.isBinary) {
-          xhr.setRequestHeader('Content-type', 'application/octet-stream');
-        } else {
-          xhr.setRequestHeader('Content-type', 'text/plain;charset=UTF-8');
-        }
-      } catch (e) {}
-    }
-
-    try {
-      xhr.setRequestHeader('Accept', '*/*');
-    } catch (e) {}
-
-    // ie6 check
-    if ('withCredentials' in xhr) {
-      xhr.withCredentials = this.withCredentials;
-    }
-
-    if (this.requestTimeout) {
-      xhr.timeout = this.requestTimeout;
-    }
-
-    if (this.hasXDR()) {
-      xhr.onload = function () {
-        self.onLoad();
-      };
-      xhr.onerror = function () {
-        self.onError(xhr.responseText);
-      };
-    } else {
-      xhr.onreadystatechange = function () {
-        if (xhr.readyState === 2) {
-          try {
-            var contentType = xhr.getResponseHeader('Content-Type');
-            if (self.supportsBinary && contentType === 'application/octet-stream' || contentType === 'application/octet-stream; charset=UTF-8') {
-              xhr.responseType = 'arraybuffer';
-            }
-          } catch (e) {}
-        }
-        if (4 !== xhr.readyState) return;
-        if (200 === xhr.status || 1223 === xhr.status) {
-          self.onLoad();
-        } else {
-          // make sure the `error` event handler that's user-set
-          // does not throw in the same tick and gets caught here
-          setTimeout(function () {
-            self.onError(typeof xhr.status === 'number' ? xhr.status : 0);
-          }, 0);
-        }
-      };
-    }
-
-    debug('xhr data %s', this.data);
-    xhr.send(this.data);
-  } catch (e) {
-    // Need to defer since .create() is called directly fhrom the constructor
-    // and thus the 'error' event can only be only bound *after* this exception
-    // occurs.  Therefore, also, we cannot throw here at all.
-    setTimeout(function () {
-      self.onError(e);
-    }, 0);
-    return;
-  }
-
-  if (typeof document !== 'undefined') {
-    this.index = Request.requestsCount++;
-    Request.requests[this.index] = this;
-  }
-};
-
-/**
- * Called upon successful response.
- *
- * @api private
- */
-
-Request.prototype.onSuccess = function () {
-  this.emit('success');
-  this.cleanup();
-};
-
-/**
- * Called if we have data.
- *
- * @api private
- */
-
-Request.prototype.onData = function (data) {
-  this.emit('data', data);
-  this.onSuccess();
-};
-
-/**
- * Called upon error.
- *
- * @api private
- */
-
-Request.prototype.onError = function (err) {
-  this.emit('error', err);
-  this.cleanup(true);
-};
-
-/**
- * Cleans up house.
- *
- * @api private
- */
-
-Request.prototype.cleanup = function (fromError) {
-  if ('undefined' === typeof this.xhr || null === this.xhr) {
-    return;
-  }
-  // xmlhttprequest
-  if (this.hasXDR()) {
-    this.xhr.onload = this.xhr.onerror = empty;
-  } else {
-    this.xhr.onreadystatechange = empty;
-  }
-
-  if (fromError) {
-    try {
-      this.xhr.abort();
-    } catch (e) {}
-  }
-
-  if (typeof document !== 'undefined') {
-    delete Request.requests[this.index];
-  }
-
-  this.xhr = null;
-};
-
-/**
- * Called upon load.
- *
- * @api private
- */
-
-Request.prototype.onLoad = function () {
-  var data;
-  try {
-    var contentType;
-    try {
-      contentType = this.xhr.getResponseHeader('Content-Type');
-    } catch (e) {}
-    if (contentType === 'application/octet-stream' || contentType === 'application/octet-stream; charset=UTF-8') {
-      data = this.xhr.response || this.xhr.responseText;
-    } else {
-      data = this.xhr.responseText;
-    }
-  } catch (e) {
-    this.onError(e);
-  }
-  if (null != data) {
-    this.onData(data);
-  }
-};
-
-/**
- * Check if it has XDomainRequest.
- *
- * @api private
- */
-
-Request.prototype.hasXDR = function () {
-  return typeof XDomainRequest !== 'undefined' && !this.xs && this.enablesXDR;
-};
-
-/**
- * Aborts the request.
- *
- * @api public
- */
-
-Request.prototype.abort = function () {
-  this.cleanup();
-};
-
-/**
- * Aborts pending requests when unloading the window. This is needed to prevent
- * memory leaks (e.g. when using IE) and to ensure that no spurious error is
- * emitted.
- */
-
-Request.requestsCount = 0;
-Request.requests = {};
-
-if (typeof document !== 'undefined') {
-  if (typeof attachEvent === 'function') {
-    attachEvent('onunload', unloadHandler);
-  } else if (typeof addEventListener === 'function') {
-    var terminationEvent = 'onpagehide' in globalThis ? 'pagehide' : 'unload';
-    addEventListener(terminationEvent, unloadHandler, false);
-  }
-}
-
-function unloadHandler () {
-  for (var i in Request.requests) {
-    if (Request.requests.hasOwnProperty(i)) {
-      Request.requests[i].abort();
-    }
-  }
-}
-
-},{"../globalThis":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/lib/globalThis.browser.js","./polling":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/lib/transports/polling.js","component-emitter":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/component-emitter/index.js","component-inherit":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/component-inherit/index.js","debug":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/node_modules/debug/src/browser.js","xmlhttprequest-ssl":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/lib/xmlhttprequest.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/lib/transports/polling.js":[function(require,module,exports){
-/**
- * Module dependencies.
- */
-
-var Transport = require('../transport');
-var parseqs = require('parseqs');
-var parser = require('engine.io-parser');
-var inherit = require('component-inherit');
-var yeast = require('yeast');
-var debug = require('debug')('engine.io-client:polling');
-
-/**
- * Module exports.
- */
-
-module.exports = Polling;
-
-/**
- * Is XHR2 supported?
- */
-
-var hasXHR2 = (function () {
-  var XMLHttpRequest = require('xmlhttprequest-ssl');
-  var xhr = new XMLHttpRequest({ xdomain: false });
-  return null != xhr.responseType;
-})();
-
-/**
- * Polling interface.
- *
- * @param {Object} opts
- * @api private
- */
-
-function Polling (opts) {
-  var forceBase64 = (opts && opts.forceBase64);
-  if (!hasXHR2 || forceBase64) {
-    this.supportsBinary = false;
-  }
-  Transport.call(this, opts);
-}
-
-/**
- * Inherits from Transport.
- */
-
-inherit(Polling, Transport);
-
-/**
- * Transport name.
- */
-
-Polling.prototype.name = 'polling';
-
-/**
- * Opens the socket (triggers polling). We write a PING message to determine
- * when the transport is open.
- *
- * @api private
- */
-
-Polling.prototype.doOpen = function () {
-  this.poll();
-};
-
-/**
- * Pauses polling.
- *
- * @param {Function} callback upon buffers are flushed and transport is paused
- * @api private
- */
-
-Polling.prototype.pause = function (onPause) {
-  var self = this;
-
-  this.readyState = 'pausing';
-
-  function pause () {
-    debug('paused');
-    self.readyState = 'paused';
-    onPause();
-  }
-
-  if (this.polling || !this.writable) {
-    var total = 0;
-
-    if (this.polling) {
-      debug('we are currently polling - waiting to pause');
-      total++;
-      this.once('pollComplete', function () {
-        debug('pre-pause polling complete');
-        --total || pause();
-      });
-    }
-
-    if (!this.writable) {
-      debug('we are currently writing - waiting to pause');
-      total++;
-      this.once('drain', function () {
-        debug('pre-pause writing complete');
-        --total || pause();
-      });
-    }
-  } else {
-    pause();
-  }
-};
-
-/**
- * Starts polling cycle.
- *
- * @api public
- */
-
-Polling.prototype.poll = function () {
-  debug('polling');
-  this.polling = true;
-  this.doPoll();
-  this.emit('poll');
-};
-
-/**
- * Overloads onData to detect payloads.
- *
- * @api private
- */
-
-Polling.prototype.onData = function (data) {
-  var self = this;
-  debug('polling got data %s', data);
-  var callback = function (packet, index, total) {
-    // if its the first message we consider the transport open
-    if ('opening' === self.readyState && packet.type === 'open') {
-      self.onOpen();
-    }
-
-    // if its a close packet, we close the ongoing requests
-    if ('close' === packet.type) {
-      self.onClose();
-      return false;
-    }
-
-    // otherwise bypass onData and handle the message
-    self.onPacket(packet);
-  };
-
-  // decode payload
-  parser.decodePayload(data, this.socket.binaryType, callback);
-
-  // if an event did not trigger closing
-  if ('closed' !== this.readyState) {
-    // if we got data we're not polling
-    this.polling = false;
-    this.emit('pollComplete');
-
-    if ('open' === this.readyState) {
-      this.poll();
-    } else {
-      debug('ignoring poll - transport state "%s"', this.readyState);
-    }
-  }
-};
-
-/**
- * For polling, send a close packet.
- *
- * @api private
- */
-
-Polling.prototype.doClose = function () {
-  var self = this;
-
-  function close () {
-    debug('writing close packet');
-    self.write([{ type: 'close' }]);
-  }
-
-  if ('open' === this.readyState) {
-    debug('transport open - closing');
-    close();
-  } else {
-    // in case we're trying to close while
-    // handshaking is in progress (GH-164)
-    debug('transport not open - deferring close');
-    this.once('open', close);
-  }
-};
-
-/**
- * Writes a packets payload.
- *
- * @param {Array} data packets
- * @param {Function} drain callback
- * @api private
- */
-
-Polling.prototype.write = function (packets) {
-  var self = this;
-  this.writable = false;
-  var callbackfn = function () {
-    self.writable = true;
-    self.emit('drain');
-  };
-
-  parser.encodePayload(packets, this.supportsBinary, function (data) {
-    self.doWrite(data, callbackfn);
-  });
-};
-
-/**
- * Generates uri for connection.
- *
- * @api private
- */
-
-Polling.prototype.uri = function () {
-  var query = this.query || {};
-  var schema = this.secure ? 'https' : 'http';
-  var port = '';
-
-  // cache busting is forced
-  if (false !== this.timestampRequests) {
-    query[this.timestampParam] = yeast();
-  }
-
-  if (!this.supportsBinary && !query.sid) {
-    query.b64 = 1;
-  }
-
-  query = parseqs.encode(query);
-
-  // avoid port if default for schema
-  if (this.port && (('https' === schema && Number(this.port) !== 443) ||
-     ('http' === schema && Number(this.port) !== 80))) {
-    port = ':' + this.port;
-  }
-
-  // prepend ? to query
-  if (query.length) {
-    query = '?' + query;
-  }
-
-  var ipv6 = this.hostname.indexOf(':') !== -1;
-  return schema + '://' + (ipv6 ? '[' + this.hostname + ']' : this.hostname) + port + this.path + query;
-};
-
-},{"../transport":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/lib/transport.js","component-inherit":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/component-inherit/index.js","debug":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/node_modules/debug/src/browser.js","engine.io-parser":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-parser/lib/browser.js","parseqs":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/parseqs/index.js","xmlhttprequest-ssl":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/lib/xmlhttprequest.js","yeast":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/yeast/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/lib/transports/websocket.js":[function(require,module,exports){
-(function (Buffer){(function (){
-/**
- * Module dependencies.
- */
-
-var Transport = require('../transport');
-var parser = require('engine.io-parser');
-var parseqs = require('parseqs');
-var inherit = require('component-inherit');
-var yeast = require('yeast');
-var debug = require('debug')('engine.io-client:websocket');
-
-var BrowserWebSocket, NodeWebSocket;
-
-if (typeof WebSocket !== 'undefined') {
-  BrowserWebSocket = WebSocket;
-} else if (typeof self !== 'undefined') {
-  BrowserWebSocket = self.WebSocket || self.MozWebSocket;
-}
-
-if (typeof window === 'undefined') {
-  try {
-    NodeWebSocket = require('ws');
-  } catch (e) { }
-}
-
-/**
- * Get either the `WebSocket` or `MozWebSocket` globals
- * in the browser or try to resolve WebSocket-compatible
- * interface exposed by `ws` for Node-like environment.
- */
-
-var WebSocketImpl = BrowserWebSocket || NodeWebSocket;
-
-/**
- * Module exports.
- */
-
-module.exports = WS;
-
-/**
- * WebSocket transport constructor.
- *
- * @api {Object} connection options
- * @api public
- */
-
-function WS (opts) {
-  var forceBase64 = (opts && opts.forceBase64);
-  if (forceBase64) {
-    this.supportsBinary = false;
-  }
-  this.perMessageDeflate = opts.perMessageDeflate;
-  this.usingBrowserWebSocket = BrowserWebSocket && !opts.forceNode;
-  this.protocols = opts.protocols;
-  if (!this.usingBrowserWebSocket) {
-    WebSocketImpl = NodeWebSocket;
-  }
-  Transport.call(this, opts);
-}
-
-/**
- * Inherits from Transport.
- */
-
-inherit(WS, Transport);
-
-/**
- * Transport name.
- *
- * @api public
- */
-
-WS.prototype.name = 'websocket';
-
-/*
- * WebSockets support binary
- */
-
-WS.prototype.supportsBinary = true;
-
-/**
- * Opens socket.
- *
- * @api private
- */
-
-WS.prototype.doOpen = function () {
-  if (!this.check()) {
-    // let probe timeout
-    return;
-  }
-
-  var uri = this.uri();
-  var protocols = this.protocols;
-
-  var opts = {};
-
-  if (!this.isReactNative) {
-    opts.agent = this.agent;
-    opts.perMessageDeflate = this.perMessageDeflate;
-
-    // SSL options for Node.js client
-    opts.pfx = this.pfx;
-    opts.key = this.key;
-    opts.passphrase = this.passphrase;
-    opts.cert = this.cert;
-    opts.ca = this.ca;
-    opts.ciphers = this.ciphers;
-    opts.rejectUnauthorized = this.rejectUnauthorized;
-  }
-
-  if (this.extraHeaders) {
-    opts.headers = this.extraHeaders;
-  }
-  if (this.localAddress) {
-    opts.localAddress = this.localAddress;
-  }
-
-  try {
-    this.ws =
-      this.usingBrowserWebSocket && !this.isReactNative
-        ? protocols
-          ? new WebSocketImpl(uri, protocols)
-          : new WebSocketImpl(uri)
-        : new WebSocketImpl(uri, protocols, opts);
-  } catch (err) {
-    return this.emit('error', err);
-  }
-
-  if (this.ws.binaryType === undefined) {
-    this.supportsBinary = false;
-  }
-
-  if (this.ws.supports && this.ws.supports.binary) {
-    this.supportsBinary = true;
-    this.ws.binaryType = 'nodebuffer';
-  } else {
-    this.ws.binaryType = 'arraybuffer';
-  }
-
-  this.addEventListeners();
-};
-
-/**
- * Adds event listeners to the socket
- *
- * @api private
- */
-
-WS.prototype.addEventListeners = function () {
-  var self = this;
-
-  this.ws.onopen = function () {
-    self.onOpen();
-  };
-  this.ws.onclose = function () {
-    self.onClose();
-  };
-  this.ws.onmessage = function (ev) {
-    self.onData(ev.data);
-  };
-  this.ws.onerror = function (e) {
-    self.onError('websocket error', e);
-  };
-};
-
-/**
- * Writes data to socket.
- *
- * @param {Array} array of packets.
- * @api private
- */
-
-WS.prototype.write = function (packets) {
-  var self = this;
-  this.writable = false;
-
-  // encodePacket efficient as it uses WS framing
-  // no need for encodePayload
-  var total = packets.length;
-  for (var i = 0, l = total; i < l; i++) {
-    (function (packet) {
-      parser.encodePacket(packet, self.supportsBinary, function (data) {
-        if (!self.usingBrowserWebSocket) {
-          // always create a new object (GH-437)
-          var opts = {};
-          if (packet.options) {
-            opts.compress = packet.options.compress;
-          }
-
-          if (self.perMessageDeflate) {
-            var len = 'string' === typeof data ? Buffer.byteLength(data) : data.length;
-            if (len < self.perMessageDeflate.threshold) {
-              opts.compress = false;
-            }
-          }
-        }
-
-        // Sometimes the websocket has already been closed but the browser didn't
-        // have a chance of informing us about it yet, in that case send will
-        // throw an error
-        try {
-          if (self.usingBrowserWebSocket) {
-            // TypeError is thrown when passing the second argument on Safari
-            self.ws.send(data);
-          } else {
-            self.ws.send(data, opts);
-          }
-        } catch (e) {
-          debug('websocket closed before onclose event');
-        }
-
-        --total || done();
-      });
-    })(packets[i]);
-  }
-
-  function done () {
-    self.emit('flush');
-
-    // fake drain
-    // defer to next tick to allow Socket to clear writeBuffer
-    setTimeout(function () {
-      self.writable = true;
-      self.emit('drain');
-    }, 0);
-  }
-};
-
-/**
- * Called upon close
- *
- * @api private
- */
-
-WS.prototype.onClose = function () {
-  Transport.prototype.onClose.call(this);
-};
-
-/**
- * Closes socket.
- *
- * @api private
- */
-
-WS.prototype.doClose = function () {
-  if (typeof this.ws !== 'undefined') {
-    this.ws.close();
-  }
-};
-
-/**
- * Generates uri for connection.
- *
- * @api private
- */
-
-WS.prototype.uri = function () {
-  var query = this.query || {};
-  var schema = this.secure ? 'wss' : 'ws';
-  var port = '';
-
-  // avoid port if default for schema
-  if (this.port && (('wss' === schema && Number(this.port) !== 443) ||
-    ('ws' === schema && Number(this.port) !== 80))) {
-    port = ':' + this.port;
-  }
-
-  // append timestamp to URI
-  if (this.timestampRequests) {
-    query[this.timestampParam] = yeast();
-  }
-
-  // communicate binary support capabilities
-  if (!this.supportsBinary) {
-    query.b64 = 1;
-  }
-
-  query = parseqs.encode(query);
-
-  // prepend ? to query
-  if (query.length) {
-    query = '?' + query;
-  }
-
-  var ipv6 = this.hostname.indexOf(':') !== -1;
-  return schema + '://' + (ipv6 ? '[' + this.hostname + ']' : this.hostname) + port + this.path + query;
-};
-
-/**
- * Feature detection for WebSocket.
- *
- * @return {Boolean} whether this transport is available.
- * @api public
- */
-
-WS.prototype.check = function () {
-  return !!WebSocketImpl && !('__initialize' in WebSocketImpl && this.name === WS.prototype.name);
-};
-
-}).call(this)}).call(this,require("buffer").Buffer)
-},{"../transport":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/lib/transport.js","buffer":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browserify/node_modules/buffer/index.js","component-inherit":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/component-inherit/index.js","debug":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/node_modules/debug/src/browser.js","engine.io-parser":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-parser/lib/browser.js","parseqs":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/parseqs/index.js","ws":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browser-resolve/empty.js","yeast":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/yeast/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/lib/xmlhttprequest.js":[function(require,module,exports){
-// browser shim for xmlhttprequest module
-
-var hasCORS = require('has-cors');
-var globalThis = require('./globalThis');
-
-module.exports = function (opts) {
-  var xdomain = opts.xdomain;
-
-  // scheme must be same when usign XDomainRequest
-  // http://blogs.msdn.com/b/ieinternals/archive/2010/05/13/xdomainrequest-restrictions-limitations-and-workarounds.aspx
-  var xscheme = opts.xscheme;
-
-  // XDomainRequest has a flow of not sending cookie, therefore it should be disabled as a default.
-  // https://github.com/Automattic/engine.io-client/pull/217
-  var enablesXDR = opts.enablesXDR;
-
-  // XMLHttpRequest can be disabled on IE
-  try {
-    if ('undefined' !== typeof XMLHttpRequest && (!xdomain || hasCORS)) {
-      return new XMLHttpRequest();
-    }
-  } catch (e) { }
-
-  // Use XDomainRequest for IE8 if enablesXDR is true
-  // because loading bar keeps flashing when using jsonp-polling
-  // https://github.com/yujiosaka/socke.io-ie8-loading-example
-  try {
-    if ('undefined' !== typeof XDomainRequest && !xscheme && enablesXDR) {
-      return new XDomainRequest();
-    }
-  } catch (e) { }
-
-  if (!xdomain) {
-    try {
-      return new globalThis[['Active'].concat('Object').join('X')]('Microsoft.XMLHTTP');
-    } catch (e) { }
-  }
-};
-
-},{"./globalThis":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/lib/globalThis.browser.js","has-cors":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/has-cors/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/node_modules/debug/src/browser.js":[function(require,module,exports){
-(function (process){(function (){
-/**
- * This is the web browser implementation of `debug()`.
- *
- * Expose `debug()` as the module.
- */
-
-exports = module.exports = require('./debug');
-exports.log = log;
-exports.formatArgs = formatArgs;
-exports.save = save;
-exports.load = load;
-exports.useColors = useColors;
-exports.storage = 'undefined' != typeof chrome
-               && 'undefined' != typeof chrome.storage
-                  ? chrome.storage.local
-                  : localstorage();
-
-/**
- * Colors.
- */
-
-exports.colors = [
-  '#0000CC', '#0000FF', '#0033CC', '#0033FF', '#0066CC', '#0066FF', '#0099CC',
-  '#0099FF', '#00CC00', '#00CC33', '#00CC66', '#00CC99', '#00CCCC', '#00CCFF',
-  '#3300CC', '#3300FF', '#3333CC', '#3333FF', '#3366CC', '#3366FF', '#3399CC',
-  '#3399FF', '#33CC00', '#33CC33', '#33CC66', '#33CC99', '#33CCCC', '#33CCFF',
-  '#6600CC', '#6600FF', '#6633CC', '#6633FF', '#66CC00', '#66CC33', '#9900CC',
-  '#9900FF', '#9933CC', '#9933FF', '#99CC00', '#99CC33', '#CC0000', '#CC0033',
-  '#CC0066', '#CC0099', '#CC00CC', '#CC00FF', '#CC3300', '#CC3333', '#CC3366',
-  '#CC3399', '#CC33CC', '#CC33FF', '#CC6600', '#CC6633', '#CC9900', '#CC9933',
-  '#CCCC00', '#CCCC33', '#FF0000', '#FF0033', '#FF0066', '#FF0099', '#FF00CC',
-  '#FF00FF', '#FF3300', '#FF3333', '#FF3366', '#FF3399', '#FF33CC', '#FF33FF',
-  '#FF6600', '#FF6633', '#FF9900', '#FF9933', '#FFCC00', '#FFCC33'
-];
-
-/**
- * Currently only WebKit-based Web Inspectors, Firefox >= v31,
- * and the Firebug extension (any Firefox version) are known
- * to support "%c" CSS customizations.
- *
- * TODO: add a `localStorage` variable to explicitly enable/disable colors
- */
-
-function useColors() {
-  // NB: In an Electron preload script, document will be defined but not fully
-  // initialized. Since we know we're in Chrome, we'll just detect this case
-  // explicitly
-  if (typeof window !== 'undefined' && window.process && window.process.type === 'renderer') {
-    return true;
-  }
-
-  // Internet Explorer and Edge do not support colors.
-  if (typeof navigator !== 'undefined' && navigator.userAgent && navigator.userAgent.toLowerCase().match(/(edge|trident)\/(\d+)/)) {
-    return false;
-  }
-
-  // is webkit? http://stackoverflow.com/a/16459606/376773
-  // document is undefined in react-native: https://github.com/facebook/react-native/pull/1632
-  return (typeof document !== 'undefined' && document.documentElement && document.documentElement.style && document.documentElement.style.WebkitAppearance) ||
-    // is firebug? http://stackoverflow.com/a/398120/376773
-    (typeof window !== 'undefined' && window.console && (window.console.firebug || (window.console.exception && window.console.table))) ||
-    // is firefox >= v31?
-    // https://developer.mozilla.org/en-US/docs/Tools/Web_Console#Styling_messages
-    (typeof navigator !== 'undefined' && navigator.userAgent && navigator.userAgent.toLowerCase().match(/firefox\/(\d+)/) && parseInt(RegExp.$1, 10) >= 31) ||
-    // double check webkit in userAgent just in case we are in a worker
-    (typeof navigator !== 'undefined' && navigator.userAgent && navigator.userAgent.toLowerCase().match(/applewebkit\/(\d+)/));
-}
-
-/**
- * Map %j to `JSON.stringify()`, since no Web Inspectors do that by default.
- */
-
-exports.formatters.j = function(v) {
-  try {
-    return JSON.stringify(v);
-  } catch (err) {
-    return '[UnexpectedJSONParseError]: ' + err.message;
-  }
-};
-
-
-/**
- * Colorize log arguments if enabled.
- *
- * @api public
- */
-
-function formatArgs(args) {
-  var useColors = this.useColors;
-
-  args[0] = (useColors ? '%c' : '')
-    + this.namespace
-    + (useColors ? ' %c' : ' ')
-    + args[0]
-    + (useColors ? '%c ' : ' ')
-    + '+' + exports.humanize(this.diff);
-
-  if (!useColors) return;
-
-  var c = 'color: ' + this.color;
-  args.splice(1, 0, c, 'color: inherit')
-
-  // the final "%c" is somewhat tricky, because there could be other
-  // arguments passed either before or after the %c, so we need to
-  // figure out the correct index to insert the CSS into
-  var index = 0;
-  var lastC = 0;
-  args[0].replace(/%[a-zA-Z%]/g, function(match) {
-    if ('%%' === match) return;
-    index++;
-    if ('%c' === match) {
-      // we only are interested in the *last* %c
-      // (the user may have provided their own)
-      lastC = index;
-    }
-  });
-
-  args.splice(lastC, 0, c);
-}
-
-/**
- * Invokes `console.log()` when available.
- * No-op when `console.log` is not a "function".
- *
- * @api public
- */
-
-function log() {
-  // this hackery is required for IE8/9, where
-  // the `console.log` function doesn't have 'apply'
-  return 'object' === typeof console
-    && console.log
-    && Function.prototype.apply.call(console.log, console, arguments);
-}
-
-/**
- * Save `namespaces`.
- *
- * @param {String} namespaces
- * @api private
- */
-
-function save(namespaces) {
-  try {
-    if (null == namespaces) {
-      exports.storage.removeItem('debug');
-    } else {
-      exports.storage.debug = namespaces;
-    }
-  } catch(e) {}
-}
-
-/**
- * Load `namespaces`.
- *
- * @return {String} returns the previously persisted debug modes
- * @api private
- */
-
-function load() {
-  var r;
-  try {
-    r = exports.storage.debug;
-  } catch(e) {}
-
-  // If debug isn't set in LS, and we're in Electron, try to load $DEBUG
-  if (!r && typeof process !== 'undefined' && 'env' in process) {
-    r = process.env.DEBUG;
-  }
-
-  return r;
-}
-
-/**
- * Enable namespaces listed in `localStorage.debug` initially.
- */
-
-exports.enable(load());
-
-/**
- * Localstorage attempts to return the localstorage.
- *
- * This is necessary because safari throws
- * when a user disables cookies/localstorage
- * and you attempt to access it.
- *
- * @return {LocalStorage}
- * @api private
- */
-
-function localstorage() {
-  try {
-    return window.localStorage;
-  } catch (e) {}
-}
-
-}).call(this)}).call(this,require('_process'))
-},{"./debug":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/node_modules/debug/src/debug.js","_process":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/process/browser.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/node_modules/debug/src/debug.js":[function(require,module,exports){
-
-/**
- * This is the common logic for both the Node.js and web browser
- * implementations of `debug()`.
- *
- * Expose `debug()` as the module.
- */
-
-exports = module.exports = createDebug.debug = createDebug['default'] = createDebug;
-exports.coerce = coerce;
-exports.disable = disable;
-exports.enable = enable;
-exports.enabled = enabled;
-exports.humanize = require('ms');
-
-/**
- * Active `debug` instances.
- */
-exports.instances = [];
-
-/**
- * The currently active debug mode names, and names to skip.
- */
-
-exports.names = [];
-exports.skips = [];
-
-/**
- * Map of special "%n" handling functions, for the debug "format" argument.
- *
- * Valid key names are a single, lower or upper-case letter, i.e. "n" and "N".
- */
-
-exports.formatters = {};
-
-/**
- * Select a color.
- * @param {String} namespace
- * @return {Number}
- * @api private
- */
-
-function selectColor(namespace) {
-  var hash = 0, i;
-
-  for (i in namespace) {
-    hash  = ((hash << 5) - hash) + namespace.charCodeAt(i);
-    hash |= 0; // Convert to 32bit integer
-  }
-
-  return exports.colors[Math.abs(hash) % exports.colors.length];
-}
-
-/**
- * Create a debugger with the given `namespace`.
- *
- * @param {String} namespace
- * @return {Function}
- * @api public
- */
-
-function createDebug(namespace) {
-
-  var prevTime;
-
-  function debug() {
-    // disabled?
-    if (!debug.enabled) return;
-
-    var self = debug;
-
-    // set `diff` timestamp
-    var curr = +new Date();
-    var ms = curr - (prevTime || curr);
-    self.diff = ms;
-    self.prev = prevTime;
-    self.curr = curr;
-    prevTime = curr;
-
-    // turn the `arguments` into a proper Array
-    var args = new Array(arguments.length);
-    for (var i = 0; i < args.length; i++) {
-      args[i] = arguments[i];
-    }
-
-    args[0] = exports.coerce(args[0]);
-
-    if ('string' !== typeof args[0]) {
-      // anything else let's inspect with %O
-      args.unshift('%O');
-    }
-
-    // apply any `formatters` transformations
-    var index = 0;
-    args[0] = args[0].replace(/%([a-zA-Z%])/g, function(match, format) {
-      // if we encounter an escaped % then don't increase the array index
-      if (match === '%%') return match;
-      index++;
-      var formatter = exports.formatters[format];
-      if ('function' === typeof formatter) {
-        var val = args[index];
-        match = formatter.call(self, val);
-
-        // now we need to remove `args[index]` since it's inlined in the `format`
-        args.splice(index, 1);
-        index--;
-      }
-      return match;
-    });
-
-    // apply env-specific formatting (colors, etc.)
-    exports.formatArgs.call(self, args);
-
-    var logFn = debug.log || exports.log || console.log.bind(console);
-    logFn.apply(self, args);
-  }
-
-  debug.namespace = namespace;
-  debug.enabled = exports.enabled(namespace);
-  debug.useColors = exports.useColors();
-  debug.color = selectColor(namespace);
-  debug.destroy = destroy;
-
-  // env-specific initialization logic for debug instances
-  if ('function' === typeof exports.init) {
-    exports.init(debug);
-  }
-
-  exports.instances.push(debug);
-
-  return debug;
-}
-
-function destroy () {
-  var index = exports.instances.indexOf(this);
-  if (index !== -1) {
-    exports.instances.splice(index, 1);
-    return true;
-  } else {
-    return false;
-  }
-}
-
-/**
- * Enables a debug mode by namespaces. This can include modes
- * separated by a colon and wildcards.
- *
- * @param {String} namespaces
- * @api public
- */
-
-function enable(namespaces) {
-  exports.save(namespaces);
-
-  exports.names = [];
-  exports.skips = [];
-
-  var i;
-  var split = (typeof namespaces === 'string' ? namespaces : '').split(/[\s,]+/);
-  var len = split.length;
-
-  for (i = 0; i < len; i++) {
-    if (!split[i]) continue; // ignore empty strings
-    namespaces = split[i].replace(/\*/g, '.*?');
-    if (namespaces[0] === '-') {
-      exports.skips.push(new RegExp('^' + namespaces.substr(1) + '$'));
-    } else {
-      exports.names.push(new RegExp('^' + namespaces + '$'));
-    }
-  }
-
-  for (i = 0; i < exports.instances.length; i++) {
-    var instance = exports.instances[i];
-    instance.enabled = exports.enabled(instance.namespace);
-  }
-}
-
-/**
- * Disable debug output.
- *
- * @api public
- */
-
-function disable() {
-  exports.enable('');
-}
-
-/**
- * Returns true if the given mode name is enabled, false otherwise.
- *
- * @param {String} name
- * @return {Boolean}
- * @api public
- */
-
-function enabled(name) {
-  if (name[name.length - 1] === '*') {
-    return true;
-  }
-  var i, len;
-  for (i = 0, len = exports.skips.length; i < len; i++) {
-    if (exports.skips[i].test(name)) {
-      return false;
-    }
-  }
-  for (i = 0, len = exports.names.length; i < len; i++) {
-    if (exports.names[i].test(name)) {
-      return true;
-    }
-  }
-  return false;
-}
-
-/**
- * Coerce `val`.
- *
- * @param {Mixed} val
- * @return {Mixed}
- * @api private
- */
-
-function coerce(val) {
-  if (val instanceof Error) return val.stack || val.message;
-  return val;
-}
-
-},{"ms":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/node_modules/ms/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/node_modules/ms/index.js":[function(require,module,exports){
-/**
- * Helpers.
- */
-
-var s = 1000;
-var m = s * 60;
-var h = m * 60;
-var d = h * 24;
-var y = d * 365.25;
-
-/**
- * Parse or format the given `val`.
- *
- * Options:
- *
- *  - `long` verbose formatting [false]
- *
- * @param {String|Number} val
- * @param {Object} [options]
- * @throws {Error} throw an error if val is not a non-empty string or a number
- * @return {String|Number}
- * @api public
- */
-
-module.exports = function(val, options) {
-  options = options || {};
-  var type = typeof val;
-  if (type === 'string' && val.length > 0) {
-    return parse(val);
-  } else if (type === 'number' && isNaN(val) === false) {
-    return options.long ? fmtLong(val) : fmtShort(val);
-  }
-  throw new Error(
-    'val is not a non-empty string or a valid number. val=' +
-      JSON.stringify(val)
-  );
-};
-
-/**
- * Parse the given `str` and return milliseconds.
- *
- * @param {String} str
- * @return {Number}
- * @api private
- */
-
-function parse(str) {
-  str = String(str);
-  if (str.length > 100) {
-    return;
-  }
-  var match = /^((?:\d+)?\.?\d+) *(milliseconds?|msecs?|ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|years?|yrs?|y)?$/i.exec(
-    str
-  );
-  if (!match) {
-    return;
-  }
-  var n = parseFloat(match[1]);
-  var type = (match[2] || 'ms').toLowerCase();
-  switch (type) {
-    case 'years':
-    case 'year':
-    case 'yrs':
-    case 'yr':
-    case 'y':
-      return n * y;
-    case 'days':
-    case 'day':
-    case 'd':
-      return n * d;
-    case 'hours':
-    case 'hour':
-    case 'hrs':
-    case 'hr':
-    case 'h':
-      return n * h;
-    case 'minutes':
-    case 'minute':
-    case 'mins':
-    case 'min':
-    case 'm':
-      return n * m;
-    case 'seconds':
-    case 'second':
-    case 'secs':
-    case 'sec':
-    case 's':
-      return n * s;
-    case 'milliseconds':
-    case 'millisecond':
-    case 'msecs':
-    case 'msec':
-    case 'ms':
-      return n;
-    default:
-      return undefined;
-  }
-}
-
-/**
- * Short format for `ms`.
- *
- * @param {Number} ms
- * @return {String}
- * @api private
- */
-
-function fmtShort(ms) {
-  if (ms >= d) {
-    return Math.round(ms / d) + 'd';
-  }
-  if (ms >= h) {
-    return Math.round(ms / h) + 'h';
-  }
-  if (ms >= m) {
-    return Math.round(ms / m) + 'm';
-  }
-  if (ms >= s) {
-    return Math.round(ms / s) + 's';
-  }
-  return ms + 'ms';
-}
-
-/**
- * Long format for `ms`.
- *
- * @param {Number} ms
- * @return {String}
- * @api private
- */
-
-function fmtLong(ms) {
-  return plural(ms, d, 'day') ||
-    plural(ms, h, 'hour') ||
-    plural(ms, m, 'minute') ||
-    plural(ms, s, 'second') ||
-    ms + ' ms';
-}
-
-/**
- * Pluralization helper.
- */
-
-function plural(ms, n, name) {
-  if (ms < n) {
-    return;
-  }
-  if (ms < n * 1.5) {
-    return Math.floor(ms / n) + ' ' + name;
-  }
-  return Math.ceil(ms / n) + ' ' + name + 's';
-}
-
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-parser/lib/browser.js":[function(require,module,exports){
-/**
- * Module dependencies.
- */
-
-var keys = require('./keys');
-var hasBinary = require('has-binary2');
-var sliceBuffer = require('arraybuffer.slice');
-var after = require('after');
-var utf8 = require('./utf8');
-
-var base64encoder;
-if (typeof ArrayBuffer !== 'undefined') {
-  base64encoder = require('base64-arraybuffer');
-}
-
-/**
- * Check if we are running an android browser. That requires us to use
- * ArrayBuffer with polling transports...
- *
- * http://ghinda.net/jpeg-blob-ajax-android/
- */
-
-var isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
-
-/**
- * Check if we are running in PhantomJS.
- * Uploading a Blob with PhantomJS does not work correctly, as reported here:
- * https://github.com/ariya/phantomjs/issues/11395
- * @type boolean
- */
-var isPhantomJS = typeof navigator !== 'undefined' && /PhantomJS/i.test(navigator.userAgent);
-
-/**
- * When true, avoids using Blobs to encode payloads.
- * @type boolean
- */
-var dontSendBlobs = isAndroid || isPhantomJS;
-
-/**
- * Current protocol version.
- */
-
-exports.protocol = 3;
-
-/**
- * Packet types.
- */
-
-var packets = exports.packets = {
-    open:     0    // non-ws
-  , close:    1    // non-ws
-  , ping:     2
-  , pong:     3
-  , message:  4
-  , upgrade:  5
-  , noop:     6
-};
-
-var packetslist = keys(packets);
-
-/**
- * Premade error packet.
- */
-
-var err = { type: 'error', data: 'parser error' };
-
-/**
- * Create a blob api even for blob builder when vendor prefixes exist
- */
-
-var Blob = require('blob');
-
-/**
- * Encodes a packet.
- *
- *     <packet type id> [ <data> ]
- *
- * Example:
- *
- *     5hello world
- *     3
- *     4
- *
- * Binary is encoded in an identical principle
- *
- * @api private
- */
-
-exports.encodePacket = function (packet, supportsBinary, utf8encode, callback) {
-  if (typeof supportsBinary === 'function') {
-    callback = supportsBinary;
-    supportsBinary = false;
-  }
-
-  if (typeof utf8encode === 'function') {
-    callback = utf8encode;
-    utf8encode = null;
-  }
-
-  var data = (packet.data === undefined)
-    ? undefined
-    : packet.data.buffer || packet.data;
-
-  if (typeof ArrayBuffer !== 'undefined' && data instanceof ArrayBuffer) {
-    return encodeArrayBuffer(packet, supportsBinary, callback);
-  } else if (typeof Blob !== 'undefined' && data instanceof Blob) {
-    return encodeBlob(packet, supportsBinary, callback);
-  }
-
-  // might be an object with { base64: true, data: dataAsBase64String }
-  if (data && data.base64) {
-    return encodeBase64Object(packet, callback);
-  }
-
-  // Sending data as a utf-8 string
-  var encoded = packets[packet.type];
-
-  // data fragment is optional
-  if (undefined !== packet.data) {
-    encoded += utf8encode ? utf8.encode(String(packet.data), { strict: false }) : String(packet.data);
-  }
-
-  return callback('' + encoded);
-
-};
-
-function encodeBase64Object(packet, callback) {
-  // packet data is an object { base64: true, data: dataAsBase64String }
-  var message = 'b' + exports.packets[packet.type] + packet.data.data;
-  return callback(message);
-}
-
-/**
- * Encode packet helpers for binary types
- */
-
-function encodeArrayBuffer(packet, supportsBinary, callback) {
-  if (!supportsBinary) {
-    return exports.encodeBase64Packet(packet, callback);
-  }
-
-  var data = packet.data;
-  var contentArray = new Uint8Array(data);
-  var resultBuffer = new Uint8Array(1 + data.byteLength);
-
-  resultBuffer[0] = packets[packet.type];
-  for (var i = 0; i < contentArray.length; i++) {
-    resultBuffer[i+1] = contentArray[i];
-  }
-
-  return callback(resultBuffer.buffer);
-}
-
-function encodeBlobAsArrayBuffer(packet, supportsBinary, callback) {
-  if (!supportsBinary) {
-    return exports.encodeBase64Packet(packet, callback);
-  }
-
-  var fr = new FileReader();
-  fr.onload = function() {
-    exports.encodePacket({ type: packet.type, data: fr.result }, supportsBinary, true, callback);
-  };
-  return fr.readAsArrayBuffer(packet.data);
-}
-
-function encodeBlob(packet, supportsBinary, callback) {
-  if (!supportsBinary) {
-    return exports.encodeBase64Packet(packet, callback);
-  }
-
-  if (dontSendBlobs) {
-    return encodeBlobAsArrayBuffer(packet, supportsBinary, callback);
-  }
-
-  var length = new Uint8Array(1);
-  length[0] = packets[packet.type];
-  var blob = new Blob([length.buffer, packet.data]);
-
-  return callback(blob);
-}
-
-/**
- * Encodes a packet with binary data in a base64 string
- *
- * @param {Object} packet, has `type` and `data`
- * @return {String} base64 encoded message
- */
-
-exports.encodeBase64Packet = function(packet, callback) {
-  var message = 'b' + exports.packets[packet.type];
-  if (typeof Blob !== 'undefined' && packet.data instanceof Blob) {
-    var fr = new FileReader();
-    fr.onload = function() {
-      var b64 = fr.result.split(',')[1];
-      callback(message + b64);
-    };
-    return fr.readAsDataURL(packet.data);
-  }
-
-  var b64data;
-  try {
-    b64data = String.fromCharCode.apply(null, new Uint8Array(packet.data));
-  } catch (e) {
-    // iPhone Safari doesn't let you apply with typed arrays
-    var typed = new Uint8Array(packet.data);
-    var basic = new Array(typed.length);
-    for (var i = 0; i < typed.length; i++) {
-      basic[i] = typed[i];
-    }
-    b64data = String.fromCharCode.apply(null, basic);
-  }
-  message += btoa(b64data);
-  return callback(message);
-};
-
-/**
- * Decodes a packet. Changes format to Blob if requested.
- *
- * @return {Object} with `type` and `data` (if any)
- * @api private
- */
-
-exports.decodePacket = function (data, binaryType, utf8decode) {
-  if (data === undefined) {
-    return err;
-  }
-  // String data
-  if (typeof data === 'string') {
-    if (data.charAt(0) === 'b') {
-      return exports.decodeBase64Packet(data.substr(1), binaryType);
-    }
-
-    if (utf8decode) {
-      data = tryDecode(data);
-      if (data === false) {
-        return err;
-      }
-    }
-    var type = data.charAt(0);
-
-    if (Number(type) != type || !packetslist[type]) {
-      return err;
-    }
-
-    if (data.length > 1) {
-      return { type: packetslist[type], data: data.substring(1) };
-    } else {
-      return { type: packetslist[type] };
-    }
-  }
-
-  var asArray = new Uint8Array(data);
-  var type = asArray[0];
-  var rest = sliceBuffer(data, 1);
-  if (Blob && binaryType === 'blob') {
-    rest = new Blob([rest]);
-  }
-  return { type: packetslist[type], data: rest };
-};
-
-function tryDecode(data) {
-  try {
-    data = utf8.decode(data, { strict: false });
-  } catch (e) {
-    return false;
-  }
-  return data;
-}
-
-/**
- * Decodes a packet encoded in a base64 string
- *
- * @param {String} base64 encoded message
- * @return {Object} with `type` and `data` (if any)
- */
-
-exports.decodeBase64Packet = function(msg, binaryType) {
-  var type = packetslist[msg.charAt(0)];
-  if (!base64encoder) {
-    return { type: type, data: { base64: true, data: msg.substr(1) } };
-  }
-
-  var data = base64encoder.decode(msg.substr(1));
-
-  if (binaryType === 'blob' && Blob) {
-    data = new Blob([data]);
-  }
-
-  return { type: type, data: data };
-};
-
-/**
- * Encodes multiple messages (payload).
- *
- *     <length>:data
- *
- * Example:
- *
- *     11:hello world2:hi
- *
- * If any contents are binary, they will be encoded as base64 strings. Base64
- * encoded strings are marked with a b before the length specifier
- *
- * @param {Array} packets
- * @api private
- */
-
-exports.encodePayload = function (packets, supportsBinary, callback) {
-  if (typeof supportsBinary === 'function') {
-    callback = supportsBinary;
-    supportsBinary = null;
-  }
-
-  var isBinary = hasBinary(packets);
-
-  if (supportsBinary && isBinary) {
-    if (Blob && !dontSendBlobs) {
-      return exports.encodePayloadAsBlob(packets, callback);
-    }
-
-    return exports.encodePayloadAsArrayBuffer(packets, callback);
-  }
-
-  if (!packets.length) {
-    return callback('0:');
-  }
-
-  function setLengthHeader(message) {
-    return message.length + ':' + message;
-  }
-
-  function encodeOne(packet, doneCallback) {
-    exports.encodePacket(packet, !isBinary ? false : supportsBinary, false, function(message) {
-      doneCallback(null, setLengthHeader(message));
-    });
-  }
-
-  map(packets, encodeOne, function(err, results) {
-    return callback(results.join(''));
-  });
-};
-
-/**
- * Async array map using after
- */
-
-function map(ary, each, done) {
-  var result = new Array(ary.length);
-  var next = after(ary.length, done);
-
-  var eachWithIndex = function(i, el, cb) {
-    each(el, function(error, msg) {
-      result[i] = msg;
-      cb(error, result);
-    });
-  };
-
-  for (var i = 0; i < ary.length; i++) {
-    eachWithIndex(i, ary[i], next);
-  }
-}
-
-/*
- * Decodes data when a payload is maybe expected. Possible binary contents are
- * decoded from their base64 representation
- *
- * @param {String} data, callback method
- * @api public
- */
-
-exports.decodePayload = function (data, binaryType, callback) {
-  if (typeof data !== 'string') {
-    return exports.decodePayloadAsBinary(data, binaryType, callback);
-  }
-
-  if (typeof binaryType === 'function') {
-    callback = binaryType;
-    binaryType = null;
-  }
-
-  var packet;
-  if (data === '') {
-    // parser error - ignoring payload
-    return callback(err, 0, 1);
-  }
-
-  var length = '', n, msg;
-
-  for (var i = 0, l = data.length; i < l; i++) {
-    var chr = data.charAt(i);
-
-    if (chr !== ':') {
-      length += chr;
-      continue;
-    }
-
-    if (length === '' || (length != (n = Number(length)))) {
-      // parser error - ignoring payload
-      return callback(err, 0, 1);
-    }
-
-    msg = data.substr(i + 1, n);
-
-    if (length != msg.length) {
-      // parser error - ignoring payload
-      return callback(err, 0, 1);
-    }
-
-    if (msg.length) {
-      packet = exports.decodePacket(msg, binaryType, false);
-
-      if (err.type === packet.type && err.data === packet.data) {
-        // parser error in individual packet - ignoring payload
-        return callback(err, 0, 1);
-      }
-
-      var ret = callback(packet, i + n, l);
-      if (false === ret) return;
-    }
-
-    // advance cursor
-    i += n;
-    length = '';
-  }
-
-  if (length !== '') {
-    // parser error - ignoring payload
-    return callback(err, 0, 1);
-  }
-
-};
-
-/**
- * Encodes multiple messages (payload) as binary.
- *
- * <1 = binary, 0 = string><number from 0-9><number from 0-9>[...]<number
- * 255><data>
- *
- * Example:
- * 1 3 255 1 2 3, if the binary contents are interpreted as 8 bit integers
- *
- * @param {Array} packets
- * @return {ArrayBuffer} encoded payload
- * @api private
- */
-
-exports.encodePayloadAsArrayBuffer = function(packets, callback) {
-  if (!packets.length) {
-    return callback(new ArrayBuffer(0));
-  }
-
-  function encodeOne(packet, doneCallback) {
-    exports.encodePacket(packet, true, true, function(data) {
-      return doneCallback(null, data);
-    });
-  }
-
-  map(packets, encodeOne, function(err, encodedPackets) {
-    var totalLength = encodedPackets.reduce(function(acc, p) {
-      var len;
-      if (typeof p === 'string'){
-        len = p.length;
-      } else {
-        len = p.byteLength;
-      }
-      return acc + len.toString().length + len + 2; // string/binary identifier + separator = 2
-    }, 0);
-
-    var resultArray = new Uint8Array(totalLength);
-
-    var bufferIndex = 0;
-    encodedPackets.forEach(function(p) {
-      var isString = typeof p === 'string';
-      var ab = p;
-      if (isString) {
-        var view = new Uint8Array(p.length);
-        for (var i = 0; i < p.length; i++) {
-          view[i] = p.charCodeAt(i);
-        }
-        ab = view.buffer;
-      }
-
-      if (isString) { // not true binary
-        resultArray[bufferIndex++] = 0;
-      } else { // true binary
-        resultArray[bufferIndex++] = 1;
-      }
-
-      var lenStr = ab.byteLength.toString();
-      for (var i = 0; i < lenStr.length; i++) {
-        resultArray[bufferIndex++] = parseInt(lenStr[i]);
-      }
-      resultArray[bufferIndex++] = 255;
-
-      var view = new Uint8Array(ab);
-      for (var i = 0; i < view.length; i++) {
-        resultArray[bufferIndex++] = view[i];
-      }
-    });
-
-    return callback(resultArray.buffer);
-  });
-};
-
-/**
- * Encode as Blob
- */
-
-exports.encodePayloadAsBlob = function(packets, callback) {
-  function encodeOne(packet, doneCallback) {
-    exports.encodePacket(packet, true, true, function(encoded) {
-      var binaryIdentifier = new Uint8Array(1);
-      binaryIdentifier[0] = 1;
-      if (typeof encoded === 'string') {
-        var view = new Uint8Array(encoded.length);
-        for (var i = 0; i < encoded.length; i++) {
-          view[i] = encoded.charCodeAt(i);
-        }
-        encoded = view.buffer;
-        binaryIdentifier[0] = 0;
-      }
-
-      var len = (encoded instanceof ArrayBuffer)
-        ? encoded.byteLength
-        : encoded.size;
-
-      var lenStr = len.toString();
-      var lengthAry = new Uint8Array(lenStr.length + 1);
-      for (var i = 0; i < lenStr.length; i++) {
-        lengthAry[i] = parseInt(lenStr[i]);
-      }
-      lengthAry[lenStr.length] = 255;
-
-      if (Blob) {
-        var blob = new Blob([binaryIdentifier.buffer, lengthAry.buffer, encoded]);
-        doneCallback(null, blob);
-      }
-    });
-  }
-
-  map(packets, encodeOne, function(err, results) {
-    return callback(new Blob(results));
-  });
-};
-
-/*
- * Decodes data when a payload is maybe expected. Strings are decoded by
- * interpreting each byte as a key code for entries marked to start with 0. See
- * description of encodePayloadAsBinary
- *
- * @param {ArrayBuffer} data, callback method
- * @api public
- */
-
-exports.decodePayloadAsBinary = function (data, binaryType, callback) {
-  if (typeof binaryType === 'function') {
-    callback = binaryType;
-    binaryType = null;
-  }
-
-  var bufferTail = data;
-  var buffers = [];
-
-  while (bufferTail.byteLength > 0) {
-    var tailArray = new Uint8Array(bufferTail);
-    var isString = tailArray[0] === 0;
-    var msgLength = '';
-
-    for (var i = 1; ; i++) {
-      if (tailArray[i] === 255) break;
-
-      // 310 = char length of Number.MAX_VALUE
-      if (msgLength.length > 310) {
-        return callback(err, 0, 1);
-      }
-
-      msgLength += tailArray[i];
-    }
-
-    bufferTail = sliceBuffer(bufferTail, 2 + msgLength.length);
-    msgLength = parseInt(msgLength);
-
-    var msg = sliceBuffer(bufferTail, 0, msgLength);
-    if (isString) {
-      try {
-        msg = String.fromCharCode.apply(null, new Uint8Array(msg));
-      } catch (e) {
-        // iPhone Safari doesn't let you apply to typed arrays
-        var typed = new Uint8Array(msg);
-        msg = '';
-        for (var i = 0; i < typed.length; i++) {
-          msg += String.fromCharCode(typed[i]);
-        }
-      }
-    }
-
-    buffers.push(msg);
-    bufferTail = sliceBuffer(bufferTail, msgLength);
-  }
-
-  var total = buffers.length;
-  buffers.forEach(function(buffer, i) {
-    callback(exports.decodePacket(buffer, binaryType, true), i, total);
-  });
-};
-
-},{"./keys":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-parser/lib/keys.js","./utf8":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-parser/lib/utf8.js","after":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/after/index.js","arraybuffer.slice":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/arraybuffer.slice/index.js","base64-arraybuffer":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/base64-arraybuffer/lib/base64-arraybuffer.js","blob":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/blob/index.js","has-binary2":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/has-binary2/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-parser/lib/keys.js":[function(require,module,exports){
-
-/**
- * Gets the keys for an object.
- *
- * @return {Array} keys
- * @api private
- */
-
-module.exports = Object.keys || function keys (obj){
-  var arr = [];
-  var has = Object.prototype.hasOwnProperty;
-
-  for (var i in obj) {
-    if (has.call(obj, i)) {
-      arr.push(i);
-    }
-  }
-  return arr;
-};
-
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-parser/lib/utf8.js":[function(require,module,exports){
-/*! https://mths.be/utf8js v2.1.2 by @mathias */
-
-var stringFromCharCode = String.fromCharCode;
-
-// Taken from https://mths.be/punycode
-function ucs2decode(string) {
-	var output = [];
-	var counter = 0;
-	var length = string.length;
-	var value;
-	var extra;
-	while (counter < length) {
-		value = string.charCodeAt(counter++);
-		if (value >= 0xD800 && value <= 0xDBFF && counter < length) {
-			// high surrogate, and there is a next character
-			extra = string.charCodeAt(counter++);
-			if ((extra & 0xFC00) == 0xDC00) { // low surrogate
-				output.push(((value & 0x3FF) << 10) + (extra & 0x3FF) + 0x10000);
-			} else {
-				// unmatched surrogate; only append this code unit, in case the next
-				// code unit is the high surrogate of a surrogate pair
-				output.push(value);
-				counter--;
-			}
-		} else {
-			output.push(value);
-		}
-	}
-	return output;
-}
-
-// Taken from https://mths.be/punycode
-function ucs2encode(array) {
-	var length = array.length;
-	var index = -1;
-	var value;
-	var output = '';
-	while (++index < length) {
-		value = array[index];
-		if (value > 0xFFFF) {
-			value -= 0x10000;
-			output += stringFromCharCode(value >>> 10 & 0x3FF | 0xD800);
-			value = 0xDC00 | value & 0x3FF;
-		}
-		output += stringFromCharCode(value);
-	}
-	return output;
-}
-
-function checkScalarValue(codePoint, strict) {
-	if (codePoint >= 0xD800 && codePoint <= 0xDFFF) {
-		if (strict) {
-			throw Error(
-				'Lone surrogate U+' + codePoint.toString(16).toUpperCase() +
-				' is not a scalar value'
-			);
-		}
-		return false;
-	}
-	return true;
-}
-/*--------------------------------------------------------------------------*/
-
-function createByte(codePoint, shift) {
-	return stringFromCharCode(((codePoint >> shift) & 0x3F) | 0x80);
-}
-
-function encodeCodePoint(codePoint, strict) {
-	if ((codePoint & 0xFFFFFF80) == 0) { // 1-byte sequence
-		return stringFromCharCode(codePoint);
-	}
-	var symbol = '';
-	if ((codePoint & 0xFFFFF800) == 0) { // 2-byte sequence
-		symbol = stringFromCharCode(((codePoint >> 6) & 0x1F) | 0xC0);
-	}
-	else if ((codePoint & 0xFFFF0000) == 0) { // 3-byte sequence
-		if (!checkScalarValue(codePoint, strict)) {
-			codePoint = 0xFFFD;
-		}
-		symbol = stringFromCharCode(((codePoint >> 12) & 0x0F) | 0xE0);
-		symbol += createByte(codePoint, 6);
-	}
-	else if ((codePoint & 0xFFE00000) == 0) { // 4-byte sequence
-		symbol = stringFromCharCode(((codePoint >> 18) & 0x07) | 0xF0);
-		symbol += createByte(codePoint, 12);
-		symbol += createByte(codePoint, 6);
-	}
-	symbol += stringFromCharCode((codePoint & 0x3F) | 0x80);
-	return symbol;
-}
-
-function utf8encode(string, opts) {
-	opts = opts || {};
-	var strict = false !== opts.strict;
-
-	var codePoints = ucs2decode(string);
-	var length = codePoints.length;
-	var index = -1;
-	var codePoint;
-	var byteString = '';
-	while (++index < length) {
-		codePoint = codePoints[index];
-		byteString += encodeCodePoint(codePoint, strict);
-	}
-	return byteString;
-}
-
-/*--------------------------------------------------------------------------*/
-
-function readContinuationByte() {
-	if (byteIndex >= byteCount) {
-		throw Error('Invalid byte index');
-	}
-
-	var continuationByte = byteArray[byteIndex] & 0xFF;
-	byteIndex++;
-
-	if ((continuationByte & 0xC0) == 0x80) {
-		return continuationByte & 0x3F;
-	}
-
-	// If we end up here, it’s not a continuation byte
-	throw Error('Invalid continuation byte');
-}
-
-function decodeSymbol(strict) {
-	var byte1;
-	var byte2;
-	var byte3;
-	var byte4;
-	var codePoint;
-
-	if (byteIndex > byteCount) {
-		throw Error('Invalid byte index');
-	}
-
-	if (byteIndex == byteCount) {
-		return false;
-	}
-
-	// Read first byte
-	byte1 = byteArray[byteIndex] & 0xFF;
-	byteIndex++;
-
-	// 1-byte sequence (no continuation bytes)
-	if ((byte1 & 0x80) == 0) {
-		return byte1;
-	}
-
-	// 2-byte sequence
-	if ((byte1 & 0xE0) == 0xC0) {
-		byte2 = readContinuationByte();
-		codePoint = ((byte1 & 0x1F) << 6) | byte2;
-		if (codePoint >= 0x80) {
-			return codePoint;
-		} else {
-			throw Error('Invalid continuation byte');
-		}
-	}
-
-	// 3-byte sequence (may include unpaired surrogates)
-	if ((byte1 & 0xF0) == 0xE0) {
-		byte2 = readContinuationByte();
-		byte3 = readContinuationByte();
-		codePoint = ((byte1 & 0x0F) << 12) | (byte2 << 6) | byte3;
-		if (codePoint >= 0x0800) {
-			return checkScalarValue(codePoint, strict) ? codePoint : 0xFFFD;
-		} else {
-			throw Error('Invalid continuation byte');
-		}
-	}
-
-	// 4-byte sequence
-	if ((byte1 & 0xF8) == 0xF0) {
-		byte2 = readContinuationByte();
-		byte3 = readContinuationByte();
-		byte4 = readContinuationByte();
-		codePoint = ((byte1 & 0x07) << 0x12) | (byte2 << 0x0C) |
-			(byte3 << 0x06) | byte4;
-		if (codePoint >= 0x010000 && codePoint <= 0x10FFFF) {
-			return codePoint;
-		}
-	}
-
-	throw Error('Invalid UTF-8 detected');
-}
-
-var byteArray;
-var byteCount;
-var byteIndex;
-function utf8decode(byteString, opts) {
-	opts = opts || {};
-	var strict = false !== opts.strict;
-
-	byteArray = ucs2decode(byteString);
-	byteCount = byteArray.length;
-	byteIndex = 0;
-	var codePoints = [];
-	var tmp;
-	while ((tmp = decodeSymbol(strict)) !== false) {
-		codePoints.push(tmp);
-	}
-	return ucs2encode(codePoints);
-}
-
-module.exports = {
-	version: '2.1.2',
-	encode: utf8encode,
-	decode: utf8decode
-};
-
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/err-code/index.js":[function(require,module,exports){
+},{"_process":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/process/browser.js","once":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/once/once.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/err-code/index.js":[function(require,module,exports){
 'use strict';
 
 function assign(obj, props) {
@@ -9407,7 +4698,212 @@ if ('undefined' !== typeof module) {
   module.exports = EventEmitter;
 }
 
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/get-browser-rtc/index.js":[function(require,module,exports){
+},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/fastq/queue.js":[function(require,module,exports){
+'use strict'
+
+var reusify = require('reusify')
+
+function fastqueue (context, worker, concurrency) {
+  if (typeof context === 'function') {
+    concurrency = worker
+    worker = context
+    context = null
+  }
+
+  if (concurrency < 1) {
+    throw new Error('fastqueue concurrency must be greater than 1')
+  }
+
+  var cache = reusify(Task)
+  var queueHead = null
+  var queueTail = null
+  var _running = 0
+  var errorHandler = null
+
+  var self = {
+    push: push,
+    drain: noop,
+    saturated: noop,
+    pause: pause,
+    paused: false,
+    concurrency: concurrency,
+    running: running,
+    resume: resume,
+    idle: idle,
+    length: length,
+    getQueue: getQueue,
+    unshift: unshift,
+    empty: noop,
+    kill: kill,
+    killAndDrain: killAndDrain,
+    error: error
+  }
+
+  return self
+
+  function running () {
+    return _running
+  }
+
+  function pause () {
+    self.paused = true
+  }
+
+  function length () {
+    var current = queueHead
+    var counter = 0
+
+    while (current) {
+      current = current.next
+      counter++
+    }
+
+    return counter
+  }
+
+  function getQueue () {
+    var current = queueHead
+    var tasks = []
+
+    while (current) {
+      tasks.push(current.value)
+      current = current.next
+    }
+
+    return tasks
+  }
+
+  function resume () {
+    if (!self.paused) return
+    self.paused = false
+    for (var i = 0; i < self.concurrency; i++) {
+      _running++
+      release()
+    }
+  }
+
+  function idle () {
+    return _running === 0 && self.length() === 0
+  }
+
+  function push (value, done) {
+    var current = cache.get()
+
+    current.context = context
+    current.release = release
+    current.value = value
+    current.callback = done || noop
+    current.errorHandler = errorHandler
+
+    if (_running === self.concurrency || self.paused) {
+      if (queueTail) {
+        queueTail.next = current
+        queueTail = current
+      } else {
+        queueHead = current
+        queueTail = current
+        self.saturated()
+      }
+    } else {
+      _running++
+      worker.call(context, current.value, current.worked)
+    }
+  }
+
+  function unshift (value, done) {
+    var current = cache.get()
+
+    current.context = context
+    current.release = release
+    current.value = value
+    current.callback = done || noop
+
+    if (_running === self.concurrency || self.paused) {
+      if (queueHead) {
+        current.next = queueHead
+        queueHead = current
+      } else {
+        queueHead = current
+        queueTail = current
+        self.saturated()
+      }
+    } else {
+      _running++
+      worker.call(context, current.value, current.worked)
+    }
+  }
+
+  function release (holder) {
+    if (holder) {
+      cache.release(holder)
+    }
+    var next = queueHead
+    if (next) {
+      if (!self.paused) {
+        if (queueTail === queueHead) {
+          queueTail = null
+        }
+        queueHead = next.next
+        next.next = null
+        worker.call(context, next.value, next.worked)
+        if (queueTail === null) {
+          self.empty()
+        }
+      } else {
+        _running--
+      }
+    } else if (--_running === 0) {
+      self.drain()
+    }
+  }
+
+  function kill () {
+    queueHead = null
+    queueTail = null
+    self.drain = noop
+  }
+
+  function killAndDrain () {
+    queueHead = null
+    queueTail = null
+    self.drain()
+    self.drain = noop
+  }
+
+  function error (handler) {
+    errorHandler = handler
+  }
+}
+
+function noop () {}
+
+function Task () {
+  this.value = null
+  this.callback = noop
+  this.next = null
+  this.release = noop
+  this.context = null
+  this.errorHandler = null
+
+  var self = this
+
+  this.worked = function worked (err, result) {
+    var callback = self.callback
+    var errorHandler = self.errorHandler
+    var val = self.value
+    self.value = null
+    self.callback = noop
+    if (self.errorHandler) {
+      errorHandler(err, val)
+    }
+    callback.call(self.context, err, result)
+    self.release(self)
+  }
+}
+
+module.exports = fastqueue
+
+},{"reusify":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/reusify/reusify.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/get-browser-rtc/index.js":[function(require,module,exports){
 // originally pulled out of simple-peer
 
 module.exports = function getBrowserRTC () {
@@ -9422,93 +4918,6 @@ module.exports = function getBrowserRTC () {
   }
   if (!wrtc.RTCPeerConnection) return null
   return wrtc
-}
-
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/has-binary2/index.js":[function(require,module,exports){
-(function (Buffer){(function (){
-/* global Blob File */
-
-/*
- * Module requirements.
- */
-
-var isArray = require('isarray');
-
-var toString = Object.prototype.toString;
-var withNativeBlob = typeof Blob === 'function' ||
-                        typeof Blob !== 'undefined' && toString.call(Blob) === '[object BlobConstructor]';
-var withNativeFile = typeof File === 'function' ||
-                        typeof File !== 'undefined' && toString.call(File) === '[object FileConstructor]';
-
-/**
- * Module exports.
- */
-
-module.exports = hasBinary;
-
-/**
- * Checks for binary data.
- *
- * Supports Buffer, ArrayBuffer, Blob and File.
- *
- * @param {Object} anything
- * @api public
- */
-
-function hasBinary (obj) {
-  if (!obj || typeof obj !== 'object') {
-    return false;
-  }
-
-  if (isArray(obj)) {
-    for (var i = 0, l = obj.length; i < l; i++) {
-      if (hasBinary(obj[i])) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  if ((typeof Buffer === 'function' && Buffer.isBuffer && Buffer.isBuffer(obj)) ||
-    (typeof ArrayBuffer === 'function' && obj instanceof ArrayBuffer) ||
-    (withNativeBlob && obj instanceof Blob) ||
-    (withNativeFile && obj instanceof File)
-  ) {
-    return true;
-  }
-
-  // see: https://github.com/Automattic/has-binary/pull/4
-  if (obj.toJSON && typeof obj.toJSON === 'function' && arguments.length === 1) {
-    return hasBinary(obj.toJSON(), true);
-  }
-
-  for (var key in obj) {
-    if (Object.prototype.hasOwnProperty.call(obj, key) && hasBinary(obj[key])) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-}).call(this)}).call(this,require("buffer").Buffer)
-},{"buffer":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browserify/node_modules/buffer/index.js","isarray":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/isarray/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/has-cors/index.js":[function(require,module,exports){
-
-/**
- * Module exports.
- *
- * Logic borrowed from Modernizr:
- *
- *   - https://github.com/Modernizr/Modernizr/blob/master/feature-detects/cors.js
- */
-
-try {
-  module.exports = typeof XMLHttpRequest !== 'undefined' &&
-    'withCredentials' in new XMLHttpRequest();
-} catch (err) {
-  // if XMLHttp support is disabled in IE then it will throw
-  // when trying to create
-  module.exports = false;
 }
 
 },{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/hyperswarm-proxy-ws/client.js":[function(require,module,exports){
@@ -10285,18 +5694,586 @@ class WebRTCInfo {
 }
 
 }).call(this)}).call(this,require('_process'))
-},{"@geut/discovery-swarm-webrtc":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/@geut/discovery-swarm-webrtc/index.js","_process":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/process/browser.js","events":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/events/events.js","hyperswarm-proxy-ws/client":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/hyperswarm-proxy-ws/client.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/indexof/index.js":[function(require,module,exports){
+},{"@geut/discovery-swarm-webrtc":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/hyperswarm-web/node_modules/@geut/discovery-swarm-webrtc/index.js","_process":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/process/browser.js","events":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/events/events.js","hyperswarm-proxy-ws/client":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/hyperswarm-proxy-ws/client.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/hyperswarm-web/node_modules/@geut/discovery-swarm-webrtc/index.js":[function(require,module,exports){
+(function (process,Buffer){(function (){
+const { EventEmitter } = require('events')
+const crypto = require('crypto')
+const assert = require('nanocustomassert')
 
-var indexOf = [].indexOf;
+const pump = require('pump')
 
-module.exports = function(arr, obj){
-  if (indexOf) return arr.indexOf(obj);
-  for (var i = 0; i < arr.length; ++i) {
-    if (arr[i] === obj) return i;
+const log = require('debug')('discovery-swarm-webrtc')
+const MMSTSignalClient = require('./lib/mmst-signal-client')
+const { toHex, callbackPromise, resolveCallback } = require('./lib/utils')
+const errors = require('./lib/errors')
+
+const { ERR_CONNECTION_DUPLICATED } = errors
+
+const assertChannel = channel => assert(Buffer.isBuffer(channel) && channel.length === 32, 'Channel must be a buffer of 32 bytes')
+
+class DiscoverySwarmWebrtc extends EventEmitter {
+  constructor (opts = {}) {
+    super()
+    log('opts', opts)
+
+    const { id = crypto.randomBytes(32), bootstrap, stream, simplePeer, maxPeers = 5, timeout = 15 * 1000, signal } = opts
+
+    assert(Array.isArray(bootstrap) && bootstrap.length > 0, 'The `bootstrap` options is required.')
+    assert(Buffer.isBuffer(id) && id.length === 32, 'The `id` option needs to be a Buffer of 32 bytes.')
+
+    this.id = id
+
+    const queueTimeout = timeout * 2
+
+    const signalOptions = {
+      id: this.id,
+      bootstrap,
+      createConnection: peer => this._createConnection(peer),
+      requestTimeout: timeout,
+      simplePeer,
+      reconnectingWebsocket: {
+        connectionTimeout: timeout
+      }
+    }
+
+    this.signal = signal ? signal(signalOptions, this) : new MMSTSignalClient({
+      ...signalOptions,
+      mmstOpts: {
+        maxPeers,
+        queueTimeout, // queue mmst
+        lookupTimeout: timeout
+      }
+    })
+
+    this._maxPeers = maxPeers
+    this._stream = stream
+    this._destroyed = false
+
+    this._initialize(opts)
   }
-  return -1;
-};
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/inherits/inherits_browser.js":[function(require,module,exports){
+
+  get connected () {
+    return this.signal.peersConnected
+  }
+
+  get connecting () {
+    return this.signal.peersConnecting
+  }
+
+  listen () {
+    // Empty method to respect the API of discovery-swarm
+  }
+
+  getPeers (channel) {
+    if (channel) return this.signal.getPeersByTopic(channel)
+    return this.signal.peersConnected
+  }
+
+  join (channel) {
+    this.signal.join(channel)
+  }
+
+  leave (channel, cb = callbackPromise()) {
+    assertChannel(channel)
+    resolveCallback(this.signal.leave(channel), cb)
+    return cb.promise
+  }
+
+  close (cb = callbackPromise()) {
+    resolveCallback(this._close(), cb)
+    return cb.promise
+  }
+
+  async connect (channel, peerId) {
+    assert(channel && Buffer.isBuffer(channel), 'channel must be a buffer')
+    assert(peerId && Buffer.isBuffer(peerId), 'peerId must be a buffer')
+
+    const peer = this.signal.connect(channel, peerId)
+    peer.subscribeMediaStream = true
+    await peer.ready()
+    return peer.stream
+  }
+
+  async _close () {
+    if (this._destroyed) return
+    this._destroyed = true
+    await this.signal.close()
+    this.emit('close')
+  }
+
+  _initialize () {
+    const signal = this.signal
+
+    // It would log the errors and prevent of throw it.
+    this.on('error', (...args) => log('error', ...args))
+
+    signal.on('peer-error', err => this.emit('error', err))
+    signal.on('error', err => this.emit('error', err))
+    signal.open().catch(err => process.nextTick(() => this.emit('error', err)))
+    signal.on('candidates-updated', (...args) => this.emit('candidates-updated', ...args))
+  }
+
+  _createConnection (peer) {
+    peer.subscribeMediaStream = true
+
+    peer.channel = peer.topic
+
+    peer.getInfo = () => ({
+      id: peer.id,
+      channel: peer.topic,
+      initiator: peer.initiator
+    })
+
+    peer.printInfo = () => ({
+      id: toHex(peer.id),
+      channel: toHex(peer.topic),
+      initiator: peer.initiator
+    })
+
+    peer.stream.addStream = stream => peer.addStream(stream)
+
+    log('createConnection', { info: peer.printInfo() })
+
+    try {
+      const duplicate = this._checkForDuplicate(peer)
+      if (duplicate) {
+        if (duplicate === peer) {
+          // current incoming connection
+          throw new ERR_CONNECTION_DUPLICATED(toHex(this.id), toHex(peer.id))
+        } else {
+          // old connection
+          duplicate.destroy()
+        }
+      }
+
+      this._bindSocketEvents(peer)
+
+      return peer
+    } catch (err) {
+      this.emit('connect-failed', err, peer.getInfo())
+      throw err
+    }
+  }
+
+  _bindSocketEvents (peer) {
+    const info = peer.getInfo()
+
+    peer.on('error', err => {
+      log('error', err)
+      this.emit('connection-error', err, info)
+    })
+
+    peer.on('connect', () => {
+      log('connect', { peer })
+      if (peer.stream.destroyed) {
+        return
+      }
+
+      if (!this._stream) {
+        this._handleConnection(peer.stream, info)
+        return
+      }
+
+      const conn = this._stream(info)
+      this.emit('handshaking', conn, info)
+      conn.on('handshake', this._handshake.bind(this, conn, info))
+      pump(peer.stream, conn, peer.stream)
+    })
+
+    peer.on('close', () => {
+      log('close', { peer })
+      this.emit('connection-closed', peer.stream, info)
+    })
+  }
+
+  _handshake (conn, info) {
+    this._handleConnection(conn, info)
+  }
+
+  _handleConnection (conn, info) {
+    this.emit('connection', conn, info)
+  }
+
+  _checkForDuplicate (peer) {
+    const oldPeer = this.getPeers(peer.channel).find(p => p.id.equals(peer.id) && !p.sessionId.equals(peer.sessionId))
+    if (!oldPeer) {
+      return
+    }
+
+    const connections = [peer, oldPeer]
+
+    /**
+     * The first case is to have duplicate connections from the same origin (remote or local).
+     * In this case we do a sort by connectionId and destroy the first one.
+     */
+    if ((peer.initiator && oldPeer.initiator) || (!peer.initiator && !oldPeer.initiator)) {
+      return connections.sort((a, b) => Buffer.compare(a.sessionId, b.sessionId))[0]
+    }
+
+    /**
+     * The second case is to have duplicate connections where each connection is started from different origins.
+     * In this case we do a sort by peer id and destroy the first one.
+     */
+    const toDestroy = [this.id, peer.id].sort(Buffer.compare)[0]
+    return connections.find(p => p.id.equals(toDestroy))
+  }
+}
+
+module.exports = (...args) => new DiscoverySwarmWebrtc(...args)
+module.exports.errors = errors
+
+}).call(this)}).call(this,require('_process'),require("buffer").Buffer)
+},{"./lib/errors":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/hyperswarm-web/node_modules/@geut/discovery-swarm-webrtc/lib/errors.js","./lib/mmst-signal-client":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/hyperswarm-web/node_modules/@geut/discovery-swarm-webrtc/lib/mmst-signal-client.js","./lib/utils":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/hyperswarm-web/node_modules/@geut/discovery-swarm-webrtc/lib/utils.js","_process":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/process/browser.js","buffer":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browserify/node_modules/buffer/index.js","crypto":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/crypto-browserify/index.js","debug":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/debug/src/browser.js","events":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/events/events.js","nanocustomassert":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanocustomassert/index.js","pump":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/pump/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/hyperswarm-web/node_modules/@geut/discovery-swarm-webrtc/lib/errors.js":[function(require,module,exports){
+const nanoerror = require('nanoerror')
+
+function createError (code, message) {
+  exports[code] = nanoerror(code, message)
+}
+
+createError('ERR_MAX_PEERS_REACHED', 'max peers reached: %s')
+createError('ERR_INVALID_CHANNEL', 'invalid channel: %s')
+createError('ERR_CONNECTION_DUPLICATED', 'connection duplicated: %s -> %s')
+
+},{"nanoerror":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanoerror/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/hyperswarm-web/node_modules/@geut/discovery-swarm-webrtc/lib/mmst-signal-client.js":[function(require,module,exports){
+(function (Buffer){(function (){
+const { SocketSignalWebsocketClient } = require('socket-signal-websocket')
+const MMST = require('mostly-minimal-spanning-tree')
+const assert = require('nanocustomassert')
+const { Readable } = require('stream')
+
+const log = require('debug')('discovery-swarm-webrtc:mmst-signal')
+const { toHex } = require('./utils')
+const { ERR_INVALID_CHANNEL, ERR_MAX_PEERS_REACHED } = require('./errors')
+const Scheduler = require('./scheduler')
+
+const assertChannel = channel => assert(Buffer.isBuffer(channel) && channel.length === 32, 'Channel must be a buffer of 32 bytes')
+
+const kOnConnected = Symbol('mmstsignal.onconnected')
+const kGetCandidates = Symbol('mmstsignal.getcandidates')
+
+module.exports = class MMSTSignal extends SocketSignalWebsocketClient {
+  constructor (opts = {}) {
+    const { bootstrap, createConnection, mmstOpts = {}, strict = true, ...clientOpts } = opts
+    super(bootstrap, clientOpts)
+
+    this._createConnection = createConnection
+    this._mmstOpts = mmstOpts
+
+    // if strict is false the network will allow situations where the maxPeers can be higher if is needed.
+    this._strict = strict
+
+    this._channels = new Map()
+    this._mmsts = new Map()
+    this._candidates = new Map()
+    this._scheduler = new Scheduler()
+
+    this[kOnConnected] = this[kOnConnected].bind(this)
+  }
+
+  join (channel) {
+    assertChannel(channel)
+
+    const channelStr = toHex(channel)
+    if (this._channels.has(channelStr)) {
+      return
+    }
+
+    this._channels.set(channelStr, channel)
+
+    const mmst = new MMST({
+      ...this._mmstOpts,
+      id: this.id,
+      lookup: () => this._lookup(channel),
+      connect: async (to) => {
+        await this.open()
+
+        try {
+          const peer = this.connect(channel, to)
+          this._runCreateConnection(peer)
+          await peer.ready()
+          return peer.stream
+        } catch (err) {
+          // Remove a candidate.
+          const candidates = this[kGetCandidates](channel)
+          candidates.list = candidates.list.filter(candidate => !candidate.equals(to))
+          if (candidates.list.length === 0) {
+            candidates.lookup = true
+          }
+          throw err
+        }
+      }
+    })
+
+    this._mmsts.set(channelStr, mmst)
+
+    if (this.connected) {
+      super.join(channel).catch(() => {})
+    }
+  }
+
+  async leave (channel) {
+    assertChannel(channel)
+
+    const channelStr = toHex(channel)
+
+    this._scheduler.delete(channelStr)
+    this._mmsts.get(channelStr).destroy()
+    this._mmsts.delete(channelStr)
+    this._channels.delete(channelStr)
+    this._candidates.delete(channelStr)
+
+    await super.leave(channel)
+    await super.closeConnectionsByTopic(channel)
+  }
+
+  async _open () {
+    this.on('connected', this[kOnConnected])
+
+    this.on('join', async (channel, peers) => {
+      log('discover', { channel })
+
+      if (!this.hasChannel(channel)) return
+
+      await this._updateCandidates(channel, peers)
+      await this._run(channel)
+
+      this._scheduler.add(channel.toString('hex'), async () => {
+        const candidates = this[kGetCandidates](channel)
+        if (candidates.list.length === 0 || this.getPeersByTopic(channel).length === 0) {
+          candidates.lookup = true
+          await this._updateCandidates(channel)
+          await this._run(channel)
+        }
+      })
+    })
+
+    this.onIncomingPeer((peer) => this._runCreateConnection(peer))
+    await super._open()
+  }
+
+  hasChannel (channel) {
+    return this._channels.has(toHex(channel))
+  }
+
+  _runCreateConnection (peer) {
+    if (!this.hasChannel(peer.topic)) {
+      throw new ERR_INVALID_CHANNEL(toHex(peer.topic))
+    }
+
+    const mmst = this._getMMST(peer.topic)
+
+    if (this._strict && !peer.initiator && !mmst.shouldHandleIncoming()) {
+      throw new ERR_MAX_PEERS_REACHED(this._mmstOpts.maxPeers)
+    }
+
+    this._createConnection(peer)
+
+    if (!peer.initiator) {
+      mmst.addConnection(peer.id, peer.stream)
+    }
+
+    return peer
+  }
+
+  async _close () {
+    await super._close()
+    this.removeListener('connected', this[kOnConnected])
+    this._mmsts.forEach(mmst => mmst.destroy())
+    this._mmsts.clear()
+    this._channels.clear()
+    this._candidates.clear()
+    this._scheduler.clear()
+  }
+
+  async _run (channel) {
+    if (!this.connected) return
+    if (this.getPeersByTopic(channel).filter(p => p.initiator).length > 0) return
+
+    try {
+      if (this.hasChannel(channel)) {
+        await this._getMMST(channel).run()
+      }
+    } catch (err) {
+      // nothing to do
+      log('run error', err.message)
+    }
+  }
+
+  _getMMST (channel) {
+    return this._mmsts.get(toHex(channel))
+  }
+
+  _lookup (channel) {
+    const stream = new Readable({
+      read () {},
+      objectMode: true
+    })
+
+    this._updateCandidates(channel).finally(() => {
+      stream.push(this[kGetCandidates](channel).list)
+      stream.push(null)
+    })
+
+    return stream
+  }
+
+  async [kOnConnected] (reconnected) {
+    if (reconnected) {
+      this._channels.forEach(channel => {
+        return super.join(channel).catch(() => {})
+      })
+    }
+  }
+
+  async _updateCandidates (channel, peers) {
+    // We try to minimize how many times we get candidates from the signal.
+    const candidates = this[kGetCandidates](channel)
+
+    let list = candidates.list
+    if (peers) {
+      list = peers
+    } else if (candidates.lookup) {
+      candidates.lookup = false
+      try {
+        list = await this.lookup(channel)
+      } catch (err) {}
+    }
+
+    candidates.list = list.filter(id => !id.equals(this.id))
+
+    this.emit('candidates-updated', channel, list)
+  }
+
+  [kGetCandidates] (channel) {
+    assert(Buffer.isBuffer(channel))
+    let candidates = this._candidates.get(toHex(channel))
+    if (candidates) {
+      return candidates
+    }
+    candidates = { list: [], lookup: false }
+    this._candidates.set(toHex(channel), candidates)
+    return candidates
+  }
+}
+
+}).call(this)}).call(this,{"isBuffer":require("../../../../../../../ssb-browser-core/node_modules/is-buffer/index.js")})
+},{"../../../../../../../ssb-browser-core/node_modules/is-buffer/index.js":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/is-buffer/index.js","./errors":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/hyperswarm-web/node_modules/@geut/discovery-swarm-webrtc/lib/errors.js","./scheduler":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/hyperswarm-web/node_modules/@geut/discovery-swarm-webrtc/lib/scheduler.js","./utils":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/hyperswarm-web/node_modules/@geut/discovery-swarm-webrtc/lib/utils.js","debug":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/debug/src/browser.js","mostly-minimal-spanning-tree":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/mostly-minimal-spanning-tree/index.js","nanocustomassert":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanocustomassert/index.js","socket-signal-websocket":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket-signal-websocket/browser.js","stream":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/stream-browserify/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/hyperswarm-web/node_modules/@geut/discovery-swarm-webrtc/lib/scheduler.js":[function(require,module,exports){
+const delay = ms => {
+  let cancel
+  let finished = false
+  const p = new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      finished = true
+      resolve()
+    }, ms)
+    cancel = () => {
+      if (finished) return
+      clearTimeout(timer)
+      reject(new Error('timeout'))
+    }
+  })
+  p.cancel = cancel
+  return p
+}
+
+class Task {
+  constructor (fn) {
+    this._fn = fn
+    this._stop = false
+    this.run()
+  }
+
+  run () {
+    (async () => {
+      while (!this._stop) {
+        this._time = delay(Math.floor(Math.random() * 11) * 1000)
+        await this._time
+        await this._fn()
+      }
+    })().catch(() => {})
+  }
+
+  stop () {
+    this._time && this._time.cancel()
+    this._stop = false
+  }
+}
+
+module.exports = class Scheduler {
+  constructor () {
+    this._tasks = new Map()
+  }
+
+  add (id, fn) {
+    this._tasks.set(id, new Task(fn))
+  }
+
+  delete (id) {
+    const task = this._tasks.get(id)
+    task && task.stop()
+    this._tasks.delete(id)
+  }
+
+  clear () {
+    this._tasks.forEach(task => {
+      task.stop()
+    })
+    this._tasks.clear()
+  }
+}
+
+},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/hyperswarm-web/node_modules/@geut/discovery-swarm-webrtc/lib/utils.js":[function(require,module,exports){
+(function (Buffer){(function (){
+const toHex = buff => {
+  if (typeof buff === 'string') {
+    return buff
+  }
+
+  if (Buffer.isBuffer(buff)) {
+    return buff.toString('hex')
+  }
+
+  throw new Error('Cannot convert the buffer to hex: ', buff)
+}
+
+const toBuffer = str => {
+  if (Buffer.isBuffer(str)) {
+    return str
+  }
+
+  if (typeof str === 'string') {
+    return Buffer.from(str, 'hex')
+  }
+
+  throw new Error('Cannot convert the string to buffer: ', str)
+}
+
+const callbackPromise = () => {
+  let callback
+
+  const promise = new Promise((resolve, reject) => {
+    callback = (err, value) => {
+      if (err) reject(err)
+      else resolve(value)
+    }
+  })
+
+  callback.promise = promise
+  return callback
+}
+
+const resolveCallback = (promise, cb) => {
+  if (!promise.then) {
+    promise = Promise.resolve()
+  }
+
+  return promise.then(result => cb(null, result)).catch(cb)
+}
+
+module.exports = { toHex, toBuffer, callbackPromise, resolveCallback }
+
+}).call(this)}).call(this,require("buffer").Buffer)
+},{"buffer":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browserify/node_modules/buffer/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/inherits/inherits_browser.js":[function(require,module,exports){
 if (typeof Object.create === 'function') {
   // implementation from standard node.js 'util' module
   module.exports = function inherits(ctor, superCtor) {
@@ -10321,8 +6298,27 @@ if (typeof Object.create === 'function') {
   }
 }
 
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/isarray/index.js":[function(require,module,exports){
-arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/isarray/index.js"][0].apply(exports,arguments)
+},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/isomorphic-ws/browser.js":[function(require,module,exports){
+(function (global){(function (){
+// https://github.com/maxogden/websocket-stream/blob/48dc3ddf943e5ada668c31ccd94e9186f02fafbd/ws-fallback.js
+
+var ws = null
+
+if (typeof WebSocket !== 'undefined') {
+  ws = WebSocket
+} else if (typeof MozWebSocket !== 'undefined') {
+  ws = MozWebSocket
+} else if (typeof global !== 'undefined') {
+  ws = global.WebSocket || global.MozWebSocket
+} else if (typeof window !== 'undefined') {
+  ws = window.WebSocket || window.MozWebSocket
+} else if (typeof self !== 'undefined') {
+  ws = self.WebSocket || self.MozWebSocket
+}
+
+module.exports = ws
+
+}).call(this)}).call(this,typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : typeof window !== "undefined" ? window : {})
 },{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/length-prefixed-stream/decode.js":[function(require,module,exports){
 (function (Buffer){(function (){
 var varint = require('varint')
@@ -10863,302 +6859,1510 @@ function plural(ms, msAbs, n, name) {
   return Math.round(ms / n) + ' ' + name + (isPlural ? 's' : '');
 }
 
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanoassert/index.js":[function(require,module,exports){
-assert.notEqual = notEqual
-assert.notOk = notOk
-assert.equal = equal
-assert.ok = assert
-
+},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanocustomassert/index.js":[function(require,module,exports){
 module.exports = assert
 
-function equal (a, b, m) {
-  assert(a == b, m) // eslint-disable-line eqeqeq
-}
+class AssertionError extends Error {}
+AssertionError.prototype.name = 'AssertionError'
 
-function notEqual (a, b, m) {
-  assert(a != b, m) // eslint-disable-line eqeqeq
-}
-
-function notOk (t, m) {
-  assert(!t, m)
-}
-
-function assert (t, m) {
-  if (!t) throw new Error(m || 'AssertionError')
-}
-
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanobus/index.js":[function(require,module,exports){
-var splice = require('remove-array-items')
-var nanotiming = require('nanotiming')
-var assert = require('assert')
-
-module.exports = Nanobus
-
-function Nanobus (name) {
-  if (!(this instanceof Nanobus)) return new Nanobus(name)
-
-  this._name = name || 'nanobus'
-  this._starListeners = []
-  this._listeners = {}
-}
-
-Nanobus.prototype.emit = function (eventName) {
-  assert.ok(typeof eventName === 'string' || typeof eventName === 'symbol', 'nanobus.emit: eventName should be type string or symbol')
-
-  var data = []
-  for (var i = 1, len = arguments.length; i < len; i++) {
-    data.push(arguments[i])
-  }
-
-  var emitTiming = nanotiming(this._name + "('" + eventName.toString() + "')")
-  var listeners = this._listeners[eventName]
-  if (listeners && listeners.length > 0) {
-    this._emit(this._listeners[eventName], data)
-  }
-
-  if (this._starListeners.length > 0) {
-    this._emit(this._starListeners, eventName, data, emitTiming.uuid)
-  }
-  emitTiming()
-
-  return this
-}
-
-Nanobus.prototype.on = Nanobus.prototype.addListener = function (eventName, listener) {
-  assert.ok(typeof eventName === 'string' || typeof eventName === 'symbol', 'nanobus.on: eventName should be type string or symbol')
-  assert.equal(typeof listener, 'function', 'nanobus.on: listener should be type function')
-
-  if (eventName === '*') {
-    this._starListeners.push(listener)
-  } else {
-    if (!this._listeners[eventName]) this._listeners[eventName] = []
-    this._listeners[eventName].push(listener)
-  }
-  return this
-}
-
-Nanobus.prototype.prependListener = function (eventName, listener) {
-  assert.ok(typeof eventName === 'string' || typeof eventName === 'symbol', 'nanobus.prependListener: eventName should be type string or symbol')
-  assert.equal(typeof listener, 'function', 'nanobus.prependListener: listener should be type function')
-
-  if (eventName === '*') {
-    this._starListeners.unshift(listener)
-  } else {
-    if (!this._listeners[eventName]) this._listeners[eventName] = []
-    this._listeners[eventName].unshift(listener)
-  }
-  return this
-}
-
-Nanobus.prototype.once = function (eventName, listener) {
-  assert.ok(typeof eventName === 'string' || typeof eventName === 'symbol', 'nanobus.once: eventName should be type string or symbol')
-  assert.equal(typeof listener, 'function', 'nanobus.once: listener should be type function')
-
-  var self = this
-  this.on(eventName, once)
-  function once () {
-    listener.apply(self, arguments)
-    self.removeListener(eventName, once)
-  }
-  return this
-}
-
-Nanobus.prototype.prependOnceListener = function (eventName, listener) {
-  assert.ok(typeof eventName === 'string' || typeof eventName === 'symbol', 'nanobus.prependOnceListener: eventName should be type string or symbol')
-  assert.equal(typeof listener, 'function', 'nanobus.prependOnceListener: listener should be type function')
-
-  var self = this
-  this.prependListener(eventName, once)
-  function once () {
-    listener.apply(self, arguments)
-    self.removeListener(eventName, once)
-  }
-  return this
-}
-
-Nanobus.prototype.removeListener = function (eventName, listener) {
-  assert.ok(typeof eventName === 'string' || typeof eventName === 'symbol', 'nanobus.removeListener: eventName should be type string or symbol')
-  assert.equal(typeof listener, 'function', 'nanobus.removeListener: listener should be type function')
-
-  if (eventName === '*') {
-    this._starListeners = this._starListeners.slice()
-    return remove(this._starListeners, listener)
-  } else {
-    if (typeof this._listeners[eventName] !== 'undefined') {
-      this._listeners[eventName] = this._listeners[eventName].slice()
+/**
+ * Minimal assert function + custom errors
+ * @param  {any} t Value to check if falsy
+ * @param  {string|function} m Optional assertion error message or nanoerror constructor
+ * @param  {string=} rest Optional error parameters for nanoerror message
+ * @throws {AssertionError || nanoerror}
+ */
+function assert (t, m, ...rest) {
+  if (!t) {
+    var err
+    if (!m || typeof m === 'string') {
+      err = new AssertionError(m)
     }
-
-    return remove(this._listeners[eventName], listener)
-  }
-
-  function remove (arr, listener) {
-    if (!arr) return
-    var index = arr.indexOf(listener)
-    if (index !== -1) {
-      splice(arr, index, 1)
-      return true
+    if (typeof m === 'function') {
+      // eslint-disable-next-line
+      err = new m(...rest)
     }
+    if (Error.captureStackTrace) Error.captureStackTrace(err, assert)
+    throw err
   }
 }
 
-Nanobus.prototype.removeAllListeners = function (eventName) {
-  if (eventName) {
-    if (eventName === '*') {
-      this._starListeners = []
+},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanoerror/index.js":[function(require,module,exports){
+const format = require('quick-format-unescaped')
+
+class Nanoerror extends Error {
+  /**
+   * @readonly
+   * @static
+   * @returns {string}
+   */
+  static get code () {
+    return this.name
+  }
+
+  /**
+   * @static
+   * @param {Nanoerror} err
+   * @returns {boolean}
+   */
+  static equals (err) {
+    return err && typeof err === 'object' && err.isNanoerror && err.code === this.code
+  }
+
+  /**
+   * Creates a new Error
+   * @param {...any} [args]
+   */
+  constructor (...args) {
+    super()
+
+    const code = this.constructor.code
+    const unformatMessage = this.constructor.message
+
+    /** @type {string} */
+    this.message = format(unformatMessage, args)
+    /** @type {string} */
+    this.name = code
+    /** @type {string} */
+    this.code = this.name
+    /** @type {Array<any>} */
+    this.args = args
+    /** @type {string} */
+    this.unformatMessage = unformatMessage
+
+    if (typeof Error.captureStackTrace === 'function') {
+      Error.captureStackTrace(this, this.constructor)
     } else {
-      this._listeners[eventName] = []
+      this.stack = (new Error(this.message)).stack
     }
-  } else {
-    this._starListeners = []
-    this._listeners = {}
   }
-  return this
+
+  /**
+   * @readonly
+   * @returns {boolean}
+   */
+  get isNanoerror () {
+    return true
+  }
 }
 
-Nanobus.prototype.listeners = function (eventName) {
-  var listeners = eventName !== '*'
-    ? this._listeners[eventName]
-    : this._starListeners
+/**
+ * @type {string}
+ * @static
+ * @memberof Nanoerror
+ */
+Nanoerror.message = ''
 
-  var ret = []
-  if (listeners) {
-    var ilength = listeners.length
-    for (var i = 0; i < ilength; i++) ret.push(listeners[i])
+/**
+ * Creates a new Error class
+ *
+ * @param {string} code
+ * @param {string} message
+ */
+function createError (code, message = '%s') {
+  const obj = {
+    [code]: class extends Nanoerror {
+      /**
+       * @static
+       * @param {Error} err
+       * @returns {Nanoerror}
+       */
+      static from (err) {
+        const newErr = new obj[code](`[${err.toString()}]`)
+        newErr.stack = err.stack || newErr.stack
+        return newErr
+      }
+    }
   }
-  return ret
+
+  obj[code].message = message
+
+  return obj[code]
 }
 
-Nanobus.prototype._emit = function (arr, eventName, data, uuid) {
-  if (typeof arr === 'undefined') return
-  if (arr.length === 0) return
-  if (data === undefined) {
-    data = eventName
-    eventName = null
+module.exports = createError
+
+},{"quick-format-unescaped":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/quick-format-unescaped/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage-rpc/index.js":[function(require,module,exports){
+const NanomessageRPC = require('./src/nanomessage-rpc')
+
+module.exports = (...args) => new NanomessageRPC(...args)
+module.exports.NanomessageRPC = NanomessageRPC
+module.exports.useSocket = require('./src/use-socket')
+module.exports.errors = require('./src/errors')
+
+},{"./src/errors":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage-rpc/src/errors.js","./src/nanomessage-rpc":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage-rpc/src/nanomessage-rpc.js","./src/use-socket":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage-rpc/src/use-socket.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage-rpc/src/codec.js":[function(require,module,exports){
+(function (Buffer){(function (){
+const varint = require('varint')
+const { BJSON } = require('nanomessage')
+const { NRPC_ERR_ENCODE, NRPC_ERR_DECODE } = require('./errors')
+
+function writeNumber (value, dest) {
+  varint.encode(value, dest.buf, dest.offset)
+  dest.offset += varint.encode.bytes
+}
+
+function writeCodec (enc, length, value, dest) {
+  writeNumber(length, dest)
+  enc.encode(value, dest.buf, dest.offset)
+  dest.offset += length
+}
+
+function writeString (value, length, dest) {
+  writeNumber(length, dest)
+  dest.buf.write(value, dest.offset, length, 'utf8')
+  dest.offset += length
+}
+
+function readNumber (source) {
+  const num = varint.decode(source.buf, source.offset)
+  source.offset += varint.decode.bytes
+  return num
+}
+
+function readCodec (enc, source) {
+  const length = readNumber(source)
+  const buf = enc.decode(source.buf, source.offset, source.offset + length)
+  source.offset += length
+  return buf
+}
+
+function readBuffer (source) {
+  const length = readNumber(source)
+  const buf = source.buf.slice(source.offset, source.offset + length)
+  source.offset += length
+  return buf
+}
+
+const ATTR_RESPONSE = 1
+const ATTR_EVENT = 1 << 1
+const ATTR_ERROR = 1 << 2
+
+class Codec {
+  constructor (valueEncoding = BJSON) {
+    this._valueEncoding = valueEncoding
+    this._lastHeader = null
+    this._lastDataLength = null
+    this._lastNameLength = null
   }
 
-  if (eventName) {
-    if (uuid !== undefined) {
-      data = [eventName].concat(data, uuid)
+  encode (obj, buf, offset = 0) {
+    try {
+      if (obj.name) {
+        return this._encodeRequest(obj, buf, offset)
+      }
+
+      return this._encodeResponse(obj, buf, offset)
+    } catch (_err) {
+      const err = new NRPC_ERR_ENCODE(_err.message)
+      err.stack = _err.stack || err.stack
+      throw _err
+    }
+  }
+
+  decode (buf, offset = 0) {
+    try {
+      const header = varint.decode(buf, offset)
+      offset += varint.decode.bytes
+
+      if (header & ATTR_RESPONSE) {
+        return this._decodeResponse(header, buf, offset)
+      }
+
+      return this._decodeRequest(header, buf, offset)
+    } catch (_err) {
+      const err = new NRPC_ERR_DECODE(_err.message)
+      err.stack = _err.stack || err.stack
+      throw _err
+    }
+  }
+
+  encodingLength (obj) {
+    if (obj.name) {
+      return this._encodingLengthRequest(obj)
+    }
+
+    return this._encodingLengthResponse(obj)
+  }
+
+  _headerRequest (obj) {
+    let header = 0
+    if (obj.event) header = header | ATTR_EVENT
+    this._lastHeader = header
+    return header
+  }
+
+  _headerResponse (obj) {
+    let header = 0
+    header = header | ATTR_RESPONSE
+    if (obj.error) header = header | ATTR_ERROR
+    this._lastHeader = header
+    return header
+  }
+
+  _encodeRequest (obj, buf, offset) {
+    const result = { buf, offset }
+    writeNumber(this._lastHeader, result)
+    writeString(obj.name, this._lastNameLength, result)
+    writeCodec(this._valueEncoding, this._lastDataLength, obj.data, result)
+    return result.buf
+  }
+
+  _decodeRequest (header, buf, offset) {
+    const obj = {}
+    const result = { buf, offset }
+    obj.event = !!(header & ATTR_EVENT)
+    obj.name = readBuffer(result).toString()
+    obj.data = readCodec(this._valueEncoding, result)
+    return obj
+  }
+
+  _encodingLengthRequest (obj) {
+    const header = this._headerRequest(obj)
+    this._lastDataLength = this._valueEncoding.encodingLength(obj.data)
+    this._lastNameLength = Buffer.byteLength(obj.name, 'utf8')
+    return (
+      varint.encodingLength(header) +
+      varint.encodingLength(this._lastDataLength) +
+      this._lastDataLength +
+      varint.encodingLength(this._lastNameLength) +
+      this._lastNameLength
+    )
+  }
+
+  _encodingLengthResponse (obj) {
+    const header = this._headerResponse(obj)
+    let codec = this._valueEncoding
+    if (obj.error) codec = BJSON
+
+    const dataLength = codec.encodingLength(obj.data)
+    return (
+      varint.encodingLength(header) +
+      varint.encodingLength(dataLength) +
+      dataLength
+    )
+  }
+
+  _encodeResponse (obj, buf, offset) {
+    let codec = this._valueEncoding
+    if (obj.error) codec = BJSON
+
+    const dataLength = codec.encodingLength(obj.data)
+
+    const result = { buf, offset }
+    writeNumber(this._lastHeader, result)
+    writeCodec(codec, dataLength, obj.data, result)
+    return result.buf
+  }
+
+  _decodeResponse (header, buf, offset) {
+    const obj = {}
+    const result = { buf, offset }
+    obj.error = !!(header & ATTR_ERROR)
+
+    let codec = this._valueEncoding
+    if (obj.error) codec = BJSON
+
+    obj.data = readCodec(codec, result)
+    return obj
+  }
+}
+
+module.exports = Codec
+
+}).call(this)}).call(this,require("buffer").Buffer)
+},{"./errors":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage-rpc/src/errors.js","buffer":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browserify/node_modules/buffer/index.js","nanomessage":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage/index.js","varint":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/varint/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage-rpc/src/errors.js":[function(require,module,exports){
+const nanoerror = require('nanoerror')
+
+exports.encodeError = encodeError
+exports.decodeError = decodeError
+
+const errors = new Map()
+
+function createError (code, message) {
+  exports[code] = nanoerror(code, message)
+}
+
+function encodeError (err) {
+  return { error: true, data: { code: err.code, unformatMessage: err.unformatMessage, args: err.args, stack: err.stack } }
+}
+
+function decodeError (code, message) {
+  if (exports[code]) return exports[code]
+
+  if (errors.has(code)) return errors.get(code)
+
+  const error = nanoerror(code, message)
+  errors.set(code, error)
+  return error
+}
+
+createError('NRPC_ERR_NAME_MISSING', 'missing action handler for: %s')
+createError('NRPC_ERR_RESPONSE_ERROR', '%s')
+createError('NRPC_ERR_REQUEST_CANCELED', '%s')
+createError('NRPC_ERR_CLOSE', 'nanomessage-rpc was closed')
+createError('NRPC_ERR_NOT_OPEN', 'nanomessage-rpc is not open')
+createError('NRPC_ERR_ENCODE', 'error encoding the request: %s')
+createError('NRPC_ERR_DECODE', 'error decoding the request: %s')
+
+},{"nanoerror":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanoerror/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage-rpc/src/nanomessage-rpc.js":[function(require,module,exports){
+(function (process){(function (){
+const { EventEmitter } = require('events')
+const Emittery = require('emittery')
+const nanomessage = require('nanomessage')
+const assert = require('nanocustomassert')
+const { NanoresourcePromise } = require('nanoresource-promise')
+
+const Codec = require('./codec')
+const {
+  encodeError,
+  decodeError,
+  NRPC_ERR_NAME_MISSING,
+  NRPC_ERR_RESPONSE_ERROR,
+  NRPC_ERR_CLOSE,
+  NRPC_ERR_NOT_OPEN,
+  NRPC_ERR_REQUEST_CANCELED
+} = require('./errors')
+
+const kNanomessage = Symbol('nrpc.nanomessage')
+const kOnmessage = Symbol('nrpc.onmessage')
+const kSubscribe = Symbol('nrpc.subscribe')
+const kActions = Symbol('nrpc.actions')
+const kEmittery = Symbol('nrpc.emittery')
+const kFastCheckOpen = Symbol('nrpc.fastcheckopen')
+const kCreateRequest = Symbol('nrpc.createrequest')
+
+const noop = () => {}
+
+class NanomessageRPC extends NanoresourcePromise {
+  constructor (opts = {}) {
+    super()
+
+    const { onError = () => {}, valueEncoding, send, subscribe, open = noop, close = noop, ...nanomessageOpts } = opts
+
+    assert(send, 'send is required')
+    assert(subscribe, 'subscribe is required')
+
+    this.ee = new EventEmitter()
+    this[kNanomessage] = nanomessage({
+      ...nanomessageOpts,
+      send: send.bind(this),
+      open: open.bind(this),
+      close: close.bind(this),
+      onMessage: this[kOnmessage].bind(this),
+      subscribe: this[kSubscribe](subscribe),
+      valueEncoding: new Codec(valueEncoding)
+    })
+    this[kEmittery] = new Emittery()
+    this[kActions] = new Map()
+
+    this._onError = onError
+
+    this.ee.on('error', err => {
+      this._onError(err)
+    })
+  }
+
+  get requests () {
+    return this[kNanomessage].requests
+  }
+
+  get inflightRequests () {
+    return this[kNanomessage].inflightRequests
+  }
+
+  get requestTimeout () {
+    return this[kNanomessage].timeout
+  }
+
+  get concurrency () {
+    return this[kNanomessage].concurrency
+  }
+
+  setRequestsTimeout (timeout) {
+    this[kNanomessage].setRequestsTimeout(timeout)
+  }
+
+  setConcurrency (concurrency) {
+    this[kNanomessage].setConcurrency(concurrency)
+  }
+
+  onError (cb) {
+    this._onError = cb
+  }
+
+  action (name, handler) {
+    this[kActions].set(name, handler)
+    return this
+  }
+
+  actions (actions) {
+    Object.keys(actions).forEach(name => this.action(name, actions[name]))
+    return this
+  }
+
+  call (name, data) {
+    return this[kCreateRequest](name, data)
+  }
+
+  emit (name, data) {
+    return this[kCreateRequest](name, data, true)
+  }
+
+  on (...args) {
+    return this[kEmittery].on(...args)
+  }
+
+  once (...args) {
+    return this[kEmittery].once(...args)
+  }
+
+  off (...args) {
+    return this[kEmittery].off(...args)
+  }
+
+  events (name) {
+    return this[kEmittery].events(name)
+  }
+
+  async _open () {
+    await this[kNanomessage].open()
+    this.ee.emit('opened')
+  }
+
+  async _close () {
+    await this[kNanomessage].close()
+    this.ee.emit('closed')
+  }
+
+  async [kFastCheckOpen] () {
+    if (this.closed || this.closing) throw new NRPC_ERR_CLOSE()
+    if (this.opening) return this.open()
+    if (!this.opened) throw new NRPC_ERR_NOT_OPEN()
+  }
+
+  [kSubscribe] (subscribe) {
+    return (next) => {
+      subscribe((data) => {
+        try {
+          next(data)
+        } catch (err) {
+          process.nextTick(() => this.ee.emit('error', err))
+        }
+      })
+    }
+  }
+
+  [kCreateRequest] (name, data, event) {
+    assert(name && typeof name === 'string', 'name is required')
+
+    const packet = { name, data, event }
+
+    let errCanceled
+    let request
+    const promise = this[kFastCheckOpen]()
+      .then(() => {
+        if (errCanceled) throw errCanceled
+        request = this[kNanomessage].request(packet)
+        this.ee.emit('request-created', request, packet)
+        return request
+      })
+      .then(result => {
+        if (result.error) {
+          const { code, unformatMessage, args, stack } = result.data
+          const ErrorDecoded = decodeError(code, unformatMessage)
+          const err = new ErrorDecoded(...args)
+          err.stack = stack || err.stack
+          throw err
+        } else {
+          return result.data
+        }
+      })
+
+    promise.cancel = (err) => {
+      if (!err) {
+        errCanceled = new NRPC_ERR_REQUEST_CANCELED('request canceled')
+      } else if (typeof err === 'string') {
+        errCanceled = new NRPC_ERR_REQUEST_CANCELED(err)
+      }
+
+      if (request) return request.cancel(errCanceled)
+      errCanceled = err
+    }
+    return promise
+  }
+
+  async [kOnmessage] (message) {
+    this.ee.emit('message', message)
+    try {
+      if (message.event) {
+        await this[kEmittery].emit(message.name, message.data)
+        return { data: null }
+      }
+
+      const action = this[kActions].get(message.name)
+
+      if (!action) {
+        return encodeError(new NRPC_ERR_NAME_MISSING(message.name))
+      }
+
+      const result = await action(message.data)
+      return { data: result }
+    } catch (err) {
+      if (err.isNanoerror) {
+        return encodeError(err)
+      }
+      const rErr = new NRPC_ERR_RESPONSE_ERROR(err.message)
+      rErr.stack = err.stack || rErr.stack
+      return encodeError(rErr)
+    }
+  }
+}
+
+module.exports = NanomessageRPC
+
+}).call(this)}).call(this,require('_process'))
+},{"./codec":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage-rpc/src/codec.js","./errors":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage-rpc/src/errors.js","_process":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/process/browser.js","emittery":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/emittery/index.js","events":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/events/events.js","nanocustomassert":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanocustomassert/index.js","nanomessage":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage/index.js","nanoresource-promise":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanoresource-promise/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage-rpc/src/use-socket.js":[function(require,module,exports){
+(function (process){(function (){
+const eos = require('end-of-stream')
+
+function useSocket (socket, onCloseDestroyStream = true) {
+  return {
+    send (buf) {
+      if (socket.destroyed) return
+      socket.write(buf)
+    },
+
+    subscribe (next) {
+      socket.on('data', next)
+      return () => socket.removeListener('data', next)
+    },
+
+    open () {
+      eos(socket, () => {
+        this
+          .close()
+          .catch(err => process.nextTick(() => this.ee.emit('error', err)))
+      })
+    },
+
+    close () {
+      return new Promise(resolve => {
+        if (socket.destroyed || !onCloseDestroyStream) return resolve()
+        eos(socket, () => resolve())
+        socket.destroy()
+      })
+    }
+  }
+}
+
+module.exports = useSocket
+
+}).call(this)}).call(this,require('_process'))
+},{"_process":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/process/browser.js","end-of-stream":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/end-of-stream/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage/index.js":[function(require,module,exports){
+const Nanomessage = require('./src/nanomessage')
+
+const nanomessage = (opts) => new Nanomessage(opts)
+nanomessage.Nanomessage = Nanomessage
+nanomessage.errors = require('./src/errors')
+nanomessage.BJSON = require('./src/buffer-json')
+module.exports = nanomessage
+
+},{"./src/buffer-json":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage/src/buffer-json.js","./src/errors":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage/src/errors.js","./src/nanomessage":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage/src/nanomessage.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage/src/buffer-json.js":[function(require,module,exports){
+(function (Buffer){(function (){
+function iterate (x, decode) {
+  if (typeof x !== 'object') {
+    if (decode && Object.prototype.toString.call(x) === '[object String]' && x.startsWith('base64:')) {
+      return Buffer.from(x.slice('base64:'.length), 'base64')
+    }
+    return x
+  }
+
+  let k
+  let tmp
+  const type = Object.prototype.toString.call(x)
+
+  if (!decode && type === '[object Uint8Array]' && Buffer.isBuffer(x)) {
+    return 'base64:' + Buffer.from(x).toString('base64')
+  }
+
+  if (type === '[object Object]') {
+    tmp = {}
+    for (k in x) {
+      tmp[k] = iterate(x[k], decode)
+    }
+    return tmp
+  }
+
+  if (type === '[object Array]') {
+    k = x.length
+    for (tmp = Array(k); k--;) {
+      tmp[k] = iterate(x[k], decode)
+    }
+    return tmp
+  }
+
+  return x
+}
+
+module.exports = {
+  _lastObj: null,
+  _lastStr: null,
+  _lastLength: null,
+  encode (obj, buf, offset) {
+    let str
+    let length
+
+    if (this._lastObj === obj) {
+      str = this._lastStr
+      length = this._lastLength
     } else {
-      data = [eventName].concat(data)
+      str = JSON.stringify(iterate({ data: obj }))
+      length = Buffer.byteLength(str, 'utf8')
     }
+
+    buf.write(str, offset, length, 'utf8')
+    this._lastObj = null
+    this._lastStr = null
+    this._lastLength = null
+    return buf.slice(offset, offset + length)
+  },
+  decode (buf, start, end) {
+    start = start || 0
+    end = end || buf.length
+    return iterate(JSON.parse(buf.slice(start, end)), true).data
+  },
+  encodingLength (obj) {
+    this._lastObj = obj
+    this._lastStr = JSON.stringify(iterate({ data: obj }))
+    this._lastLength = Buffer.byteLength(this._lastStr, 'utf8')
+    return this._lastLength
   }
-
-  var length = arr.length
-  for (var i = 0; i < length; i++) {
-    var listener = arr[i]
-    listener.apply(listener, data)
-  }
 }
 
-},{"assert":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanoassert/index.js","nanotiming":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanotiming/browser.js","remove-array-items":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/remove-array-items/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanoscheduler/index.js":[function(require,module,exports){
-var assert = require('assert')
+}).call(this)}).call(this,require("buffer").Buffer)
+},{"buffer":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browserify/node_modules/buffer/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage/src/codec.js":[function(require,module,exports){
+(function (Buffer){(function (){
+const varint = require('varint')
+const BJSON = require('./buffer-json')
+const { NMSG_ERR_ENCODE, NMSG_ERR_DECODE } = require('./errors')
 
-var hasWindow = typeof window !== 'undefined'
+const ATTR_RESPONSE = 1
 
-function createScheduler () {
-  var scheduler
-  if (hasWindow) {
-    if (!window._nanoScheduler) window._nanoScheduler = new NanoScheduler(true)
-    scheduler = window._nanoScheduler
-  } else {
-    scheduler = new NanoScheduler()
-  }
-  return scheduler
-}
-
-function NanoScheduler (hasWindow) {
-  this.hasWindow = hasWindow
-  this.hasIdle = this.hasWindow && window.requestIdleCallback
-  this.method = this.hasIdle ? window.requestIdleCallback.bind(window) : this.setTimeout
-  this.scheduled = false
-  this.queue = []
-}
-
-NanoScheduler.prototype.push = function (cb) {
-  assert.equal(typeof cb, 'function', 'nanoscheduler.push: cb should be type function')
-
-  this.queue.push(cb)
-  this.schedule()
-}
-
-NanoScheduler.prototype.schedule = function () {
-  if (this.scheduled) return
-
-  this.scheduled = true
-  var self = this
-  this.method(function (idleDeadline) {
-    var cb
-    while (self.queue.length && idleDeadline.timeRemaining() > 0) {
-      cb = self.queue.shift()
-      cb(idleDeadline)
-    }
-    self.scheduled = false
-    if (self.queue.length) self.schedule()
-  })
-}
-
-NanoScheduler.prototype.setTimeout = function (cb) {
-  setTimeout(cb, 0, {
-    timeRemaining: function () {
-      return 1
-    }
-  })
-}
-
-module.exports = createScheduler
-
-},{"assert":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanoassert/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanotiming/browser.js":[function(require,module,exports){
-var scheduler = require('nanoscheduler')()
-var assert = require('assert')
-
-var perf
-nanotiming.disabled = true
-try {
-  perf = window.performance
-  nanotiming.disabled = window.localStorage.DISABLE_NANOTIMING === 'true' || !perf.mark
-} catch (e) { }
-
-module.exports = nanotiming
-
-function nanotiming (name) {
-  assert.equal(typeof name, 'string', 'nanotiming: name should be type string')
-
-  if (nanotiming.disabled) return noop
-
-  var uuid = (perf.now() * 10000).toFixed() % Number.MAX_SAFE_INTEGER
-  var startName = 'start-' + uuid + '-' + name
-  perf.mark(startName)
-
-  function end (cb) {
-    var endName = 'end-' + uuid + '-' + name
-    perf.mark(endName)
-
-    scheduler.push(function () {
-      var err = null
+module.exports = function createCodec (valueEncoding = BJSON) {
+  return {
+    encode (info) {
       try {
-        var measureName = name + ' [' + uuid + ']'
-        perf.measure(measureName, startName, endName)
-        perf.clearMarks(startName)
-        perf.clearMarks(endName)
-      } catch (e) { err = e }
-      if (cb) cb(err, name)
+        let header = info.id << 1
+        if (info.response) header = header | ATTR_RESPONSE
+        const dataLength = valueEncoding.encodingLength(info.data)
+        const buf = Buffer.allocUnsafe(varint.encodingLength(header) + varint.encodingLength(dataLength) + dataLength)
+        let offset = 0
+        varint.encode(header, buf, offset)
+        offset += varint.encode.bytes
+        varint.encode(dataLength, buf, offset)
+        offset += varint.encode.bytes
+        valueEncoding.encode(info.data, buf, offset)
+        return buf
+      } catch (err) {
+        throw new NMSG_ERR_ENCODE(err.message)
+      }
+    },
+
+    decode (buf) {
+      try {
+        const request = {}
+        let offset = 0
+        const header = varint.decode(buf, offset)
+        offset += varint.decode.bytes
+        const dataLength = varint.decode(buf, offset)
+        offset += varint.decode.bytes
+        request.data = valueEncoding.decode(buf, offset, offset + dataLength)
+        request.response = !!(header & ATTR_RESPONSE)
+        request.id = header >> 1
+        return request
+      } catch (err) {
+        throw new NMSG_ERR_DECODE(err.message)
+      }
+    }
+  }
+}
+
+}).call(this)}).call(this,require("buffer").Buffer)
+},{"./buffer-json":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage/src/buffer-json.js","./errors":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage/src/errors.js","buffer":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browserify/node_modules/buffer/index.js","varint":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/varint/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage/src/errors.js":[function(require,module,exports){
+const nanoerror = require('nanoerror')
+
+const errors = {}
+
+function createError (code, message) {
+  errors[code] = nanoerror(code, message)
+}
+
+createError('NMSG_ERR_TIMEOUT', 'timeout on request: %s')
+createError('NMSG_ERR_ENCODE', 'error encoding the request: %s')
+createError('NMSG_ERR_DECODE', 'error decoding the request: %s')
+createError('NMSG_ERR_RESPONSE', 'response error on request: %s')
+createError('NMSG_ERR_CLOSE', 'nanomessage was closed')
+createError('NMSG_ERR_NOT_OPEN', 'nanomessage is not open')
+createError('NMSG_ERR_CANCEL', 'request canceled: %s')
+
+module.exports = errors
+
+},{"nanoerror":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanoerror/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage/src/id-generator.js":[function(require,module,exports){
+module.exports = class IdGenerator {
+  constructor (generate) {
+    this._generate = generate
+    this._free = []
+  }
+
+  get () {
+    if (!this._free.length) {
+      return this._generate()
+    }
+
+    return this._free.pop()
+  }
+
+  release (id) {
+    this._free.push(id)
+  }
+}
+
+},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage/src/nanomessage.js":[function(require,module,exports){
+const assert = require('nanocustomassert')
+const { NanoresourcePromise } = require('nanoresource-promise/emitter')
+const fastq = require('fastq')
+
+const Request = require('./request')
+const createCodec = require('./codec')
+const { NMSG_ERR_CLOSE, NMSG_ERR_NOT_OPEN, NMSG_ERR_RESPONSE } = require('./errors')
+const IdGenerator = require('./id-generator')
+
+const kRequests = Symbol('nanomessage.requests')
+const kInQueue = Symbol('nanomessage.inqueue')
+const kOutQueue = Symbol('nanomessage.outqueue')
+const kUnsubscribe = Symbol('nanomessage.unsubscribe')
+const kMessageHandler = Symbol('nanomessage.messagehandler')
+const kOpen = Symbol('nanomessage.open')
+const kClose = Symbol('nanomessage.close')
+const kFastCheckOpen = Symbol('nanomessage.fastcheckopen')
+const kTimeout = Symbol('nanomessage.timeout')
+const kIdGenerator = Symbol('nanomessage.idgenerator')
+const kCodec = Symbol('nanomessage.codec')
+
+function inWorker (info, done) {
+  this[kFastCheckOpen]()
+    .then(() => this._onMessage(info.data, info))
+    .then(data => {
+      if (this.closed || this.closing) return done()
+
+      info.responseData = data
+
+      return this._send(this[kCodec].encode({
+        id: info.id,
+        response: info.response,
+        data
+      }), info)
+    })
+    .then(() => done())
+    .catch(err => done(err))
+}
+
+function outWorker (request, done) {
+  const info = request.info()
+  this[kFastCheckOpen]()
+    .then(() => {
+      if (request.finished) return
+      request.start()
+      return this._send(this[kCodec].encode(info), info)
+    })
+    .then(() => {
+      if (request.finished) return
+      return request.promise
+    })
+    .then(data => done(null, data))
+    .catch(err => done(err))
+}
+
+class Nanomessage extends NanoresourcePromise {
+  /**
+   * Creates an instance of Nanomessage.
+   * @param {Object} [opts={}]
+   * @param {(buf: Buffer, info: Object) => Promise|undefined} [opts.send]
+   * @param {function} [opts.subscribe]
+   * @param {(data: Object, info: Object) => Promise<*>} [opts.onMessage]
+   * @param {function} [opts.open]
+   * @param {function} [opts.close]
+   * @param {number} [opts.timeout]
+   * @param {Object} [opts.valueEncoding]
+   * @param {({ incoming: number, outgoing: number }|number)} [opts.concurrency]
+   * @memberof Nanomessage
+   */
+  constructor (opts = {}) {
+    super()
+
+    const { send, subscribe, onMessage, open, close, timeout, valueEncoding } = opts
+    const { concurrency = {} } = opts
+
+    if (send) this._send = send
+    if (subscribe) this._subscribe = subscribe
+    if (onMessage) this.setMessageHandler(onMessage)
+    if (open) this[kOpen] = open
+    if (close) this[kClose] = close
+    this.setRequestTimeout(timeout)
+
+    this[kCodec] = createCodec(valueEncoding)
+
+    this[kInQueue] = fastq(this, inWorker, 256)
+    this[kOutQueue] = fastq(this, outWorker, 256)
+    this.setConcurrency(concurrency)
+
+    this[kRequests] = new Map()
+    this[kIdGenerator] = new IdGenerator(() => this[kRequests].size + 1)
+  }
+
+  /**
+   * @readonly
+   * @type {Object}
+   */
+  get codec () {
+    return this[kCodec]
+  }
+
+  /**
+   * @readonly
+   * @type {Array<Request>}
+   */
+  get requests () {
+    return Array.from(this[kRequests].values())
+  }
+
+  /**
+   * @readonly
+   * @type {number}
+   */
+  get inflightRequests () {
+    return this[kOutQueue].running()
+  }
+
+  /**
+   * @readonly
+   * @type {number}
+   */
+  get requestTimeout () {
+    return this[kTimeout]
+  }
+
+  /**
+   * @readonly
+   * @type {Object}
+   */
+  get concurrency () {
+    return {
+      incoming: this[kInQueue].concurrency,
+      outgoing: this[kOutQueue].concurrency
+    }
+  }
+
+  /**
+   * @param {number} timeout
+   * @returns {Nanomessage}
+   */
+  setRequestTimeout (timeout) {
+    this[kTimeout] = timeout
+    return this
+  }
+
+  /**
+   * @param {({ incoming: number, outgoing: number }|number)} value
+   * @returns {Nanomessage}
+   */
+  setConcurrency (value) {
+    if (typeof value === 'number') {
+      this[kInQueue].concurrency = value
+      this[kOutQueue].concurrency = value
+    } else {
+      this[kInQueue].concurrency = value.incoming || this[kInQueue].concurrency
+      this[kOutQueue].concurrency = value.outgoing || this[kOutQueue].concurrency
+    }
+    return this
+  }
+
+  /**
+   * Send a request and wait for the response.
+   *
+   * @param {*} data
+   * @returns {Promise<*>}
+   */
+  request (data) {
+    const request = new Request({ id: this[kIdGenerator].get(), data, timeout: this[kTimeout] })
+    const info = request.info()
+
+    this[kRequests].set(request.id, request)
+    request.onFinish(() => {
+      this[kRequests].delete(request.id)
+      this[kIdGenerator].release(request.id)
+    })
+
+    this.emit('request-created', info)
+
+    this[kOutQueue].push(request, (err, data) => {
+      info.response = true
+      info.responseData = data
+      this.emit('request-ended', err, info)
+    })
+
+    return request.promise
+  }
+
+  /**
+   * Send a ephemeral message.
+   *
+   * @param {*} data
+   * @returns {Promise}
+   */
+  send (data) {
+    return this[kFastCheckOpen]()
+      .then(() => {
+        const info = Request.info({ id: 0, data })
+        return this._send(this[kCodec].encode(info), info)
+      })
+  }
+
+  /**
+   * @param {(data: Object, info: Object) => Promise<*>} onMessage
+   * @returns {Nanomessage}
+   */
+  setMessageHandler (onMessage) {
+    this._onMessage = onMessage
+    return this
+  }
+
+  /**
+   * @abstract
+   * @param {Buffer} buf
+   * @param {Object} info
+   * @returns {Promise|undefined}
+   */
+  async _send (buf, info) {
+    throw new Error('_send not implemented')
+  }
+
+  /**
+   * @abstract
+   * @param {Object} data
+   * @param {Object} info
+   * @returns {Promise<*>}
+   */
+  async _onMessage (data, info) {
+    throw new Error('_onMessage not implemented')
+  }
+
+  async _open () {
+    assert(!!this._subscribe, 'subscribe is required')
+    await (this[kOpen] && this[kOpen]())
+    this[kUnsubscribe] = this._subscribe(this[kMessageHandler].bind(this))
+  }
+
+  async _close () {
+    if (this[kUnsubscribe]) this[kUnsubscribe]()
+
+    const requestsToClose = []
+    this[kRequests].forEach(request => request.reject(new NMSG_ERR_CLOSE()))
+    this[kRequests].clear()
+
+    this[kInQueue] && this[kInQueue].kill()
+    this[kOutQueue] && this[kOutQueue].kill()
+
+    await (this[kClose] && this[kClose]())
+    await Promise.all(requestsToClose)
+  }
+
+  async [kFastCheckOpen] () {
+    if (this.closed || this.closing) throw new NMSG_ERR_CLOSE()
+    if (this.opening) return this.open()
+    if (!this.opened) throw new NMSG_ERR_NOT_OPEN()
+  }
+
+  [kMessageHandler] (message) {
+    if (this.closed || this.closing) return
+
+    const info = Request.info(this[kCodec].decode(message))
+
+    // resolve response
+    if (info.response) {
+      const request = this[kRequests].get(info.id)
+      if (request) request.resolve(info.data)
+      return
+    }
+
+    if (info.ephemeral) {
+      this.emit('request-received', info)
+      this[kFastCheckOpen]()
+        .then(() => this._onMessage(info.data, info))
+        .catch(err => {
+          const rErr = new NMSG_ERR_RESPONSE(err.message)
+          rErr.stack = err.stack || rErr.stack
+          this.emit('response-error', rErr, info)
+        })
+      return
+    }
+
+    info.response = true
+    this.emit('request-received', info)
+
+    this[kInQueue].push(info, err => {
+      if (err) {
+        const rErr = new NMSG_ERR_RESPONSE(err.message)
+        rErr.stack = err.stack || rErr.stack
+        this.emit('response-error', rErr, info)
+      }
+    })
+  }
+}
+
+module.exports = Nanomessage
+
+},{"./codec":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage/src/codec.js","./errors":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage/src/errors.js","./id-generator":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage/src/id-generator.js","./request":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage/src/request.js","fastq":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/fastq/queue.js","nanocustomassert":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanocustomassert/index.js","nanoresource-promise/emitter":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanoresource-promise/emitter.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage/src/request.js":[function(require,module,exports){
+const { NMSG_ERR_CANCEL, NMSG_ERR_TIMEOUT } = require('./errors')
+
+class Request {
+  static info (obj = {}) {
+    return {
+      id: obj.id,
+      data: obj.data,
+      response: obj.response || false,
+      ephemeral: obj.id === 0
+    }
+  }
+
+  constructor (info) {
+    const { id, data, response = false, timeout } = info
+
+    this.id = id
+    this.data = data
+    this.response = response
+    this.finished = false
+    this.timeout = timeout
+    this.timer = null
+
+    let _resolve, _reject
+    this.promise = new Promise((resolve, reject) => {
+      _resolve = resolve
+      _reject = reject
+    })
+
+    this.resolve = (data) => {
+      if (!this.finished) {
+        this.timer && clearTimeout(this.timer)
+        this.finished = true
+        this._onFinish()
+        _resolve(data)
+      }
+    }
+
+    this.reject = (err) => {
+      if (!this.finished) {
+        this.timer && clearTimeout(this.timer)
+        this.finished = true
+        this._onFinish(err)
+        _reject(err)
+      }
+    }
+
+    this.promise.cancel = this.cancel.bind(this)
+  }
+
+  start () {
+    if (this.timeout) {
+      this.timer = setTimeout(() => {
+        this.reject(new NMSG_ERR_TIMEOUT(this.id))
+      }, this.timeout)
+    }
+  }
+
+  onFinish (cb) {
+    this._onFinish = cb
+  }
+
+  cancel (err) {
+    if (!err) {
+      err = new NMSG_ERR_CANCEL(this.id)
+    } else if (typeof err === 'string') {
+      err = new NMSG_ERR_CANCEL(this.id, err)
+    }
+
+    this.reject(err)
+  }
+
+  info () {
+    return Request.info(this)
+  }
+}
+
+module.exports = Request
+
+},{"./errors":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage/src/errors.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanoresource-promise/emitter.js":[function(require,module,exports){
+const { EventEmitter } = require('events')
+const nanoresource = require('.')
+
+const kNanoresource = Symbol('nanoresource')
+
+class NanoresourcePromise extends EventEmitter {
+  constructor (opts = {}) {
+    super()
+
+    this[kNanoresource] = nanoresource({
+      open: opts.open || this._open.bind(this),
+      close: opts.close || this._close.bind(this),
+      reopen: opts.reopen
     })
   }
 
-  end.uuid = uuid
-  return end
+  get opened () {
+    return this[kNanoresource].opened
+  }
+
+  get opening () {
+    return this[kNanoresource].opening
+  }
+
+  get closed () {
+    return this[kNanoresource].closed
+  }
+
+  get closing () {
+    return this[kNanoresource].closing
+  }
+
+  get actives () {
+    return this[kNanoresource].actives
+  }
+
+  /**
+   * @returns {Promise}
+   */
+  async open () {
+    await this[kNanoresource].open()
+    this.emit('opened')
+  }
+
+  /**
+   * @returns {Promise}
+   */
+  async close (allowActive) {
+    await this[kNanoresource].close(allowActive)
+    this.emit('closed')
+  }
+
+  /**
+   * @returns {boolean}
+   */
+  active (cb) {
+    return this[kNanoresource].active(cb)
+  }
+
+  /**
+   * @returns {boolean}
+   */
+  inactive (cb, err, value) {
+    return this[kNanoresource].inactive(cb, err, value)
+  }
+
+  /**
+   * @abstract
+   */
+  async _open () {}
+
+  /**
+   * @abstract
+   */
+  async _close () {}
 }
 
-function noop (cb) {
-  if (cb) {
-    scheduler.push(function () {
-      cb(new Error('nanotiming: performance API unavailable'))
+module.exports = (opts) => new NanoresourcePromise(opts)
+module.exports.NanoresourcePromise = NanoresourcePromise
+
+},{".":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanoresource-promise/index.js","events":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/events/events.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanoresource-promise/index.js":[function(require,module,exports){
+const nanoresource = require('./nanoresource-cb')
+
+function callbackPromise () {
+  let callback
+
+  const promise = new Promise((resolve, reject) => {
+    callback = (err, value) => {
+      if (err) reject(err)
+      else resolve(value)
+    }
+  })
+
+  callback.promise = promise
+  return callback
+}
+
+const kNanoresource = Symbol('nanoresource')
+const kProcessPromise = Symbol('processpromise')
+
+class NanoresourcePromise {
+  constructor (opts = {}) {
+    const open = opts.open || this._open.bind(this)
+    const close = opts.close || this._close.bind(this)
+
+    this[kNanoresource] = nanoresource({
+      open: (cb) => this[kProcessPromise](open, cb),
+      close: (cb) => this[kProcessPromise](close, cb),
+      reopen: opts.reopen
     })
+  }
+
+  get opened () {
+    return this[kNanoresource].opened
+  }
+
+  get opening () {
+    return this[kNanoresource].opening
+  }
+
+  get closed () {
+    return this[kNanoresource].closed
+  }
+
+  get closing () {
+    return this[kNanoresource].closing
+  }
+
+  get actives () {
+    return this[kNanoresource].actives
+  }
+
+  /**
+   * @returns {Promise}
+   */
+  open () {
+    const callback = callbackPromise()
+    this[kNanoresource].open(callback)
+    return callback.promise
+  }
+
+  /**
+   * @returns {Promise}
+   */
+  close (allowActive = false) {
+    const callback = callbackPromise()
+    this[kNanoresource].close(allowActive, callback)
+    return callback.promise
+  }
+
+  /**
+   * @returns {boolean}
+   */
+  active (cb) {
+    return this[kNanoresource].active(cb)
+  }
+
+  /**
+   * @returns {boolean}
+   */
+  inactive (cb, err, value) {
+    return this[kNanoresource].inactive(cb, err, value)
+  }
+
+  /**
+   * @abstract
+   */
+  async _open () {}
+
+  /**
+   * @abstract
+   */
+  async _close () {}
+
+  async [kProcessPromise] (fnPromise, cb) {
+    try {
+      await fnPromise()
+      cb()
+    } catch (err) {
+      cb(err)
+    }
   }
 }
 
-},{"assert":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanoassert/index.js","nanoscheduler":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanoscheduler/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/once/once.js":[function(require,module,exports){
+module.exports = (opts) => new NanoresourcePromise(opts)
+module.exports.NanoresourcePromise = NanoresourcePromise
+
+},{"./nanoresource-cb":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanoresource-promise/nanoresource-cb.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanoresource-promise/nanoresource-cb.js":[function(require,module,exports){
+(function (process){(function (){
+/**
+ *
+ * This code is based on the @mafintosh work.
+ * https://github.com/mafintosh/nanoresource
+ */
+
+const preopening = Symbol('opening when closing')
+const opening = Symbol('opening queue')
+const preclosing = Symbol('closing when inactive')
+const closing = Symbol('closing queue')
+const sync = Symbol('sync')
+const fastClose = Symbol('fast close')
+const reopen = Symbol('allow reopen')
+const init = Symbol('init state')
+
+class Nanoresource {
+  constructor (opts) {
+    if (!opts) opts = {}
+    if (opts.open) this._open = opts.open
+    if (opts.close) this._close = opts.close
+
+    this[init]()
+
+    this[reopen] = opts.reopen || false
+    this[preopening] = null
+    this[opening] = null
+    this[preclosing] = null
+    this[closing] = null
+    this[sync] = false
+    this[fastClose] = true
+  }
+
+  [init] () {
+    this.opening = false
+    this.opened = false
+    this.closing = false
+    this.closed = false
+    this.actives = 0
+  }
+
+  _open (cb) {
+    cb(null)
+  }
+
+  _close (cb) {
+    cb(null)
+  }
+
+  open (cb) {
+    if (!cb) cb = noop
+
+    if (this.closing || this.closed) {
+      if (!this[reopen]) {
+        return process.nextTick(cb, new Error('Resource is closed'))
+      }
+
+      if (this.closing) {
+        if (!this[preopening]) this[preopening] = []
+        this[preopening].push(cb)
+        return
+      }
+
+      this[init]()
+    }
+
+    if (this.opened) return process.nextTick(cb)
+
+    if (this[opening]) {
+      this[opening].push(cb)
+      return
+    }
+
+    this.opening = true
+    this[opening] = [cb]
+    this[sync] = true
+    this._open(onopen.bind(this))
+    this[sync] = false
+  }
+
+  active (cb) {
+    if ((this[fastClose] && this[preclosing]) || this[closing] || this.closed) {
+      if (cb) process.nextTick(cb, new Error('Resource is closed'))
+      return false
+    }
+    this.actives++
+    return true
+  }
+
+  inactive (cb, err, val) {
+    if (!--this.actives) {
+      const queue = this[preclosing]
+      if (queue) {
+        this[preclosing] = null
+        while (queue.length) this.close(queue.shift())
+      }
+    }
+
+    if (cb) cb(err, val)
+  }
+
+  close (allowActive, cb) {
+    if (typeof allowActive === 'function') return this.close(false, allowActive)
+    if (!cb) cb = noop
+
+    if (allowActive) this[fastClose] = false
+
+    if (this.closed) return process.nextTick(cb)
+
+    if (this.actives || this[opening]) {
+      if (!this[preclosing]) this[preclosing] = []
+      this[preclosing].push(cb)
+      return
+    }
+
+    if (!this.opened) {
+      this.closed = true
+      process.nextTick(cb)
+      return
+    }
+
+    if (this[closing]) {
+      this[closing].push(cb)
+      return
+    }
+
+    this.closing = true
+    this[closing] = [cb]
+    this[sync] = true
+    this._close(onclose.bind(this))
+    this[sync] = false
+  }
+}
+
+function onopen (err) {
+  if (this[sync]) return process.nextTick(onopen.bind(this), err)
+
+  const oqueue = this[opening]
+  this[opening] = null
+  this.opening = false
+  this.opened = !err
+
+  while (oqueue.length) oqueue.shift()(err)
+
+  const cqueue = this[preclosing]
+  if (cqueue && !this.actives) {
+    this[preclosing] = null
+    while (cqueue.length) this.close(cqueue.shift())
+  }
+}
+
+function onclose (err) {
+  if (this[sync]) return process.nextTick(onclose.bind(this), err)
+  const queue = this[closing]
+  this.closing = false
+  this[closing] = null
+  this.closed = !err
+  while (queue.length) queue.shift()(err)
+
+  const cqueue = this[preopening]
+  if (cqueue) {
+    this[preopening] = null
+    while (cqueue.length) this.open(cqueue.shift())
+  }
+}
+
+function noop () {}
+
+module.exports = (opts) => new Nanoresource(opts)
+module.exports.Nanoresource = Nanoresource
+
+}).call(this)}).call(this,require('_process'))
+},{"_process":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/process/browser.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/once/once.js":[function(require,module,exports){
 var wrappy = require('wrappy')
 module.exports = wrappy(once)
 module.exports.strict = wrappy(onceStrict)
@@ -11202,51 +8406,300 @@ function onceStrict (fn) {
   return f
 }
 
-},{"wrappy":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/wrappy/wrappy.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/p-debounce/index.js":[function(require,module,exports){
+},{"wrappy":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/wrappy/wrappy.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/p-event/index.js":[function(require,module,exports){
 'use strict';
+const pTimeout = require('p-timeout');
 
-const pDebounce = (fn, wait, options = {}) => {
-	if (!Number.isFinite(wait)) {
-		throw new TypeError('Expected `wait` to be a finite number');
+const symbolAsyncIterator = Symbol.asyncIterator || '@@asyncIterator';
+
+const normalizeEmitter = emitter => {
+	const addListener = emitter.on || emitter.addListener || emitter.addEventListener;
+	const removeListener = emitter.off || emitter.removeListener || emitter.removeEventListener;
+
+	if (!addListener || !removeListener) {
+		throw new TypeError('Emitter is not compatible');
 	}
 
-	let leadingValue;
-	let timer;
-	let resolveList = [];
-
-	return function (...arguments_) {
-		return new Promise(resolve => {
-			const runImmediately = options.leading && !timer;
-
-			clearTimeout(timer);
-
-			timer = setTimeout(() => {
-				timer = null;
-
-				const result = options.leading ? leadingValue : fn.apply(this, arguments_);
-
-				for (resolve of resolveList) {
-					resolve(result);
-				}
-
-				resolveList = [];
-			}, wait);
-
-			if (runImmediately) {
-				leadingValue = fn.apply(this, arguments_);
-				resolve(leadingValue);
-			} else {
-				resolveList.push(resolve);
-			}
-		});
+	return {
+		addListener: addListener.bind(emitter),
+		removeListener: removeListener.bind(emitter)
 	};
 };
 
-module.exports = pDebounce;
-// TODO: Remove this for the next major release
-module.exports.default = pDebounce;
+const toArray = value => Array.isArray(value) ? value : [value];
 
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/p-finally/index.js":[function(require,module,exports){
+const multiple = (emitter, event, options) => {
+	let cancel;
+	const ret = new Promise((resolve, reject) => {
+		options = {
+			rejectionEvents: ['error'],
+			multiArgs: false,
+			resolveImmediately: false,
+			...options
+		};
+
+		if (!(options.count >= 0 && (options.count === Infinity || Number.isInteger(options.count)))) {
+			throw new TypeError('The `count` option should be at least 0 or more');
+		}
+
+		// Allow multiple events
+		const events = toArray(event);
+
+		const items = [];
+		const {addListener, removeListener} = normalizeEmitter(emitter);
+
+		const onItem = (...args) => {
+			const value = options.multiArgs ? args : args[0];
+
+			if (options.filter && !options.filter(value)) {
+				return;
+			}
+
+			items.push(value);
+
+			if (options.count === items.length) {
+				cancel();
+				resolve(items);
+			}
+		};
+
+		const rejectHandler = error => {
+			cancel();
+			reject(error);
+		};
+
+		cancel = () => {
+			for (const event of events) {
+				removeListener(event, onItem);
+			}
+
+			for (const rejectionEvent of options.rejectionEvents) {
+				removeListener(rejectionEvent, rejectHandler);
+			}
+		};
+
+		for (const event of events) {
+			addListener(event, onItem);
+		}
+
+		for (const rejectionEvent of options.rejectionEvents) {
+			addListener(rejectionEvent, rejectHandler);
+		}
+
+		if (options.resolveImmediately) {
+			resolve(items);
+		}
+	});
+
+	ret.cancel = cancel;
+
+	if (typeof options.timeout === 'number') {
+		const timeout = pTimeout(ret, options.timeout);
+		timeout.cancel = cancel;
+		return timeout;
+	}
+
+	return ret;
+};
+
+const pEvent = (emitter, event, options) => {
+	if (typeof options === 'function') {
+		options = {filter: options};
+	}
+
+	options = {
+		...options,
+		count: 1,
+		resolveImmediately: false
+	};
+
+	const arrayPromise = multiple(emitter, event, options);
+	const promise = arrayPromise.then(array => array[0]); // eslint-disable-line promise/prefer-await-to-then
+	promise.cancel = arrayPromise.cancel;
+
+	return promise;
+};
+
+module.exports = pEvent;
+// TODO: Remove this for the next major release
+module.exports.default = pEvent;
+
+module.exports.multiple = multiple;
+
+module.exports.iterator = (emitter, event, options) => {
+	if (typeof options === 'function') {
+		options = {filter: options};
+	}
+
+	// Allow multiple events
+	const events = toArray(event);
+
+	options = {
+		rejectionEvents: ['error'],
+		resolutionEvents: [],
+		limit: Infinity,
+		multiArgs: false,
+		...options
+	};
+
+	const {limit} = options;
+	const isValidLimit = limit >= 0 && (limit === Infinity || Number.isInteger(limit));
+	if (!isValidLimit) {
+		throw new TypeError('The `limit` option should be a non-negative integer or Infinity');
+	}
+
+	if (limit === 0) {
+		// Return an empty async iterator to avoid any further cost
+		return {
+			[Symbol.asyncIterator]() {
+				return this;
+			},
+			async next() {
+				return {
+					done: true,
+					value: undefined
+				};
+			}
+		};
+	}
+
+	const {addListener, removeListener} = normalizeEmitter(emitter);
+
+	let isDone = false;
+	let error;
+	let hasPendingError = false;
+	const nextQueue = [];
+	const valueQueue = [];
+	let eventCount = 0;
+	let isLimitReached = false;
+
+	const valueHandler = (...args) => {
+		eventCount++;
+		isLimitReached = eventCount === limit;
+
+		const value = options.multiArgs ? args : args[0];
+
+		if (nextQueue.length > 0) {
+			const {resolve} = nextQueue.shift();
+
+			resolve({done: false, value});
+
+			if (isLimitReached) {
+				cancel();
+			}
+
+			return;
+		}
+
+		valueQueue.push(value);
+
+		if (isLimitReached) {
+			cancel();
+		}
+	};
+
+	const cancel = () => {
+		isDone = true;
+		for (const event of events) {
+			removeListener(event, valueHandler);
+		}
+
+		for (const rejectionEvent of options.rejectionEvents) {
+			removeListener(rejectionEvent, rejectHandler);
+		}
+
+		for (const resolutionEvent of options.resolutionEvents) {
+			removeListener(resolutionEvent, resolveHandler);
+		}
+
+		while (nextQueue.length > 0) {
+			const {resolve} = nextQueue.shift();
+			resolve({done: true, value: undefined});
+		}
+	};
+
+	const rejectHandler = (...args) => {
+		error = options.multiArgs ? args : args[0];
+
+		if (nextQueue.length > 0) {
+			const {reject} = nextQueue.shift();
+			reject(error);
+		} else {
+			hasPendingError = true;
+		}
+
+		cancel();
+	};
+
+	const resolveHandler = (...args) => {
+		const value = options.multiArgs ? args : args[0];
+
+		if (options.filter && !options.filter(value)) {
+			return;
+		}
+
+		if (nextQueue.length > 0) {
+			const {resolve} = nextQueue.shift();
+			resolve({done: true, value});
+		} else {
+			valueQueue.push(value);
+		}
+
+		cancel();
+	};
+
+	for (const event of events) {
+		addListener(event, valueHandler);
+	}
+
+	for (const rejectionEvent of options.rejectionEvents) {
+		addListener(rejectionEvent, rejectHandler);
+	}
+
+	for (const resolutionEvent of options.resolutionEvents) {
+		addListener(resolutionEvent, resolveHandler);
+	}
+
+	return {
+		[symbolAsyncIterator]() {
+			return this;
+		},
+		async next() {
+			if (valueQueue.length > 0) {
+				const value = valueQueue.shift();
+				return {
+					done: isDone && valueQueue.length === 0 && !isLimitReached,
+					value
+				};
+			}
+
+			if (hasPendingError) {
+				hasPendingError = false;
+				throw error;
+			}
+
+			if (isDone) {
+				return {
+					done: true,
+					value: undefined
+				};
+			}
+
+			return new Promise((resolve, reject) => nextQueue.push({resolve, reject}));
+		},
+		async return(value) {
+			cancel();
+			return {
+				done: isDone,
+				value
+			};
+		}
+	};
+};
+
+module.exports.TimeoutError = pTimeout.TimeoutError;
+
+},{"p-timeout":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/p-timeout/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/p-finally/index.js":[function(require,module,exports){
 'use strict';
 module.exports = (promise, onFinally) => {
 	onFinally = onFinally || (() => {});
@@ -11263,27 +8716,80 @@ module.exports = (promise, onFinally) => {
 	);
 };
 
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/p-forever/index.js":[function(require,module,exports){
+},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/p-limit/index.js":[function(require,module,exports){
 'use strict';
-const symbolEnd = Symbol('pForever.end');
+const Queue = require('yocto-queue');
 
-const pForever = async (fn, previousValue) => {
-	const newValue = await fn(await previousValue);
-
-	if (newValue === symbolEnd) {
-		return;
+const pLimit = concurrency => {
+	if (!((Number.isInteger(concurrency) || concurrency === Infinity) && concurrency > 0)) {
+		throw new TypeError('Expected `concurrency` to be a number from 1 and up');
 	}
 
-	return pForever(fn, newValue);
+	const queue = new Queue();
+	let activeCount = 0;
+
+	const next = () => {
+		activeCount--;
+
+		if (queue.size > 0) {
+			queue.dequeue()();
+		}
+	};
+
+	const run = async (fn, resolve, ...args) => {
+		activeCount++;
+
+		const result = (async () => fn(...args))();
+
+		resolve(result);
+
+		try {
+			await result;
+		} catch {}
+
+		next();
+	};
+
+	const enqueue = (fn, resolve, ...args) => {
+		queue.enqueue(run.bind(null, fn, resolve, ...args));
+
+		(async () => {
+			// This function needs to wait until the next microtask before comparing
+			// `activeCount` to `concurrency`, because `activeCount` is updated asynchronously
+			// when the run function is dequeued and called. The comparison in the if-statement
+			// needs to happen asynchronously as well to get an up-to-date value for `activeCount`.
+			await Promise.resolve();
+
+			if (activeCount < concurrency && queue.size > 0) {
+				queue.dequeue()();
+			}
+		})();
+	};
+
+	const generator = (fn, ...args) => new Promise(resolve => {
+		enqueue(fn, resolve, ...args);
+	});
+
+	Object.defineProperties(generator, {
+		activeCount: {
+			get: () => activeCount
+		},
+		pendingCount: {
+			get: () => queue.size
+		},
+		clearQueue: {
+			value: () => {
+				queue.clear();
+			}
+		}
+	});
+
+	return generator;
 };
 
-module.exports = pForever;
-// TODO: Remove this for the next major release
-module.exports.default = pForever;
+module.exports = pLimit;
 
-module.exports.end = symbolEnd;
-
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/p-queue/dist/index.js":[function(require,module,exports){
+},{"yocto-queue":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/yocto-queue/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/p-queue/dist/index.js":[function(require,module,exports){
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 const EventEmitter = require("eventemitter3");
@@ -11680,116 +9186,7 @@ module.exports.default = pTimeout;
 
 module.exports.TimeoutError = TimeoutError;
 
-},{"p-finally":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/p-finally/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/parseqs/index.js":[function(require,module,exports){
-/**
- * Compiles a querystring
- * Returns string representation of the object
- *
- * @param {Object}
- * @api private
- */
-
-exports.encode = function (obj) {
-  var str = '';
-
-  for (var i in obj) {
-    if (obj.hasOwnProperty(i)) {
-      if (str.length) str += '&';
-      str += encodeURIComponent(i) + '=' + encodeURIComponent(obj[i]);
-    }
-  }
-
-  return str;
-};
-
-/**
- * Parses a simple querystring into an object
- *
- * @param {String} qs
- * @api private
- */
-
-exports.decode = function(qs){
-  var qry = {};
-  var pairs = qs.split('&');
-  for (var i = 0, l = pairs.length; i < l; i++) {
-    var pair = pairs[i].split('=');
-    qry[decodeURIComponent(pair[0])] = decodeURIComponent(pair[1]);
-  }
-  return qry;
-};
-
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/parseuri/index.js":[function(require,module,exports){
-/**
- * Parses an URI
- *
- * @author Steven Levithan <stevenlevithan.com> (MIT license)
- * @api private
- */
-
-var re = /^(?:(?![^:@]+:[^:@\/]*@)(http|https|ws|wss):\/\/)?((?:(([^:@]*)(?::([^:@]*))?)?@)?((?:[a-f0-9]{0,4}:){2,7}[a-f0-9]{0,4}|[^:\/?#]*)(?::(\d*))?)(((\/(?:[^?#](?![^?#\/]*\.[^?#\/.]+(?:[?#]|$)))*\/?)?([^?#\/]*))(?:\?([^#]*))?(?:#(.*))?)/;
-
-var parts = [
-    'source', 'protocol', 'authority', 'userInfo', 'user', 'password', 'host', 'port', 'relative', 'path', 'directory', 'file', 'query', 'anchor'
-];
-
-module.exports = function parseuri(str) {
-    var src = str,
-        b = str.indexOf('['),
-        e = str.indexOf(']');
-
-    if (b != -1 && e != -1) {
-        str = str.substring(0, b) + str.substring(b, e).replace(/:/g, ';') + str.substring(e, str.length);
-    }
-
-    var m = re.exec(str || ''),
-        uri = {},
-        i = 14;
-
-    while (i--) {
-        uri[parts[i]] = m[i] || '';
-    }
-
-    if (b != -1 && e != -1) {
-        uri.source = src;
-        uri.host = uri.host.substring(1, uri.host.length - 1).replace(/;/g, ':');
-        uri.authority = uri.authority.replace('[', '').replace(']', '').replace(/;/g, ':');
-        uri.ipv6uri = true;
-    }
-
-    uri.pathNames = pathNames(uri, uri['path']);
-    uri.queryKey = queryKey(uri, uri['query']);
-
-    return uri;
-};
-
-function pathNames(obj, path) {
-    var regx = /\/{2,9}/g,
-        names = path.replace(regx, "/").split("/");
-
-    if (path.substr(0, 1) == '/' || path.length === 0) {
-        names.splice(0, 1);
-    }
-    if (path.substr(path.length - 1, 1) == '/') {
-        names.splice(names.length - 1, 1);
-    }
-
-    return names;
-}
-
-function queryKey(uri, query) {
-    var data = {};
-
-    query.replace(/(?:^|&)([^&=]*)=?([^&]*)/g, function ($0, $1, $2) {
-        if ($1) {
-            data[$1] = $2;
-        }
-    });
-
-    return data;
-}
-
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/process-nextick-args/index.js":[function(require,module,exports){
+},{"p-finally":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/p-finally/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/process-nextick-args/index.js":[function(require,module,exports){
 (function (process){(function (){
 'use strict';
 
@@ -12901,6 +10298,113 @@ module.exports = typeof queueMicrotask === 'function'
   : cb => (promise || (promise = Promise.resolve()))
     .then(cb)
     .catch(err => setTimeout(() => { throw err }, 0))
+
+},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/quick-format-unescaped/index.js":[function(require,module,exports){
+'use strict'
+function tryStringify (o) {
+  try { return JSON.stringify(o) } catch(e) { return '"[Circular]"' }
+}
+
+module.exports = format 
+
+function format(f, args, opts) {
+  var ss = (opts && opts.stringify) || tryStringify
+  var offset = 1
+  if (f === null) {
+    f = args[0]
+    offset = 0
+  }
+  if (typeof f === 'object' && f !== null) {
+    var len = args.length + offset
+    if (len === 1) return f
+    var objects = new Array(len)
+    objects[0] = ss(f)
+    for (var index = 1; index < len; index++) {
+      objects[index] = ss(args[index])
+    }
+    return objects.join(' ')
+  }
+  var argLen = args.length
+  if (argLen === 0) return f
+  var x = ''
+  var str = ''
+  var a = 1 - offset
+  var lastPos = 0
+  var flen = (f && f.length) || 0
+  for (var i = 0; i < flen;) {
+    if (f.charCodeAt(i) === 37 && i + 1 < flen) {
+      switch (f.charCodeAt(i + 1)) {
+        case 100: // 'd'
+          if (a >= argLen)
+            break
+          if (lastPos < i)
+            str += f.slice(lastPos, i)
+          if (args[a] == null)  break
+          str += Number(args[a])
+          lastPos = i = i + 2
+          break
+        case 79: // 'O'
+        case 111: // 'o'
+        case 106: // 'j'
+          if (a >= argLen)
+            break
+          if (lastPos < i)
+            str += f.slice(lastPos, i)
+          if (args[a] === undefined) break
+          var type = typeof args[a]
+          if (type === 'string') {
+            str += '\'' + args[a] + '\''
+            lastPos = i + 2
+            i++
+            break
+          }
+          if (type === 'function') {
+            str += args[a].name || '<anonymous>'
+            lastPos = i + 2
+            i++
+            break
+          }
+          str += ss(args[a])
+          lastPos = i + 2
+          i++
+          break
+        case 115: // 's'
+          if (a >= argLen)
+            break
+          if (lastPos < i)
+            str += f.slice(lastPos, i)
+          str += String(args[a])
+          lastPos = i + 2
+          i++
+          break
+        case 37: // '%'
+          if (lastPos < i)
+            str += f.slice(lastPos, i)
+          str += '%'
+          lastPos = i + 2
+          i++
+          break
+      }
+      ++a
+    }
+    ++i
+  }
+  if (lastPos === 0)
+    str = f
+  else if (lastPos < flen) {
+    str += f.slice(lastPos)
+  }
+  while (a < argLen) {
+    x = args[a++]
+    if (x === null || (typeof x !== 'object')) {
+      str += ' ' + String(x)
+    } else {
+      str += ' ' + ss(x)
+    }
+  }
+
+  return str
+}
 
 },{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/randombytes/browser.js":[function(require,module,exports){
 (function (process,global){(function (){
@@ -16089,99 +13593,634 @@ exports.PassThrough = require('./lib/_stream_passthrough.js');
 exports.finished = require('./lib/internal/streams/end-of-stream.js');
 exports.pipeline = require('./lib/internal/streams/pipeline.js');
 
-},{"./lib/_stream_duplex.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/readable-stream/lib/_stream_duplex.js","./lib/_stream_passthrough.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/readable-stream/lib/_stream_passthrough.js","./lib/_stream_readable.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/readable-stream/lib/_stream_readable.js","./lib/_stream_transform.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/readable-stream/lib/_stream_transform.js","./lib/_stream_writable.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/readable-stream/lib/_stream_writable.js","./lib/internal/streams/end-of-stream.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/readable-stream/lib/internal/streams/end-of-stream.js","./lib/internal/streams/pipeline.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/readable-stream/lib/internal/streams/pipeline.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/remove-array-items/index.js":[function(require,module,exports){
+},{"./lib/_stream_duplex.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/readable-stream/lib/_stream_duplex.js","./lib/_stream_passthrough.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/readable-stream/lib/_stream_passthrough.js","./lib/_stream_readable.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/readable-stream/lib/_stream_readable.js","./lib/_stream_transform.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/readable-stream/lib/_stream_transform.js","./lib/_stream_writable.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/readable-stream/lib/_stream_writable.js","./lib/internal/streams/end-of-stream.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/readable-stream/lib/internal/streams/end-of-stream.js","./lib/internal/streams/pipeline.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/readable-stream/lib/internal/streams/pipeline.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/reconnecting-websocket/dist/reconnecting-websocket-cjs.js":[function(require,module,exports){
+'use strict';
+
+/*! *****************************************************************************
+Copyright (c) Microsoft Corporation. All rights reserved.
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+this file except in compliance with the License. You may obtain a copy of the
+License at http://www.apache.org/licenses/LICENSE-2.0
+
+THIS CODE IS PROVIDED ON AN *AS IS* BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION ANY IMPLIED
+WARRANTIES OR CONDITIONS OF TITLE, FITNESS FOR A PARTICULAR PURPOSE,
+MERCHANTABLITY OR NON-INFRINGEMENT.
+
+See the Apache Version 2.0 License for specific language governing permissions
+and limitations under the License.
+***************************************************************************** */
+/* global Reflect, Promise */
+
+var extendStatics = function(d, b) {
+    extendStatics = Object.setPrototypeOf ||
+        ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
+        function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
+    return extendStatics(d, b);
+};
+
+function __extends(d, b) {
+    extendStatics(d, b);
+    function __() { this.constructor = d; }
+    d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
+}
+
+function __values(o) {
+    var m = typeof Symbol === "function" && o[Symbol.iterator], i = 0;
+    if (m) return m.call(o);
+    return {
+        next: function () {
+            if (o && i >= o.length) o = void 0;
+            return { value: o && o[i++], done: !o };
+        }
+    };
+}
+
+function __read(o, n) {
+    var m = typeof Symbol === "function" && o[Symbol.iterator];
+    if (!m) return o;
+    var i = m.call(o), r, ar = [], e;
+    try {
+        while ((n === void 0 || n-- > 0) && !(r = i.next()).done) ar.push(r.value);
+    }
+    catch (error) { e = { error: error }; }
+    finally {
+        try {
+            if (r && !r.done && (m = i["return"])) m.call(i);
+        }
+        finally { if (e) throw e.error; }
+    }
+    return ar;
+}
+
+function __spread() {
+    for (var ar = [], i = 0; i < arguments.length; i++)
+        ar = ar.concat(__read(arguments[i]));
+    return ar;
+}
+
+var Event = /** @class */ (function () {
+    function Event(type, target) {
+        this.target = target;
+        this.type = type;
+    }
+    return Event;
+}());
+var ErrorEvent = /** @class */ (function (_super) {
+    __extends(ErrorEvent, _super);
+    function ErrorEvent(error, target) {
+        var _this = _super.call(this, 'error', target) || this;
+        _this.message = error.message;
+        _this.error = error;
+        return _this;
+    }
+    return ErrorEvent;
+}(Event));
+var CloseEvent = /** @class */ (function (_super) {
+    __extends(CloseEvent, _super);
+    function CloseEvent(code, reason, target) {
+        if (code === void 0) { code = 1000; }
+        if (reason === void 0) { reason = ''; }
+        var _this = _super.call(this, 'close', target) || this;
+        _this.wasClean = true;
+        _this.code = code;
+        _this.reason = reason;
+        return _this;
+    }
+    return CloseEvent;
+}(Event));
+
+/*!
+ * Reconnecting WebSocket
+ * by Pedro Ladaria <pedro.ladaria@gmail.com>
+ * https://github.com/pladaria/reconnecting-websocket
+ * License MIT
+ */
+var getGlobalWebSocket = function () {
+    if (typeof WebSocket !== 'undefined') {
+        // @ts-ignore
+        return WebSocket;
+    }
+};
+/**
+ * Returns true if given argument looks like a WebSocket class
+ */
+var isWebSocket = function (w) { return typeof w !== 'undefined' && !!w && w.CLOSING === 2; };
+var DEFAULT = {
+    maxReconnectionDelay: 10000,
+    minReconnectionDelay: 1000 + Math.random() * 4000,
+    minUptime: 5000,
+    reconnectionDelayGrowFactor: 1.3,
+    connectionTimeout: 4000,
+    maxRetries: Infinity,
+    maxEnqueuedMessages: Infinity,
+    startClosed: false,
+    debug: false,
+};
+var ReconnectingWebSocket = /** @class */ (function () {
+    function ReconnectingWebSocket(url, protocols, options) {
+        var _this = this;
+        if (options === void 0) { options = {}; }
+        this._listeners = {
+            error: [],
+            message: [],
+            open: [],
+            close: [],
+        };
+        this._retryCount = -1;
+        this._shouldReconnect = true;
+        this._connectLock = false;
+        this._binaryType = 'blob';
+        this._closeCalled = false;
+        this._messageQueue = [];
+        /**
+         * An event listener to be called when the WebSocket connection's readyState changes to CLOSED
+         */
+        this.onclose = null;
+        /**
+         * An event listener to be called when an error occurs
+         */
+        this.onerror = null;
+        /**
+         * An event listener to be called when a message is received from the server
+         */
+        this.onmessage = null;
+        /**
+         * An event listener to be called when the WebSocket connection's readyState changes to OPEN;
+         * this indicates that the connection is ready to send and receive data
+         */
+        this.onopen = null;
+        this._handleOpen = function (event) {
+            _this._debug('open event');
+            var _a = _this._options.minUptime, minUptime = _a === void 0 ? DEFAULT.minUptime : _a;
+            clearTimeout(_this._connectTimeout);
+            _this._uptimeTimeout = setTimeout(function () { return _this._acceptOpen(); }, minUptime);
+            _this._ws.binaryType = _this._binaryType;
+            // send enqueued messages (messages sent before websocket open event)
+            _this._messageQueue.forEach(function (message) { return _this._ws.send(message); });
+            _this._messageQueue = [];
+            if (_this.onopen) {
+                _this.onopen(event);
+            }
+            _this._listeners.open.forEach(function (listener) { return _this._callEventListener(event, listener); });
+        };
+        this._handleMessage = function (event) {
+            _this._debug('message event');
+            if (_this.onmessage) {
+                _this.onmessage(event);
+            }
+            _this._listeners.message.forEach(function (listener) { return _this._callEventListener(event, listener); });
+        };
+        this._handleError = function (event) {
+            _this._debug('error event', event.message);
+            _this._disconnect(undefined, event.message === 'TIMEOUT' ? 'timeout' : undefined);
+            if (_this.onerror) {
+                _this.onerror(event);
+            }
+            _this._debug('exec error listeners');
+            _this._listeners.error.forEach(function (listener) { return _this._callEventListener(event, listener); });
+            _this._connect();
+        };
+        this._handleClose = function (event) {
+            _this._debug('close event');
+            _this._clearTimeouts();
+            if (_this._shouldReconnect) {
+                _this._connect();
+            }
+            if (_this.onclose) {
+                _this.onclose(event);
+            }
+            _this._listeners.close.forEach(function (listener) { return _this._callEventListener(event, listener); });
+        };
+        this._url = url;
+        this._protocols = protocols;
+        this._options = options;
+        if (this._options.startClosed) {
+            this._shouldReconnect = false;
+        }
+        this._connect();
+    }
+    Object.defineProperty(ReconnectingWebSocket, "CONNECTING", {
+        get: function () {
+            return 0;
+        },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(ReconnectingWebSocket, "OPEN", {
+        get: function () {
+            return 1;
+        },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(ReconnectingWebSocket, "CLOSING", {
+        get: function () {
+            return 2;
+        },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(ReconnectingWebSocket, "CLOSED", {
+        get: function () {
+            return 3;
+        },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(ReconnectingWebSocket.prototype, "CONNECTING", {
+        get: function () {
+            return ReconnectingWebSocket.CONNECTING;
+        },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(ReconnectingWebSocket.prototype, "OPEN", {
+        get: function () {
+            return ReconnectingWebSocket.OPEN;
+        },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(ReconnectingWebSocket.prototype, "CLOSING", {
+        get: function () {
+            return ReconnectingWebSocket.CLOSING;
+        },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(ReconnectingWebSocket.prototype, "CLOSED", {
+        get: function () {
+            return ReconnectingWebSocket.CLOSED;
+        },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(ReconnectingWebSocket.prototype, "binaryType", {
+        get: function () {
+            return this._ws ? this._ws.binaryType : this._binaryType;
+        },
+        set: function (value) {
+            this._binaryType = value;
+            if (this._ws) {
+                this._ws.binaryType = value;
+            }
+        },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(ReconnectingWebSocket.prototype, "retryCount", {
+        /**
+         * Returns the number or connection retries
+         */
+        get: function () {
+            return Math.max(this._retryCount, 0);
+        },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(ReconnectingWebSocket.prototype, "bufferedAmount", {
+        /**
+         * The number of bytes of data that have been queued using calls to send() but not yet
+         * transmitted to the network. This value resets to zero once all queued data has been sent.
+         * This value does not reset to zero when the connection is closed; if you keep calling send(),
+         * this will continue to climb. Read only
+         */
+        get: function () {
+            var bytes = this._messageQueue.reduce(function (acc, message) {
+                if (typeof message === 'string') {
+                    acc += message.length; // not byte size
+                }
+                else if (message instanceof Blob) {
+                    acc += message.size;
+                }
+                else {
+                    acc += message.byteLength;
+                }
+                return acc;
+            }, 0);
+            return bytes + (this._ws ? this._ws.bufferedAmount : 0);
+        },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(ReconnectingWebSocket.prototype, "extensions", {
+        /**
+         * The extensions selected by the server. This is currently only the empty string or a list of
+         * extensions as negotiated by the connection
+         */
+        get: function () {
+            return this._ws ? this._ws.extensions : '';
+        },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(ReconnectingWebSocket.prototype, "protocol", {
+        /**
+         * A string indicating the name of the sub-protocol the server selected;
+         * this will be one of the strings specified in the protocols parameter when creating the
+         * WebSocket object
+         */
+        get: function () {
+            return this._ws ? this._ws.protocol : '';
+        },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(ReconnectingWebSocket.prototype, "readyState", {
+        /**
+         * The current state of the connection; this is one of the Ready state constants
+         */
+        get: function () {
+            if (this._ws) {
+                return this._ws.readyState;
+            }
+            return this._options.startClosed
+                ? ReconnectingWebSocket.CLOSED
+                : ReconnectingWebSocket.CONNECTING;
+        },
+        enumerable: true,
+        configurable: true
+    });
+    Object.defineProperty(ReconnectingWebSocket.prototype, "url", {
+        /**
+         * The URL as resolved by the constructor
+         */
+        get: function () {
+            return this._ws ? this._ws.url : '';
+        },
+        enumerable: true,
+        configurable: true
+    });
+    /**
+     * Closes the WebSocket connection or connection attempt, if any. If the connection is already
+     * CLOSED, this method does nothing
+     */
+    ReconnectingWebSocket.prototype.close = function (code, reason) {
+        if (code === void 0) { code = 1000; }
+        this._closeCalled = true;
+        this._shouldReconnect = false;
+        this._clearTimeouts();
+        if (!this._ws) {
+            this._debug('close enqueued: no ws instance');
+            return;
+        }
+        if (this._ws.readyState === this.CLOSED) {
+            this._debug('close: already closed');
+            return;
+        }
+        this._ws.close(code, reason);
+    };
+    /**
+     * Closes the WebSocket connection or connection attempt and connects again.
+     * Resets retry counter;
+     */
+    ReconnectingWebSocket.prototype.reconnect = function (code, reason) {
+        this._shouldReconnect = true;
+        this._closeCalled = false;
+        this._retryCount = -1;
+        if (!this._ws || this._ws.readyState === this.CLOSED) {
+            this._connect();
+        }
+        else {
+            this._disconnect(code, reason);
+            this._connect();
+        }
+    };
+    /**
+     * Enqueue specified data to be transmitted to the server over the WebSocket connection
+     */
+    ReconnectingWebSocket.prototype.send = function (data) {
+        if (this._ws && this._ws.readyState === this.OPEN) {
+            this._debug('send', data);
+            this._ws.send(data);
+        }
+        else {
+            var _a = this._options.maxEnqueuedMessages, maxEnqueuedMessages = _a === void 0 ? DEFAULT.maxEnqueuedMessages : _a;
+            if (this._messageQueue.length < maxEnqueuedMessages) {
+                this._debug('enqueue', data);
+                this._messageQueue.push(data);
+            }
+        }
+    };
+    /**
+     * Register an event handler of a specific event type
+     */
+    ReconnectingWebSocket.prototype.addEventListener = function (type, listener) {
+        if (this._listeners[type]) {
+            // @ts-ignore
+            this._listeners[type].push(listener);
+        }
+    };
+    ReconnectingWebSocket.prototype.dispatchEvent = function (event) {
+        var e_1, _a;
+        var listeners = this._listeners[event.type];
+        if (listeners) {
+            try {
+                for (var listeners_1 = __values(listeners), listeners_1_1 = listeners_1.next(); !listeners_1_1.done; listeners_1_1 = listeners_1.next()) {
+                    var listener = listeners_1_1.value;
+                    this._callEventListener(event, listener);
+                }
+            }
+            catch (e_1_1) { e_1 = { error: e_1_1 }; }
+            finally {
+                try {
+                    if (listeners_1_1 && !listeners_1_1.done && (_a = listeners_1.return)) _a.call(listeners_1);
+                }
+                finally { if (e_1) throw e_1.error; }
+            }
+        }
+        return true;
+    };
+    /**
+     * Removes an event listener
+     */
+    ReconnectingWebSocket.prototype.removeEventListener = function (type, listener) {
+        if (this._listeners[type]) {
+            // @ts-ignore
+            this._listeners[type] = this._listeners[type].filter(function (l) { return l !== listener; });
+        }
+    };
+    ReconnectingWebSocket.prototype._debug = function () {
+        var args = [];
+        for (var _i = 0; _i < arguments.length; _i++) {
+            args[_i] = arguments[_i];
+        }
+        if (this._options.debug) {
+            // not using spread because compiled version uses Symbols
+            // tslint:disable-next-line
+            console.log.apply(console, __spread(['RWS>'], args));
+        }
+    };
+    ReconnectingWebSocket.prototype._getNextDelay = function () {
+        var _a = this._options, _b = _a.reconnectionDelayGrowFactor, reconnectionDelayGrowFactor = _b === void 0 ? DEFAULT.reconnectionDelayGrowFactor : _b, _c = _a.minReconnectionDelay, minReconnectionDelay = _c === void 0 ? DEFAULT.minReconnectionDelay : _c, _d = _a.maxReconnectionDelay, maxReconnectionDelay = _d === void 0 ? DEFAULT.maxReconnectionDelay : _d;
+        var delay = 0;
+        if (this._retryCount > 0) {
+            delay =
+                minReconnectionDelay * Math.pow(reconnectionDelayGrowFactor, this._retryCount - 1);
+            if (delay > maxReconnectionDelay) {
+                delay = maxReconnectionDelay;
+            }
+        }
+        this._debug('next delay', delay);
+        return delay;
+    };
+    ReconnectingWebSocket.prototype._wait = function () {
+        var _this = this;
+        return new Promise(function (resolve) {
+            setTimeout(resolve, _this._getNextDelay());
+        });
+    };
+    ReconnectingWebSocket.prototype._getNextUrl = function (urlProvider) {
+        if (typeof urlProvider === 'string') {
+            return Promise.resolve(urlProvider);
+        }
+        if (typeof urlProvider === 'function') {
+            var url = urlProvider();
+            if (typeof url === 'string') {
+                return Promise.resolve(url);
+            }
+            if (!!url.then) {
+                return url;
+            }
+        }
+        throw Error('Invalid URL');
+    };
+    ReconnectingWebSocket.prototype._connect = function () {
+        var _this = this;
+        if (this._connectLock || !this._shouldReconnect) {
+            return;
+        }
+        this._connectLock = true;
+        var _a = this._options, _b = _a.maxRetries, maxRetries = _b === void 0 ? DEFAULT.maxRetries : _b, _c = _a.connectionTimeout, connectionTimeout = _c === void 0 ? DEFAULT.connectionTimeout : _c, _d = _a.WebSocket, WebSocket = _d === void 0 ? getGlobalWebSocket() : _d;
+        if (this._retryCount >= maxRetries) {
+            this._debug('max retries reached', this._retryCount, '>=', maxRetries);
+            return;
+        }
+        this._retryCount++;
+        this._debug('connect', this._retryCount);
+        this._removeListeners();
+        if (!isWebSocket(WebSocket)) {
+            throw Error('No valid WebSocket class provided');
+        }
+        this._wait()
+            .then(function () { return _this._getNextUrl(_this._url); })
+            .then(function (url) {
+            // close could be called before creating the ws
+            if (_this._closeCalled) {
+                return;
+            }
+            _this._debug('connect', { url: url, protocols: _this._protocols });
+            _this._ws = _this._protocols
+                ? new WebSocket(url, _this._protocols)
+                : new WebSocket(url);
+            _this._ws.binaryType = _this._binaryType;
+            _this._connectLock = false;
+            _this._addListeners();
+            _this._connectTimeout = setTimeout(function () { return _this._handleTimeout(); }, connectionTimeout);
+        });
+    };
+    ReconnectingWebSocket.prototype._handleTimeout = function () {
+        this._debug('timeout event');
+        this._handleError(new ErrorEvent(Error('TIMEOUT'), this));
+    };
+    ReconnectingWebSocket.prototype._disconnect = function (code, reason) {
+        if (code === void 0) { code = 1000; }
+        this._clearTimeouts();
+        if (!this._ws) {
+            return;
+        }
+        this._removeListeners();
+        try {
+            this._ws.close(code, reason);
+            this._handleClose(new CloseEvent(code, reason, this));
+        }
+        catch (error) {
+            // ignore
+        }
+    };
+    ReconnectingWebSocket.prototype._acceptOpen = function () {
+        this._debug('accept open');
+        this._retryCount = 0;
+    };
+    ReconnectingWebSocket.prototype._callEventListener = function (event, listener) {
+        if ('handleEvent' in listener) {
+            // @ts-ignore
+            listener.handleEvent(event);
+        }
+        else {
+            // @ts-ignore
+            listener(event);
+        }
+    };
+    ReconnectingWebSocket.prototype._removeListeners = function () {
+        if (!this._ws) {
+            return;
+        }
+        this._debug('removeListeners');
+        this._ws.removeEventListener('open', this._handleOpen);
+        this._ws.removeEventListener('close', this._handleClose);
+        this._ws.removeEventListener('message', this._handleMessage);
+        // @ts-ignore
+        this._ws.removeEventListener('error', this._handleError);
+    };
+    ReconnectingWebSocket.prototype._addListeners = function () {
+        if (!this._ws) {
+            return;
+        }
+        this._debug('addListeners');
+        this._ws.addEventListener('open', this._handleOpen);
+        this._ws.addEventListener('close', this._handleClose);
+        this._ws.addEventListener('message', this._handleMessage);
+        // @ts-ignore
+        this._ws.addEventListener('error', this._handleError);
+    };
+    ReconnectingWebSocket.prototype._clearTimeouts = function () {
+        clearTimeout(this._connectTimeout);
+        clearTimeout(this._uptimeTimeout);
+    };
+    return ReconnectingWebSocket;
+}());
+
+module.exports = ReconnectingWebSocket;
+
+},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/reusify/reusify.js":[function(require,module,exports){
 'use strict'
 
-/**
- * Remove a range of items from an array
- *
- * @function removeItems
- * @param {Array<*>} arr The target array
- * @param {number} startIdx The index to begin removing from (inclusive)
- * @param {number} removeCount How many items to remove
- */
-module.exports = function removeItems (arr, startIdx, removeCount) {
-  var i, length = arr.length
+function reusify (Constructor) {
+  var head = new Constructor()
+  var tail = head
 
-  if (startIdx >= length || removeCount === 0) {
-    return
+  function get () {
+    var current = head
+
+    if (current.next) {
+      head = current.next
+    } else {
+      head = new Constructor()
+      tail = head
+    }
+
+    current.next = null
+
+    return current
   }
 
-  removeCount = (startIdx + removeCount > length ? length - startIdx : removeCount)
-
-  var len = length - removeCount
-
-  for (i = startIdx; i < len; ++i) {
-    arr[i] = arr[i + removeCount]
+  function release (obj) {
+    tail.next = obj
+    tail = obj
   }
 
-  arr.length = len
+  return {
+    get: get,
+    release: release
+  }
 }
+
+module.exports = reusify
 
 },{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/safe-buffer/index.js":[function(require,module,exports){
-/* eslint-disable node/no-deprecated-api */
-var buffer = require('buffer')
-var Buffer = buffer.Buffer
-
-// alternative to using Object.keys for old browsers
-function copyProps (src, dst) {
-  for (var key in src) {
-    dst[key] = src[key]
-  }
-}
-if (Buffer.from && Buffer.alloc && Buffer.allocUnsafe && Buffer.allocUnsafeSlow) {
-  module.exports = buffer
-} else {
-  // Copy properties from require('buffer')
-  copyProps(buffer, exports)
-  exports.Buffer = SafeBuffer
-}
-
-function SafeBuffer (arg, encodingOrOffset, length) {
-  return Buffer(arg, encodingOrOffset, length)
-}
-
-// Copy static methods from Buffer
-copyProps(Buffer, SafeBuffer)
-
-SafeBuffer.from = function (arg, encodingOrOffset, length) {
-  if (typeof arg === 'number') {
-    throw new TypeError('Argument must not be a number')
-  }
-  return Buffer(arg, encodingOrOffset, length)
-}
-
-SafeBuffer.alloc = function (size, fill, encoding) {
-  if (typeof size !== 'number') {
-    throw new TypeError('Argument must be a number')
-  }
-  var buf = Buffer(size)
-  if (fill !== undefined) {
-    if (typeof encoding === 'string') {
-      buf.fill(fill, encoding)
-    } else {
-      buf.fill(fill)
-    }
-  } else {
-    buf.fill(0)
-  }
-  return buf
-}
-
-SafeBuffer.allocUnsafe = function (size) {
-  if (typeof size !== 'number') {
-    throw new TypeError('Argument must be a number')
-  }
-  return Buffer(size)
-}
-
-SafeBuffer.allocUnsafeSlow = function (size) {
-  if (typeof size !== 'number') {
-    throw new TypeError('Argument must be a number')
-  }
-  return buffer.SlowBuffer(size)
-}
-
+arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/safe-buffer/index.js"][0].apply(exports,arguments)
 },{"buffer":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browserify/node_modules/buffer/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/signed-varint/index.js":[function(require,module,exports){
 var varint = require('varint')
 exports.encode = function encode (v, b, o) {
@@ -17226,2052 +15265,1310 @@ Peer.channelConfig = {}
 
 module.exports = Peer
 
-},{"buffer":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browserify/node_modules/buffer/index.js","debug":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/debug/src/browser.js","err-code":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/err-code/index.js","get-browser-rtc":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/get-browser-rtc/index.js","queue-microtask":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/queue-microtask/index.js","randombytes":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/randombytes/browser.js","readable-stream":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/readable-stream/readable-browser.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/simple-signal-client/src/index.js":[function(require,module,exports){
-const cuid = require('cuid')
-const inherits = require('inherits')
-const EventEmitter = require('nanobus')
-const SimplePeer = require('simple-peer')
-
-inherits(SimpleSignalClient, EventEmitter)
-
-const ERR_CONNECTION_TIMEOUT = 'ERR_CONNECTION_TIMEOUT'
-const ERR_PREMATURE_CLOSE = 'ERR_PREMATURE_CLOSE'
-
-/**
- * SimpleSignalClient
- *
- * @param {Socket} socket Socket
- * @param {Object} options
- * @param {number} [options.connectionTimeout=10000] Defines a timeout for establishing a connection.
- */
-function SimpleSignalClient (socket, options = {}) {
-  if (!(this instanceof SimpleSignalClient)) return new SimpleSignalClient(socket)
-
-  EventEmitter.call(this)
-
-  const { connectionTimeout = 10 * 1000 } = options
-
-  this.id = null
-  this.socket = socket
-  this._connectionTimeout = connectionTimeout
-
-  this._peers = {}
-  this._sessionQueues = {}
-  this._timers = new Map()
-
-  this.socket.on('simple-signal[discover]', this._onDiscover.bind(this))
-  this.socket.on('simple-signal[offer]', this._onOffer.bind(this))
-  this.socket.on('simple-signal[signal]', this._onSignal.bind(this))
-  this.socket.on('simple-signal[reject]', this._onReject.bind(this))
-}
-
-SimpleSignalClient.prototype._onDiscover = function (data) {
-  this.id = data.id
-  this.emit('discover', data.discoveryData)
-}
-
-SimpleSignalClient.prototype._onOffer = function ({ initiator, metadata, sessionId, signal }) {
-  this._sessionQueues[sessionId] = [signal]
-
-  const request = { initiator, metadata, sessionId }
-  request.accept = this._accept.bind(this, request)
-  request.reject = this._reject.bind(this, request)
-
-  this.emit('request', request)
-}
-
-SimpleSignalClient.prototype._accept = function (request, metadata = {}, peerOptions = {}) {
-  peerOptions.initiator = false
-  const peer = this._peers[request.sessionId] = new SimplePeer(peerOptions)
-
-  peer.on('signal', (signal) => {
-    this.socket.emit('simple-signal[signal]', {
-      signal,
-      metadata,
-      sessionId: request.sessionId,
-      target: request.initiator
-    })
-  })
-
-  peer.once('close', () => {
-    this._closePeer(request.sessionId)
-  })
-
-  // clear signaling queue
-  this._sessionQueues[request.sessionId].forEach(signal => {
-    peer.signal(signal)
-  })
-  delete this._sessionQueues[request.sessionId]
-
-  return new Promise((resolve, reject) => {
-    this._onSafeConnect(peer, () => {
-      this._clearTimer(request.sessionId)
-
-      resolve({ peer, metadata: request.metadata })
-    })
-
-    peer.once('close', () => {
-      reject({ metadata: { code: ERR_PREMATURE_CLOSE } })
-    })
-
-    this._startTimer(request.sessionId, metadata => {
-      reject({ metadata })
-      this._closePeer(request.sessionId)
-    })
-  })
-}
-
-SimpleSignalClient.prototype._reject = function (request, metadata = {}) {
-  // clear signaling queue
-  delete this._sessionQueues[request.sessionId]
-  this._clearTimer(request.sessionId)
-  this.socket.emit('simple-signal[reject]', {
-    metadata,
-    sessionId: request.sessionId,
-    target: request.initiator
-  })
-}
-
-SimpleSignalClient.prototype._onReject = function ({ sessionId, metadata }) {
-  const peer = this._peers[sessionId]
-  if (peer) peer.reject(metadata)
-}
-
-SimpleSignalClient.prototype._onSignal = function ({ sessionId, signal, metadata }) {
-  const peer = this._peers[sessionId]
-  if (peer) {
-    peer.signal(signal)
-    if (metadata !== undefined && peer.resolveMetadata) peer.resolveMetadata(metadata)
-  } else {
-    this._sessionQueues[sessionId] = this._sessionQueues[sessionId] || []
-    this._sessionQueues[sessionId].push(signal)
-  }
-}
-
-SimpleSignalClient.prototype.connect = function (target, metadata = {}, peerOptions = {}) {
-  if (!this.id) throw new Error('Must complete discovery first.')
-
-  peerOptions.initiator = true
-
-  const sessionId = cuid() // TODO: Use crypto
-  var firstOffer = true
-  const peer = this._peers[sessionId] = new SimplePeer(peerOptions)
-
-  peer.once('close', () => {
-    this._closePeer(sessionId)
-  })
-
-  peer.on('signal', (signal) => {
-    const messageType = signal.sdp && firstOffer ? 'simple-signal[offer]' : 'simple-signal[signal]'
-    if (signal.sdp) firstOffer = false
-    this.socket.emit(messageType, {
-      signal, metadata, sessionId, target
-    })
-  })
-
-  return new Promise((resolve, reject) => {
-    peer.resolveMetadata = (metadata) => {
-      peer.resolveMetadata = null
-      this._onSafeConnect(peer, () => {
-        this._clearTimer(sessionId)
-
-        resolve({ peer, metadata })
-      })
-    }
-
-    peer.reject = (metadata) => {
-      reject({ metadata }) // eslint-disable-line
-      this._closePeer(sessionId)
-    }
-
-    peer.once('close', () => {
-      reject({ metadata: { code: ERR_PREMATURE_CLOSE } })
-    })
-
-    this._startTimer(sessionId, metadata => peer.reject(metadata))
-  })
-}
-
-SimpleSignalClient.prototype._onSafeConnect = function (peer, callback) {
-  // simple-signal caches stream and track events so they always come AFTER connect
-  const cachedEvents = []
-  function streamHandler (stream) {
-    cachedEvents.push({ name: 'stream', args: [stream] })
-  }
-  function trackHandler (track, stream) {
-    cachedEvents.push({ name: 'track', args: [track, stream] })
-  }
-  peer.on('stream', streamHandler)
-  peer.on('track', trackHandler)
-  peer.once('connect', () => {
-    setTimeout(() => {
-      peer.emit('connect') // expose missed 'connect' event to application
-      setTimeout(() => {
-        cachedEvents.forEach(({ name, args }) => { // replay any missed stream/track events
-          peer.emit(name, ...args)
-        })
-      }, 0)
-    }, 0)
-    peer.removeListener('stream', streamHandler)
-    peer.removeListener('track', trackHandler)
-    callback(peer)
-  })
-}
-
-SimpleSignalClient.prototype._closePeer = function (sessionId) {
-  const peer = this._peers[sessionId]
-  this._clearTimer(sessionId)
-  delete this._peers[sessionId]
-  if (peer) peer.destroy()
-}
-
-SimpleSignalClient.prototype._startTimer = function (sessionId, cb) {
-  if (this._connectionTimeout !== -1) {
-    const timer = setTimeout(() => {
-      this._clearTimer(sessionId)
-      // metadata err
-      cb({ code: ERR_CONNECTION_TIMEOUT })
-    }, this._connectionTimeout)
-    this._timers.set(sessionId, timer)
-  }
-}
-
-SimpleSignalClient.prototype._clearTimer = function (sessionId) {
-  if (this._timers.has(sessionId)) {
-    clearTimeout(this._timers.get(sessionId))
-    this._timers.delete(sessionId)
-  }
-}
-
-SimpleSignalClient.prototype.discover = function (discoveryData = {}) {
-  this.socket.emit('simple-signal[discover]', discoveryData)
-}
-
-SimpleSignalClient.prototype.peers = function () {
-  return Object.values(this._peers)
-}
-
-SimpleSignalClient.prototype.destroy = function () {
-  this.socket.close()
-  this.peers().forEach(peer => peer.destroy())
-
-  this.id = null
-  this.socket = null
-  this._peers = null
-  this._sessionQueues = null
-}
-
-module.exports = SimpleSignalClient
-module.exports.SimplePeer = SimplePeer
-module.exports.ERR_CONNECTION_TIMEOUT = ERR_CONNECTION_TIMEOUT
-module.exports.ERR_PREMATURE_CLOSE = ERR_PREMATURE_CLOSE
-
-},{"cuid":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/cuid/index.js","inherits":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/inherits/inherits_browser.js","nanobus":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanobus/index.js","simple-peer":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/simple-peer/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/lib/index.js":[function(require,module,exports){
-
-/**
- * Module dependencies.
- */
-
-var url = require('./url');
-var parser = require('socket.io-parser');
-var Manager = require('./manager');
-var debug = require('debug')('socket.io-client');
-
-/**
- * Module exports.
- */
-
-module.exports = exports = lookup;
-
-/**
- * Managers cache.
- */
-
-var cache = exports.managers = {};
-
-/**
- * Looks up an existing `Manager` for multiplexing.
- * If the user summons:
- *
- *   `io('http://localhost/a');`
- *   `io('http://localhost/b');`
- *
- * We reuse the existing instance based on same scheme/port/host,
- * and we initialize sockets for each namespace.
- *
- * @api public
- */
-
-function lookup (uri, opts) {
-  if (typeof uri === 'object') {
-    opts = uri;
-    uri = undefined;
-  }
-
-  opts = opts || {};
-
-  var parsed = url(uri);
-  var source = parsed.source;
-  var id = parsed.id;
-  var path = parsed.path;
-  var sameNamespace = cache[id] && path in cache[id].nsps;
-  var newConnection = opts.forceNew || opts['force new connection'] ||
-                      false === opts.multiplex || sameNamespace;
-
-  var io;
-
-  if (newConnection) {
-    debug('ignoring socket cache for %s', source);
-    io = Manager(source, opts);
-  } else {
-    if (!cache[id]) {
-      debug('new io instance for %s', source);
-      cache[id] = Manager(source, opts);
-    }
-    io = cache[id];
-  }
-  if (parsed.query && !opts.query) {
-    opts.query = parsed.query;
-  }
-  return io.socket(parsed.path, opts);
-}
-
-/**
- * Protocol version.
- *
- * @api public
- */
-
-exports.protocol = parser.protocol;
-
-/**
- * `connect`.
- *
- * @param {String} uri
- * @api public
- */
-
-exports.connect = lookup;
-
-/**
- * Expose constructors for standalone build.
- *
- * @api public
- */
-
-exports.Manager = require('./manager');
-exports.Socket = require('./socket');
-
-},{"./manager":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/lib/manager.js","./socket":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/lib/socket.js","./url":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/lib/url.js","debug":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/node_modules/debug/src/browser.js","socket.io-parser":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/node_modules/socket.io-parser/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/lib/manager.js":[function(require,module,exports){
-
-/**
- * Module dependencies.
- */
-
-var eio = require('engine.io-client');
-var Socket = require('./socket');
-var Emitter = require('component-emitter');
-var parser = require('socket.io-parser');
-var on = require('./on');
-var bind = require('component-bind');
-var debug = require('debug')('socket.io-client:manager');
-var indexOf = require('indexof');
-var Backoff = require('backo2');
-
-/**
- * IE6+ hasOwnProperty
- */
-
-var has = Object.prototype.hasOwnProperty;
-
-/**
- * Module exports
- */
-
-module.exports = Manager;
-
-/**
- * `Manager` constructor.
- *
- * @param {String} engine instance or engine uri/opts
- * @param {Object} options
- * @api public
- */
-
-function Manager (uri, opts) {
-  if (!(this instanceof Manager)) return new Manager(uri, opts);
-  if (uri && ('object' === typeof uri)) {
-    opts = uri;
-    uri = undefined;
-  }
-  opts = opts || {};
-
-  opts.path = opts.path || '/socket.io';
-  this.nsps = {};
-  this.subs = [];
-  this.opts = opts;
-  this.reconnection(opts.reconnection !== false);
-  this.reconnectionAttempts(opts.reconnectionAttempts || Infinity);
-  this.reconnectionDelay(opts.reconnectionDelay || 1000);
-  this.reconnectionDelayMax(opts.reconnectionDelayMax || 5000);
-  this.randomizationFactor(opts.randomizationFactor || 0.5);
-  this.backoff = new Backoff({
-    min: this.reconnectionDelay(),
-    max: this.reconnectionDelayMax(),
-    jitter: this.randomizationFactor()
-  });
-  this.timeout(null == opts.timeout ? 20000 : opts.timeout);
-  this.readyState = 'closed';
-  this.uri = uri;
-  this.connecting = [];
-  this.lastPing = null;
-  this.encoding = false;
-  this.packetBuffer = [];
-  var _parser = opts.parser || parser;
-  this.encoder = new _parser.Encoder();
-  this.decoder = new _parser.Decoder();
-  this.autoConnect = opts.autoConnect !== false;
-  if (this.autoConnect) this.open();
-}
-
-/**
- * Propagate given event to sockets and emit on `this`
- *
- * @api private
- */
-
-Manager.prototype.emitAll = function () {
-  this.emit.apply(this, arguments);
-  for (var nsp in this.nsps) {
-    if (has.call(this.nsps, nsp)) {
-      this.nsps[nsp].emit.apply(this.nsps[nsp], arguments);
-    }
-  }
-};
-
-/**
- * Update `socket.id` of all sockets
- *
- * @api private
- */
-
-Manager.prototype.updateSocketIds = function () {
-  for (var nsp in this.nsps) {
-    if (has.call(this.nsps, nsp)) {
-      this.nsps[nsp].id = this.generateId(nsp);
-    }
-  }
-};
-
-/**
- * generate `socket.id` for the given `nsp`
- *
- * @param {String} nsp
- * @return {String}
- * @api private
- */
-
-Manager.prototype.generateId = function (nsp) {
-  return (nsp === '/' ? '' : (nsp + '#')) + this.engine.id;
-};
-
-/**
- * Mix in `Emitter`.
- */
-
-Emitter(Manager.prototype);
-
-/**
- * Sets the `reconnection` config.
- *
- * @param {Boolean} true/false if it should automatically reconnect
- * @return {Manager} self or value
- * @api public
- */
-
-Manager.prototype.reconnection = function (v) {
-  if (!arguments.length) return this._reconnection;
-  this._reconnection = !!v;
-  return this;
-};
-
-/**
- * Sets the reconnection attempts config.
- *
- * @param {Number} max reconnection attempts before giving up
- * @return {Manager} self or value
- * @api public
- */
-
-Manager.prototype.reconnectionAttempts = function (v) {
-  if (!arguments.length) return this._reconnectionAttempts;
-  this._reconnectionAttempts = v;
-  return this;
-};
-
-/**
- * Sets the delay between reconnections.
- *
- * @param {Number} delay
- * @return {Manager} self or value
- * @api public
- */
-
-Manager.prototype.reconnectionDelay = function (v) {
-  if (!arguments.length) return this._reconnectionDelay;
-  this._reconnectionDelay = v;
-  this.backoff && this.backoff.setMin(v);
-  return this;
-};
-
-Manager.prototype.randomizationFactor = function (v) {
-  if (!arguments.length) return this._randomizationFactor;
-  this._randomizationFactor = v;
-  this.backoff && this.backoff.setJitter(v);
-  return this;
-};
-
-/**
- * Sets the maximum delay between reconnections.
- *
- * @param {Number} delay
- * @return {Manager} self or value
- * @api public
- */
-
-Manager.prototype.reconnectionDelayMax = function (v) {
-  if (!arguments.length) return this._reconnectionDelayMax;
-  this._reconnectionDelayMax = v;
-  this.backoff && this.backoff.setMax(v);
-  return this;
-};
-
-/**
- * Sets the connection timeout. `false` to disable
- *
- * @return {Manager} self or value
- * @api public
- */
-
-Manager.prototype.timeout = function (v) {
-  if (!arguments.length) return this._timeout;
-  this._timeout = v;
-  return this;
-};
-
-/**
- * Starts trying to reconnect if reconnection is enabled and we have not
- * started reconnecting yet
- *
- * @api private
- */
-
-Manager.prototype.maybeReconnectOnOpen = function () {
-  // Only try to reconnect if it's the first time we're connecting
-  if (!this.reconnecting && this._reconnection && this.backoff.attempts === 0) {
-    // keeps reconnection from firing twice for the same reconnection loop
-    this.reconnect();
-  }
-};
-
-/**
- * Sets the current transport `socket`.
- *
- * @param {Function} optional, callback
- * @return {Manager} self
- * @api public
- */
-
-Manager.prototype.open =
-Manager.prototype.connect = function (fn, opts) {
-  debug('readyState %s', this.readyState);
-  if (~this.readyState.indexOf('open')) return this;
-
-  debug('opening %s', this.uri);
-  this.engine = eio(this.uri, this.opts);
-  var socket = this.engine;
-  var self = this;
-  this.readyState = 'opening';
-  this.skipReconnect = false;
-
-  // emit `open`
-  var openSub = on(socket, 'open', function () {
-    self.onopen();
-    fn && fn();
-  });
-
-  // emit `connect_error`
-  var errorSub = on(socket, 'error', function (data) {
-    debug('connect_error');
-    self.cleanup();
-    self.readyState = 'closed';
-    self.emitAll('connect_error', data);
-    if (fn) {
-      var err = new Error('Connection error');
-      err.data = data;
-      fn(err);
-    } else {
-      // Only do this if there is no fn to handle the error
-      self.maybeReconnectOnOpen();
-    }
-  });
-
-  // emit `connect_timeout`
-  if (false !== this._timeout) {
-    var timeout = this._timeout;
-    debug('connect attempt will timeout after %d', timeout);
-
-    if (timeout === 0) {
-      openSub.destroy(); // prevents a race condition with the 'open' event
-    }
-
-    // set timer
-    var timer = setTimeout(function () {
-      debug('connect attempt timed out after %d', timeout);
-      openSub.destroy();
-      socket.close();
-      socket.emit('error', 'timeout');
-      self.emitAll('connect_timeout', timeout);
-    }, timeout);
-
-    this.subs.push({
-      destroy: function () {
-        clearTimeout(timer);
-      }
-    });
-  }
-
-  this.subs.push(openSub);
-  this.subs.push(errorSub);
-
-  return this;
-};
-
-/**
- * Called upon transport open.
- *
- * @api private
- */
-
-Manager.prototype.onopen = function () {
-  debug('open');
-
-  // clear old subs
-  this.cleanup();
-
-  // mark as open
-  this.readyState = 'open';
-  this.emit('open');
-
-  // add new subs
-  var socket = this.engine;
-  this.subs.push(on(socket, 'data', bind(this, 'ondata')));
-  this.subs.push(on(socket, 'ping', bind(this, 'onping')));
-  this.subs.push(on(socket, 'pong', bind(this, 'onpong')));
-  this.subs.push(on(socket, 'error', bind(this, 'onerror')));
-  this.subs.push(on(socket, 'close', bind(this, 'onclose')));
-  this.subs.push(on(this.decoder, 'decoded', bind(this, 'ondecoded')));
-};
-
-/**
- * Called upon a ping.
- *
- * @api private
- */
-
-Manager.prototype.onping = function () {
-  this.lastPing = new Date();
-  this.emitAll('ping');
-};
-
-/**
- * Called upon a packet.
- *
- * @api private
- */
-
-Manager.prototype.onpong = function () {
-  this.emitAll('pong', new Date() - this.lastPing);
-};
-
-/**
- * Called with data.
- *
- * @api private
- */
-
-Manager.prototype.ondata = function (data) {
-  this.decoder.add(data);
-};
-
-/**
- * Called when parser fully decodes a packet.
- *
- * @api private
- */
-
-Manager.prototype.ondecoded = function (packet) {
-  this.emit('packet', packet);
-};
-
-/**
- * Called upon socket error.
- *
- * @api private
- */
-
-Manager.prototype.onerror = function (err) {
-  debug('error', err);
-  this.emitAll('error', err);
-};
-
-/**
- * Creates a new socket for the given `nsp`.
- *
- * @return {Socket}
- * @api public
- */
-
-Manager.prototype.socket = function (nsp, opts) {
-  var socket = this.nsps[nsp];
-  if (!socket) {
-    socket = new Socket(this, nsp, opts);
-    this.nsps[nsp] = socket;
-    var self = this;
-    socket.on('connecting', onConnecting);
-    socket.on('connect', function () {
-      socket.id = self.generateId(nsp);
-    });
-
-    if (this.autoConnect) {
-      // manually call here since connecting event is fired before listening
-      onConnecting();
-    }
-  }
-
-  function onConnecting () {
-    if (!~indexOf(self.connecting, socket)) {
-      self.connecting.push(socket);
-    }
-  }
-
-  return socket;
-};
-
-/**
- * Called upon a socket close.
- *
- * @param {Socket} socket
- */
-
-Manager.prototype.destroy = function (socket) {
-  var index = indexOf(this.connecting, socket);
-  if (~index) this.connecting.splice(index, 1);
-  if (this.connecting.length) return;
-
-  this.close();
-};
-
-/**
- * Writes a packet.
- *
- * @param {Object} packet
- * @api private
- */
-
-Manager.prototype.packet = function (packet) {
-  debug('writing packet %j', packet);
-  var self = this;
-  if (packet.query && packet.type === 0) packet.nsp += '?' + packet.query;
-
-  if (!self.encoding) {
-    // encode, then write to engine with result
-    self.encoding = true;
-    this.encoder.encode(packet, function (encodedPackets) {
-      for (var i = 0; i < encodedPackets.length; i++) {
-        self.engine.write(encodedPackets[i], packet.options);
-      }
-      self.encoding = false;
-      self.processPacketQueue();
-    });
-  } else { // add packet to the queue
-    self.packetBuffer.push(packet);
-  }
-};
-
-/**
- * If packet buffer is non-empty, begins encoding the
- * next packet in line.
- *
- * @api private
- */
-
-Manager.prototype.processPacketQueue = function () {
-  if (this.packetBuffer.length > 0 && !this.encoding) {
-    var pack = this.packetBuffer.shift();
-    this.packet(pack);
-  }
-};
-
-/**
- * Clean up transport subscriptions and packet buffer.
- *
- * @api private
- */
-
-Manager.prototype.cleanup = function () {
-  debug('cleanup');
-
-  var subsLength = this.subs.length;
-  for (var i = 0; i < subsLength; i++) {
-    var sub = this.subs.shift();
-    sub.destroy();
-  }
-
-  this.packetBuffer = [];
-  this.encoding = false;
-  this.lastPing = null;
-
-  this.decoder.destroy();
-};
-
-/**
- * Close the current socket.
- *
- * @api private
- */
-
-Manager.prototype.close =
-Manager.prototype.disconnect = function () {
-  debug('disconnect');
-  this.skipReconnect = true;
-  this.reconnecting = false;
-  if ('opening' === this.readyState) {
-    // `onclose` will not fire because
-    // an open event never happened
-    this.cleanup();
-  }
-  this.backoff.reset();
-  this.readyState = 'closed';
-  if (this.engine) this.engine.close();
-};
-
-/**
- * Called upon engine close.
- *
- * @api private
- */
-
-Manager.prototype.onclose = function (reason) {
-  debug('onclose');
-
-  this.cleanup();
-  this.backoff.reset();
-  this.readyState = 'closed';
-  this.emit('close', reason);
-
-  if (this._reconnection && !this.skipReconnect) {
-    this.reconnect();
-  }
-};
-
-/**
- * Attempt a reconnection.
- *
- * @api private
- */
-
-Manager.prototype.reconnect = function () {
-  if (this.reconnecting || this.skipReconnect) return this;
-
-  var self = this;
-
-  if (this.backoff.attempts >= this._reconnectionAttempts) {
-    debug('reconnect failed');
-    this.backoff.reset();
-    this.emitAll('reconnect_failed');
-    this.reconnecting = false;
-  } else {
-    var delay = this.backoff.duration();
-    debug('will wait %dms before reconnect attempt', delay);
-
-    this.reconnecting = true;
-    var timer = setTimeout(function () {
-      if (self.skipReconnect) return;
-
-      debug('attempting reconnect');
-      self.emitAll('reconnect_attempt', self.backoff.attempts);
-      self.emitAll('reconnecting', self.backoff.attempts);
-
-      // check again for the case socket closed in above events
-      if (self.skipReconnect) return;
-
-      self.open(function (err) {
-        if (err) {
-          debug('reconnect attempt error');
-          self.reconnecting = false;
-          self.reconnect();
-          self.emitAll('reconnect_error', err.data);
-        } else {
-          debug('reconnect success');
-          self.onreconnect();
-        }
-      });
-    }, delay);
-
-    this.subs.push({
-      destroy: function () {
-        clearTimeout(timer);
-      }
-    });
-  }
-};
-
-/**
- * Called upon successful reconnect.
- *
- * @api private
- */
-
-Manager.prototype.onreconnect = function () {
-  var attempt = this.backoff.attempts;
-  this.reconnecting = false;
-  this.backoff.reset();
-  this.updateSocketIds();
-  this.emitAll('reconnect', attempt);
-};
-
-},{"./on":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/lib/on.js","./socket":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/lib/socket.js","backo2":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/backo2/index.js","component-bind":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/component-bind/index.js","component-emitter":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/component-emitter/index.js","debug":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/node_modules/debug/src/browser.js","engine.io-client":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/lib/index.js","indexof":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/indexof/index.js","socket.io-parser":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/node_modules/socket.io-parser/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/lib/on.js":[function(require,module,exports){
-
-/**
- * Module exports.
- */
-
-module.exports = on;
-
-/**
- * Helper for subscriptions.
- *
- * @param {Object|EventEmitter} obj with `Emitter` mixin or `EventEmitter`
- * @param {String} event name
- * @param {Function} callback
- * @api public
- */
-
-function on (obj, ev, fn) {
-  obj.on(ev, fn);
-  return {
-    destroy: function () {
-      obj.removeListener(ev, fn);
-    }
-  };
-}
-
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/lib/socket.js":[function(require,module,exports){
-
-/**
- * Module dependencies.
- */
-
-var parser = require('socket.io-parser');
-var Emitter = require('component-emitter');
-var toArray = require('to-array');
-var on = require('./on');
-var bind = require('component-bind');
-var debug = require('debug')('socket.io-client:socket');
-var parseqs = require('parseqs');
-var hasBin = require('has-binary2');
-
-/**
- * Module exports.
- */
-
-module.exports = exports = Socket;
-
-/**
- * Internal events (blacklisted).
- * These events can't be emitted by the user.
- *
- * @api private
- */
-
-var events = {
-  connect: 1,
-  connect_error: 1,
-  connect_timeout: 1,
-  connecting: 1,
-  disconnect: 1,
-  error: 1,
-  reconnect: 1,
-  reconnect_attempt: 1,
-  reconnect_failed: 1,
-  reconnect_error: 1,
-  reconnecting: 1,
-  ping: 1,
-  pong: 1
-};
-
-/**
- * Shortcut to `Emitter#emit`.
- */
-
-var emit = Emitter.prototype.emit;
-
-/**
- * `Socket` constructor.
- *
- * @api public
- */
-
-function Socket (io, nsp, opts) {
-  this.io = io;
-  this.nsp = nsp;
-  this.json = this; // compat
-  this.ids = 0;
-  this.acks = {};
-  this.receiveBuffer = [];
-  this.sendBuffer = [];
-  this.connected = false;
-  this.disconnected = true;
-  this.flags = {};
-  if (opts && opts.query) {
-    this.query = opts.query;
-  }
-  if (this.io.autoConnect) this.open();
-}
-
-/**
- * Mix in `Emitter`.
- */
-
-Emitter(Socket.prototype);
-
-/**
- * Subscribe to open, close and packet events
- *
- * @api private
- */
-
-Socket.prototype.subEvents = function () {
-  if (this.subs) return;
-
-  var io = this.io;
-  this.subs = [
-    on(io, 'open', bind(this, 'onopen')),
-    on(io, 'packet', bind(this, 'onpacket')),
-    on(io, 'close', bind(this, 'onclose'))
-  ];
-};
-
-/**
- * "Opens" the socket.
- *
- * @api public
- */
-
-Socket.prototype.open =
-Socket.prototype.connect = function () {
-  if (this.connected) return this;
-
-  this.subEvents();
-  if (!this.io.reconnecting) this.io.open(); // ensure open
-  if ('open' === this.io.readyState) this.onopen();
-  this.emit('connecting');
-  return this;
-};
-
-/**
- * Sends a `message` event.
- *
- * @return {Socket} self
- * @api public
- */
-
-Socket.prototype.send = function () {
-  var args = toArray(arguments);
-  args.unshift('message');
-  this.emit.apply(this, args);
-  return this;
-};
-
-/**
- * Override `emit`.
- * If the event is in `events`, it's emitted normally.
- *
- * @param {String} event name
- * @return {Socket} self
- * @api public
- */
-
-Socket.prototype.emit = function (ev) {
-  if (events.hasOwnProperty(ev)) {
-    emit.apply(this, arguments);
-    return this;
-  }
-
-  var args = toArray(arguments);
-  var packet = {
-    type: (this.flags.binary !== undefined ? this.flags.binary : hasBin(args)) ? parser.BINARY_EVENT : parser.EVENT,
-    data: args
-  };
-
-  packet.options = {};
-  packet.options.compress = !this.flags || false !== this.flags.compress;
-
-  // event ack callback
-  if ('function' === typeof args[args.length - 1]) {
-    debug('emitting packet with ack id %d', this.ids);
-    this.acks[this.ids] = args.pop();
-    packet.id = this.ids++;
-  }
-
-  if (this.connected) {
-    this.packet(packet);
-  } else {
-    this.sendBuffer.push(packet);
-  }
-
-  this.flags = {};
-
-  return this;
-};
-
-/**
- * Sends a packet.
- *
- * @param {Object} packet
- * @api private
- */
-
-Socket.prototype.packet = function (packet) {
-  packet.nsp = this.nsp;
-  this.io.packet(packet);
-};
-
-/**
- * Called upon engine `open`.
- *
- * @api private
- */
-
-Socket.prototype.onopen = function () {
-  debug('transport is open - connecting');
-
-  // write connect packet if necessary
-  if ('/' !== this.nsp) {
-    if (this.query) {
-      var query = typeof this.query === 'object' ? parseqs.encode(this.query) : this.query;
-      debug('sending connect packet with query %s', query);
-      this.packet({type: parser.CONNECT, query: query});
-    } else {
-      this.packet({type: parser.CONNECT});
-    }
-  }
-};
-
-/**
- * Called upon engine `close`.
- *
- * @param {String} reason
- * @api private
- */
-
-Socket.prototype.onclose = function (reason) {
-  debug('close (%s)', reason);
-  this.connected = false;
-  this.disconnected = true;
-  delete this.id;
-  this.emit('disconnect', reason);
-};
-
-/**
- * Called with socket packet.
- *
- * @param {Object} packet
- * @api private
- */
-
-Socket.prototype.onpacket = function (packet) {
-  var sameNamespace = packet.nsp === this.nsp;
-  var rootNamespaceError = packet.type === parser.ERROR && packet.nsp === '/';
-
-  if (!sameNamespace && !rootNamespaceError) return;
-
-  switch (packet.type) {
-    case parser.CONNECT:
-      this.onconnect();
-      break;
-
-    case parser.EVENT:
-      this.onevent(packet);
-      break;
-
-    case parser.BINARY_EVENT:
-      this.onevent(packet);
-      break;
-
-    case parser.ACK:
-      this.onack(packet);
-      break;
-
-    case parser.BINARY_ACK:
-      this.onack(packet);
-      break;
-
-    case parser.DISCONNECT:
-      this.ondisconnect();
-      break;
-
-    case parser.ERROR:
-      this.emit('error', packet.data);
-      break;
-  }
-};
-
-/**
- * Called upon a server event.
- *
- * @param {Object} packet
- * @api private
- */
-
-Socket.prototype.onevent = function (packet) {
-  var args = packet.data || [];
-  debug('emitting event %j', args);
-
-  if (null != packet.id) {
-    debug('attaching ack callback to event');
-    args.push(this.ack(packet.id));
-  }
-
-  if (this.connected) {
-    emit.apply(this, args);
-  } else {
-    this.receiveBuffer.push(args);
-  }
-};
-
-/**
- * Produces an ack callback to emit with an event.
- *
- * @api private
- */
-
-Socket.prototype.ack = function (id) {
-  var self = this;
-  var sent = false;
-  return function () {
-    // prevent double callbacks
-    if (sent) return;
-    sent = true;
-    var args = toArray(arguments);
-    debug('sending ack %j', args);
-
-    self.packet({
-      type: hasBin(args) ? parser.BINARY_ACK : parser.ACK,
-      id: id,
-      data: args
-    });
-  };
-};
-
-/**
- * Called upon a server acknowlegement.
- *
- * @param {Object} packet
- * @api private
- */
-
-Socket.prototype.onack = function (packet) {
-  var ack = this.acks[packet.id];
-  if ('function' === typeof ack) {
-    debug('calling ack %s with %j', packet.id, packet.data);
-    ack.apply(this, packet.data);
-    delete this.acks[packet.id];
-  } else {
-    debug('bad ack %s', packet.id);
-  }
-};
-
-/**
- * Called upon server connect.
- *
- * @api private
- */
-
-Socket.prototype.onconnect = function () {
-  this.connected = true;
-  this.disconnected = false;
-  this.emit('connect');
-  this.emitBuffered();
-};
-
-/**
- * Emit buffered events (received and emitted).
- *
- * @api private
- */
-
-Socket.prototype.emitBuffered = function () {
-  var i;
-  for (i = 0; i < this.receiveBuffer.length; i++) {
-    emit.apply(this, this.receiveBuffer[i]);
-  }
-  this.receiveBuffer = [];
-
-  for (i = 0; i < this.sendBuffer.length; i++) {
-    this.packet(this.sendBuffer[i]);
-  }
-  this.sendBuffer = [];
-};
-
-/**
- * Called upon server disconnect.
- *
- * @api private
- */
-
-Socket.prototype.ondisconnect = function () {
-  debug('server disconnect (%s)', this.nsp);
-  this.destroy();
-  this.onclose('io server disconnect');
-};
-
-/**
- * Called upon forced client/server side disconnections,
- * this method ensures the manager stops tracking us and
- * that reconnections don't get triggered for this.
- *
- * @api private.
- */
-
-Socket.prototype.destroy = function () {
-  if (this.subs) {
-    // clean subscriptions to avoid reconnections
-    for (var i = 0; i < this.subs.length; i++) {
-      this.subs[i].destroy();
-    }
-    this.subs = null;
-  }
-
-  this.io.destroy(this);
-};
-
-/**
- * Disconnects the socket manually.
- *
- * @return {Socket} self
- * @api public
- */
-
-Socket.prototype.close =
-Socket.prototype.disconnect = function () {
-  if (this.connected) {
-    debug('performing disconnect (%s)', this.nsp);
-    this.packet({ type: parser.DISCONNECT });
-  }
-
-  // remove socket from pool
-  this.destroy();
-
-  if (this.connected) {
-    // fire events
-    this.onclose('io client disconnect');
-  }
-  return this;
-};
-
-/**
- * Sets the compress flag.
- *
- * @param {Boolean} if `true`, compresses the sending data
- * @return {Socket} self
- * @api public
- */
-
-Socket.prototype.compress = function (compress) {
-  this.flags.compress = compress;
-  return this;
-};
-
-/**
- * Sets the binary flag
- *
- * @param {Boolean} whether the emitted data contains binary
- * @return {Socket} self
- * @api public
- */
-
-Socket.prototype.binary = function (binary) {
-  this.flags.binary = binary;
-  return this;
-};
-
-},{"./on":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/lib/on.js","component-bind":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/component-bind/index.js","component-emitter":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/component-emitter/index.js","debug":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/node_modules/debug/src/browser.js","has-binary2":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/has-binary2/index.js","parseqs":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/parseqs/index.js","socket.io-parser":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/node_modules/socket.io-parser/index.js","to-array":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/to-array/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/lib/url.js":[function(require,module,exports){
-
-/**
- * Module dependencies.
- */
-
-var parseuri = require('parseuri');
-var debug = require('debug')('socket.io-client:url');
-
-/**
- * Module exports.
- */
-
-module.exports = url;
-
-/**
- * URL parser.
- *
- * @param {String} url
- * @param {Object} An object meant to mimic window.location.
- *                 Defaults to window.location.
- * @api public
- */
-
-function url (uri, loc) {
-  var obj = uri;
-
-  // default to window.location
-  loc = loc || (typeof location !== 'undefined' && location);
-  if (null == uri) uri = loc.protocol + '//' + loc.host;
-
-  // relative path support
-  if ('string' === typeof uri) {
-    if ('/' === uri.charAt(0)) {
-      if ('/' === uri.charAt(1)) {
-        uri = loc.protocol + uri;
-      } else {
-        uri = loc.host + uri;
-      }
-    }
-
-    if (!/^(https?|wss?):\/\//.test(uri)) {
-      debug('protocol-less url %s', uri);
-      if ('undefined' !== typeof loc) {
-        uri = loc.protocol + '//' + uri;
-      } else {
-        uri = 'https://' + uri;
-      }
-    }
-
-    // parse
-    debug('parse %s', uri);
-    obj = parseuri(uri);
-  }
-
-  // make sure we treat `localhost:80` and `localhost` equally
-  if (!obj.port) {
-    if (/^(http|ws)$/.test(obj.protocol)) {
-      obj.port = '80';
-    } else if (/^(http|ws)s$/.test(obj.protocol)) {
-      obj.port = '443';
-    }
-  }
-
-  obj.path = obj.path || '/';
-
-  var ipv6 = obj.host.indexOf(':') !== -1;
-  var host = ipv6 ? '[' + obj.host + ']' : obj.host;
-
-  // define unique id
-  obj.id = obj.protocol + '://' + host + ':' + obj.port;
-  // define href
-  obj.href = obj.protocol + '://' + host + (loc && loc.port === obj.port ? '' : (':' + obj.port));
-
-  return obj;
-}
-
-},{"debug":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/node_modules/debug/src/browser.js","parseuri":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/parseuri/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/node_modules/debug/src/browser.js":[function(require,module,exports){
-arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/node_modules/debug/src/browser.js"][0].apply(exports,arguments)
-},{"./debug":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/node_modules/debug/src/debug.js","_process":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/process/browser.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/node_modules/debug/src/debug.js":[function(require,module,exports){
-arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/node_modules/debug/src/debug.js"][0].apply(exports,arguments)
-},{"ms":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/node_modules/ms/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/node_modules/ms/index.js":[function(require,module,exports){
-arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/engine.io-client/node_modules/ms/index.js"][0].apply(exports,arguments)
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/node_modules/socket.io-parser/binary.js":[function(require,module,exports){
-/*global Blob,File*/
-
-/**
- * Module requirements
- */
-
-var isArray = require('isarray');
-var isBuf = require('./is-buffer');
-var toString = Object.prototype.toString;
-var withNativeBlob = typeof Blob === 'function' || (typeof Blob !== 'undefined' && toString.call(Blob) === '[object BlobConstructor]');
-var withNativeFile = typeof File === 'function' || (typeof File !== 'undefined' && toString.call(File) === '[object FileConstructor]');
-
-/**
- * Replaces every Buffer | ArrayBuffer in packet with a numbered placeholder.
- * Anything with blobs or files should be fed through removeBlobs before coming
- * here.
- *
- * @param {Object} packet - socket.io event packet
- * @return {Object} with deconstructed packet and list of buffers
- * @api public
- */
-
-exports.deconstructPacket = function(packet) {
-  var buffers = [];
-  var packetData = packet.data;
-  var pack = packet;
-  pack.data = _deconstructPacket(packetData, buffers);
-  pack.attachments = buffers.length; // number of binary 'attachments'
-  return {packet: pack, buffers: buffers};
-};
-
-function _deconstructPacket(data, buffers) {
-  if (!data) return data;
-
-  if (isBuf(data)) {
-    var placeholder = { _placeholder: true, num: buffers.length };
-    buffers.push(data);
-    return placeholder;
-  } else if (isArray(data)) {
-    var newData = new Array(data.length);
-    for (var i = 0; i < data.length; i++) {
-      newData[i] = _deconstructPacket(data[i], buffers);
-    }
-    return newData;
-  } else if (typeof data === 'object' && !(data instanceof Date)) {
-    var newData = {};
-    for (var key in data) {
-      newData[key] = _deconstructPacket(data[key], buffers);
-    }
-    return newData;
-  }
-  return data;
-}
-
-/**
- * Reconstructs a binary packet from its placeholder packet and buffers
- *
- * @param {Object} packet - event packet with placeholders
- * @param {Array} buffers - binary buffers to put in placeholder positions
- * @return {Object} reconstructed packet
- * @api public
- */
-
-exports.reconstructPacket = function(packet, buffers) {
-  packet.data = _reconstructPacket(packet.data, buffers);
-  packet.attachments = undefined; // no longer useful
-  return packet;
-};
-
-function _reconstructPacket(data, buffers) {
-  if (!data) return data;
-
-  if (data && data._placeholder) {
-    return buffers[data.num]; // appropriate buffer (should be natural order anyway)
-  } else if (isArray(data)) {
-    for (var i = 0; i < data.length; i++) {
-      data[i] = _reconstructPacket(data[i], buffers);
-    }
-  } else if (typeof data === 'object') {
-    for (var key in data) {
-      data[key] = _reconstructPacket(data[key], buffers);
-    }
-  }
-
-  return data;
-}
-
-/**
- * Asynchronously removes Blobs or Files from data via
- * FileReader's readAsArrayBuffer method. Used before encoding
- * data as msgpack. Calls callback with the blobless data.
- *
- * @param {Object} data
- * @param {Function} callback
- * @api private
- */
-
-exports.removeBlobs = function(data, callback) {
-  function _removeBlobs(obj, curKey, containingObject) {
-    if (!obj) return obj;
-
-    // convert any blob
-    if ((withNativeBlob && obj instanceof Blob) ||
-        (withNativeFile && obj instanceof File)) {
-      pendingBlobs++;
-
-      // async filereader
-      var fileReader = new FileReader();
-      fileReader.onload = function() { // this.result == arraybuffer
-        if (containingObject) {
-          containingObject[curKey] = this.result;
-        }
-        else {
-          bloblessData = this.result;
-        }
-
-        // if nothing pending its callback time
-        if(! --pendingBlobs) {
-          callback(bloblessData);
-        }
-      };
-
-      fileReader.readAsArrayBuffer(obj); // blob -> arraybuffer
-    } else if (isArray(obj)) { // handle array
-      for (var i = 0; i < obj.length; i++) {
-        _removeBlobs(obj[i], i, obj);
-      }
-    } else if (typeof obj === 'object' && !isBuf(obj)) { // and object
-      for (var key in obj) {
-        _removeBlobs(obj[key], key, obj);
-      }
-    }
-  }
-
-  var pendingBlobs = 0;
-  var bloblessData = data;
-  _removeBlobs(bloblessData);
-  if (!pendingBlobs) {
-    callback(bloblessData);
-  }
-};
-
-},{"./is-buffer":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/node_modules/socket.io-parser/is-buffer.js","isarray":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/isarray/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/node_modules/socket.io-parser/index.js":[function(require,module,exports){
-
-/**
- * Module dependencies.
- */
-
-var debug = require('debug')('socket.io-parser');
-var Emitter = require('component-emitter');
-var binary = require('./binary');
-var isArray = require('isarray');
-var isBuf = require('./is-buffer');
-
-/**
- * Protocol version.
- *
- * @api public
- */
-
-exports.protocol = 4;
-
-/**
- * Packet types.
- *
- * @api public
- */
-
-exports.types = [
-  'CONNECT',
-  'DISCONNECT',
-  'EVENT',
-  'ACK',
-  'ERROR',
-  'BINARY_EVENT',
-  'BINARY_ACK'
-];
-
-/**
- * Packet type `connect`.
- *
- * @api public
- */
-
-exports.CONNECT = 0;
-
-/**
- * Packet type `disconnect`.
- *
- * @api public
- */
-
-exports.DISCONNECT = 1;
-
-/**
- * Packet type `event`.
- *
- * @api public
- */
-
-exports.EVENT = 2;
-
-/**
- * Packet type `ack`.
- *
- * @api public
- */
-
-exports.ACK = 3;
-
-/**
- * Packet type `error`.
- *
- * @api public
- */
-
-exports.ERROR = 4;
-
-/**
- * Packet type 'binary event'
- *
- * @api public
- */
-
-exports.BINARY_EVENT = 5;
-
-/**
- * Packet type `binary ack`. For acks with binary arguments.
- *
- * @api public
- */
-
-exports.BINARY_ACK = 6;
-
-/**
- * Encoder constructor.
- *
- * @api public
- */
-
-exports.Encoder = Encoder;
-
-/**
- * Decoder constructor.
- *
- * @api public
- */
-
-exports.Decoder = Decoder;
-
-/**
- * A socket.io Encoder instance
- *
- * @api public
- */
-
-function Encoder() {}
-
-var ERROR_PACKET = exports.ERROR + '"encode error"';
-
-/**
- * Encode a packet as a single string if non-binary, or as a
- * buffer sequence, depending on packet type.
- *
- * @param {Object} obj - packet object
- * @param {Function} callback - function to handle encodings (likely engine.write)
- * @return Calls callback with Array of encodings
- * @api public
- */
-
-Encoder.prototype.encode = function(obj, callback){
-  debug('encoding packet %j', obj);
-
-  if (exports.BINARY_EVENT === obj.type || exports.BINARY_ACK === obj.type) {
-    encodeAsBinary(obj, callback);
-  } else {
-    var encoding = encodeAsString(obj);
-    callback([encoding]);
-  }
-};
-
-/**
- * Encode packet as string.
- *
- * @param {Object} packet
- * @return {String} encoded
- * @api private
- */
-
-function encodeAsString(obj) {
-
-  // first is type
-  var str = '' + obj.type;
-
-  // attachments if we have them
-  if (exports.BINARY_EVENT === obj.type || exports.BINARY_ACK === obj.type) {
-    str += obj.attachments + '-';
-  }
-
-  // if we have a namespace other than `/`
-  // we append it followed by a comma `,`
-  if (obj.nsp && '/' !== obj.nsp) {
-    str += obj.nsp + ',';
-  }
-
-  // immediately followed by the id
-  if (null != obj.id) {
-    str += obj.id;
-  }
-
-  // json data
-  if (null != obj.data) {
-    var payload = tryStringify(obj.data);
-    if (payload !== false) {
-      str += payload;
-    } else {
-      return ERROR_PACKET;
-    }
-  }
-
-  debug('encoded %j as %s', obj, str);
-  return str;
-}
-
-function tryStringify(str) {
-  try {
-    return JSON.stringify(str);
-  } catch(e){
-    return false;
-  }
-}
-
-/**
- * Encode packet as 'buffer sequence' by removing blobs, and
- * deconstructing packet into object with placeholders and
- * a list of buffers.
- *
- * @param {Object} packet
- * @return {Buffer} encoded
- * @api private
- */
-
-function encodeAsBinary(obj, callback) {
-
-  function writeEncoding(bloblessData) {
-    var deconstruction = binary.deconstructPacket(bloblessData);
-    var pack = encodeAsString(deconstruction.packet);
-    var buffers = deconstruction.buffers;
-
-    buffers.unshift(pack); // add packet info to beginning of data list
-    callback(buffers); // write all the buffers
-  }
-
-  binary.removeBlobs(obj, writeEncoding);
-}
-
-/**
- * A socket.io Decoder instance
- *
- * @return {Object} decoder
- * @api public
- */
-
-function Decoder() {
-  this.reconstructor = null;
-}
-
-/**
- * Mix in `Emitter` with Decoder.
- */
-
-Emitter(Decoder.prototype);
-
-/**
- * Decodes an encoded packet string into packet JSON.
- *
- * @param {String} obj - encoded packet
- * @return {Object} packet
- * @api public
- */
-
-Decoder.prototype.add = function(obj) {
-  var packet;
-  if (typeof obj === 'string') {
-    packet = decodeString(obj);
-    if (exports.BINARY_EVENT === packet.type || exports.BINARY_ACK === packet.type) { // binary packet's json
-      this.reconstructor = new BinaryReconstructor(packet);
-
-      // no attachments, labeled binary but no binary data to follow
-      if (this.reconstructor.reconPack.attachments === 0) {
-        this.emit('decoded', packet);
-      }
-    } else { // non-binary full packet
-      this.emit('decoded', packet);
-    }
-  } else if (isBuf(obj) || obj.base64) { // raw binary data
-    if (!this.reconstructor) {
-      throw new Error('got binary data when not reconstructing a packet');
-    } else {
-      packet = this.reconstructor.takeBinaryData(obj);
-      if (packet) { // received final buffer
-        this.reconstructor = null;
-        this.emit('decoded', packet);
-      }
-    }
-  } else {
-    throw new Error('Unknown type: ' + obj);
-  }
-};
-
-/**
- * Decode a packet String (JSON data)
- *
- * @param {String} str
- * @return {Object} packet
- * @api private
- */
-
-function decodeString(str) {
-  var i = 0;
-  // look up type
-  var p = {
-    type: Number(str.charAt(0))
-  };
-
-  if (null == exports.types[p.type]) {
-    return error('unknown packet type ' + p.type);
-  }
-
-  // look up attachments if type binary
-  if (exports.BINARY_EVENT === p.type || exports.BINARY_ACK === p.type) {
-    var start = i + 1;
-    while (str.charAt(++i) !== '-' && i != str.length) {}
-    var buf = str.substring(start, i);
-    if (buf != Number(buf) || str.charAt(i) !== '-') {
-      throw new Error('Illegal attachments');
-    }
-    p.attachments = Number(buf);
-  }
-
-  // look up namespace (if any)
-  if ('/' === str.charAt(i + 1)) {
-    var start = i + 1;
-    while (++i) {
-      var c = str.charAt(i);
-      if (',' === c) break;
-      if (i === str.length) break;
-    }
-    p.nsp = str.substring(start, i);
-  } else {
-    p.nsp = '/';
-  }
-
-  // look up id
-  var next = str.charAt(i + 1);
-  if ('' !== next && Number(next) == next) {
-    var start = i + 1;
-    while (++i) {
-      var c = str.charAt(i);
-      if (null == c || Number(c) != c) {
-        --i;
-        break;
-      }
-      if (i === str.length) break;
-    }
-    p.id = Number(str.substring(start, i + 1));
-  }
-
-  // look up json data
-  if (str.charAt(++i)) {
-    var payload = tryParse(str.substr(i));
-    var isPayloadValid = payload !== false && (p.type === exports.ERROR || isArray(payload));
-    if (isPayloadValid) {
-      p.data = payload;
-    } else {
-      return error('invalid payload');
-    }
-  }
-
-  debug('decoded %s as %j', str, p);
-  return p;
-}
-
-function tryParse(str) {
-  try {
-    return JSON.parse(str);
-  } catch(e){
-    return false;
-  }
-}
-
-/**
- * Deallocates a parser's resources
- *
- * @api public
- */
-
-Decoder.prototype.destroy = function() {
-  if (this.reconstructor) {
-    this.reconstructor.finishedReconstruction();
-  }
-};
-
-/**
- * A manager of a binary event's 'buffer sequence'. Should
- * be constructed whenever a packet of type BINARY_EVENT is
- * decoded.
- *
- * @param {Object} packet
- * @return {BinaryReconstructor} initialized reconstructor
- * @api private
- */
-
-function BinaryReconstructor(packet) {
-  this.reconPack = packet;
-  this.buffers = [];
-}
-
-/**
- * Method to be called when binary data received from connection
- * after a BINARY_EVENT packet.
- *
- * @param {Buffer | ArrayBuffer} binData - the raw binary data received
- * @return {null | Object} returns null if more binary data is expected or
- *   a reconstructed packet object if all buffers have been received.
- * @api private
- */
-
-BinaryReconstructor.prototype.takeBinaryData = function(binData) {
-  this.buffers.push(binData);
-  if (this.buffers.length === this.reconPack.attachments) { // done with buffer list
-    var packet = binary.reconstructPacket(this.reconPack, this.buffers);
-    this.finishedReconstruction();
-    return packet;
-  }
-  return null;
-};
-
-/**
- * Cleans up binary packet reconstruction variables.
- *
- * @api private
- */
-
-BinaryReconstructor.prototype.finishedReconstruction = function() {
-  this.reconPack = null;
-  this.buffers = [];
-};
-
-function error(msg) {
-  return {
-    type: exports.ERROR,
-    data: 'parser error: ' + msg
-  };
-}
-
-},{"./binary":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/node_modules/socket.io-parser/binary.js","./is-buffer":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/node_modules/socket.io-parser/is-buffer.js","component-emitter":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/component-emitter/index.js","debug":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/node_modules/debug/src/browser.js","isarray":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/isarray/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket.io-client/node_modules/socket.io-parser/is-buffer.js":[function(require,module,exports){
+},{"buffer":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browserify/node_modules/buffer/index.js","debug":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/debug/src/browser.js","err-code":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/err-code/index.js","get-browser-rtc":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/get-browser-rtc/index.js","queue-microtask":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/queue-microtask/index.js","randombytes":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/randombytes/browser.js","readable-stream":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/readable-stream/readable-browser.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/simple-websocket/index.js":[function(require,module,exports){
 (function (Buffer){(function (){
+/*! simple-websocket. MIT License. Feross Aboukhadijeh <https://feross.org/opensource> */
+/* global WebSocket */
 
-module.exports = isBuf;
+const debug = require('debug')('simple-websocket')
+const randombytes = require('randombytes')
+const stream = require('readable-stream')
+const queueMicrotask = require('queue-microtask') // TODO: remove when Node 10 is not supported
+const ws = require('ws') // websockets in node - will be empty object in browser
 
-var withNativeBuffer = typeof Buffer === 'function' && typeof Buffer.isBuffer === 'function';
-var withNativeArrayBuffer = typeof ArrayBuffer === 'function';
+const _WebSocket = typeof ws !== 'function' ? WebSocket : ws
 
-var isView = function (obj) {
-  return typeof ArrayBuffer.isView === 'function' ? ArrayBuffer.isView(obj) : (obj.buffer instanceof ArrayBuffer);
-};
+const MAX_BUFFERED_AMOUNT = 64 * 1024
 
 /**
- * Returns true if obj is a buffer or an arraybuffer.
- *
- * @api private
+ * WebSocket. Same API as node core `net.Socket`. Duplex stream.
+ * @param {Object} opts
+ * @param {string=} opts.url websocket server url
+ * @param {string=} opts.socket raw websocket instance to wrap
  */
+class Socket extends stream.Duplex {
+  constructor (opts = {}) {
+    // Support simple usage: `new Socket(url)`
+    if (typeof opts === 'string') {
+      opts = { url: opts }
+    }
 
-function isBuf(obj) {
-  return (withNativeBuffer && Buffer.isBuffer(obj)) ||
-          (withNativeArrayBuffer && (obj instanceof ArrayBuffer || isView(obj)));
+    opts = Object.assign({
+      allowHalfOpen: false
+    }, opts)
+
+    super(opts)
+
+    if (opts.url == null && opts.socket == null) {
+      throw new Error('Missing required `url` or `socket` option')
+    }
+    if (opts.url != null && opts.socket != null) {
+      throw new Error('Must specify either `url` or `socket` option, not both')
+    }
+
+    this._id = randombytes(4).toString('hex').slice(0, 7)
+    this._debug('new websocket: %o', opts)
+
+    this.connected = false
+    this.destroyed = false
+
+    this._chunk = null
+    this._cb = null
+    this._interval = null
+
+    if (opts.socket) {
+      this.url = opts.socket.url
+      this._ws = opts.socket
+      this.connected = opts.socket.readyState === _WebSocket.OPEN
+    } else {
+      this.url = opts.url
+      try {
+        if (typeof ws === 'function') {
+          // `ws` package accepts options
+          this._ws = new _WebSocket(opts.url, null, {
+            ...opts,
+            encoding: undefined // encoding option breaks ws internals
+          })
+        } else {
+          this._ws = new _WebSocket(opts.url)
+        }
+      } catch (err) {
+        queueMicrotask(() => this.destroy(err))
+        return
+      }
+    }
+
+    this._ws.binaryType = 'arraybuffer'
+
+    if (opts.socket && this.connected) {
+      queueMicrotask(() => this._handleOpen())
+    } else {
+      this._ws.onopen = () => this._handleOpen()
+    }
+
+    this._ws.onmessage = event => this._handleMessage(event)
+    this._ws.onclose = () => this._handleClose()
+    this._ws.onerror = err => this._handleError(err)
+
+    this._handleFinishBound = () => this._handleFinish()
+    this.once('finish', this._handleFinishBound)
+  }
+
+  /**
+   * Send text/binary data to the WebSocket server.
+   * @param {TypedArrayView|ArrayBuffer|Buffer|string|Blob|Object} chunk
+   */
+  send (chunk) {
+    this._ws.send(chunk)
+  }
+
+  // TODO: Delete this method once readable-stream is updated to contain a default
+  // implementation of destroy() that automatically calls _destroy()
+  // See: https://github.com/nodejs/readable-stream/issues/283
+  destroy (err) {
+    this._destroy(err, () => {})
+  }
+
+  _destroy (err, cb) {
+    if (this.destroyed) return
+
+    this._debug('destroy (error: %s)', err && (err.message || err))
+
+    this.readable = this.writable = false
+    if (!this._readableState.ended) this.push(null)
+    if (!this._writableState.finished) this.end()
+
+    this.connected = false
+    this.destroyed = true
+
+    clearInterval(this._interval)
+    this._interval = null
+    this._chunk = null
+    this._cb = null
+
+    if (this._handleFinishBound) {
+      this.removeListener('finish', this._handleFinishBound)
+    }
+    this._handleFinishBound = null
+
+    if (this._ws) {
+      const ws = this._ws
+      const onClose = () => {
+        ws.onclose = null
+      }
+      if (ws.readyState === _WebSocket.CLOSED) {
+        onClose()
+      } else {
+        try {
+          ws.onclose = onClose
+          ws.close()
+        } catch (err) {
+          onClose()
+        }
+      }
+
+      ws.onopen = null
+      ws.onmessage = null
+      ws.onerror = () => {}
+    }
+    this._ws = null
+
+    if (err) this.emit('error', err)
+    this.emit('close')
+    cb()
+  }
+
+  _read () {}
+
+  _write (chunk, encoding, cb) {
+    if (this.destroyed) return cb(new Error('cannot write after socket is destroyed'))
+
+    if (this.connected) {
+      try {
+        this.send(chunk)
+      } catch (err) {
+        return this.destroy(err)
+      }
+      if (typeof ws !== 'function' && this._ws.bufferedAmount > MAX_BUFFERED_AMOUNT) {
+        this._debug('start backpressure: bufferedAmount %d', this._ws.bufferedAmount)
+        this._cb = cb
+      } else {
+        cb(null)
+      }
+    } else {
+      this._debug('write before connect')
+      this._chunk = chunk
+      this._cb = cb
+    }
+  }
+
+  _handleOpen () {
+    if (this.connected || this.destroyed) return
+    this.connected = true
+
+    if (this._chunk) {
+      try {
+        this.send(this._chunk)
+      } catch (err) {
+        return this.destroy(err)
+      }
+      this._chunk = null
+      this._debug('sent chunk from "write before connect"')
+
+      const cb = this._cb
+      this._cb = null
+      cb(null)
+    }
+
+    // Backpressure is not implemented in Node.js. The `ws` module has a buggy
+    // `bufferedAmount` property. See: https://github.com/websockets/ws/issues/492
+    if (typeof ws !== 'function') {
+      this._interval = setInterval(() => this._onInterval(), 150)
+      if (this._interval.unref) this._interval.unref()
+    }
+
+    this._debug('connect')
+    this.emit('connect')
+  }
+
+  _handleMessage (event) {
+    if (this.destroyed) return
+    let data = event.data
+    if (data instanceof ArrayBuffer) data = Buffer.from(data)
+    this.push(data)
+  }
+
+  _handleClose () {
+    if (this.destroyed) return
+    this._debug('on close')
+    this.destroy()
+  }
+
+  _handleError (_) {
+    this.destroy(new Error(`Error connecting to ${this.url}`))
+  }
+
+  // When stream finishes writing, close socket. Half open connections are not
+  // supported.
+  _handleFinish () {
+    if (this.destroyed) return
+
+    // Wait a bit before destroying so the socket flushes.
+    // TODO: is there a more reliable way to accomplish this?
+    const destroySoon = () => {
+      setTimeout(() => this.destroy(), 1000)
+    }
+
+    if (this.connected) {
+      destroySoon()
+    } else {
+      this.once('connect', destroySoon)
+    }
+  }
+
+  _onInterval () {
+    if (!this._cb || !this._ws || this._ws.bufferedAmount > MAX_BUFFERED_AMOUNT) {
+      return
+    }
+    this._debug('ending backpressure: bufferedAmount %d', this._ws.bufferedAmount)
+    const cb = this._cb
+    this._cb = null
+    cb(null)
+  }
+
+  _debug () {
+    const args = [].slice.call(arguments)
+    args[0] = '[' + this._id + '] ' + args[0]
+    debug.apply(null, args)
+  }
 }
+
+Socket.WEBSOCKET_SUPPORT = !!_WebSocket
+
+module.exports = Socket
 
 }).call(this)}).call(this,require("buffer").Buffer)
-},{"buffer":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browserify/node_modules/buffer/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/stream-shift/index.js":[function(require,module,exports){
+},{"buffer":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browserify/node_modules/buffer/index.js","debug":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/debug/src/browser.js","queue-microtask":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/queue-microtask/index.js","randombytes":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/randombytes/browser.js","readable-stream":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/readable-stream/readable-browser.js","ws":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browser-resolve/empty.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket-signal-websocket/browser.js":[function(require,module,exports){
+module.exports = {
+  SocketSignalWebsocketClient: require('./lib/client')
+}
+
+},{"./lib/client":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket-signal-websocket/lib/client.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket-signal-websocket/lib/client.js":[function(require,module,exports){
+const Socket = require('simple-websocket')
+const assert = require('nanocustomassert')
+const WebSocket = require('isomorphic-ws')
+const { SocketSignalClient } = require('socket-signal')
+const log = require('debug')('socket-signal:websocket-client')
+
+// round robin url provider
+const defaultUrlProvider = urls => {
+  let urlIndex = 0
+
+  return () => {
+    const url = urls[urlIndex++ % urls.length]
+    log('url provider', url)
+    return url
+  }
+}
+
+let ReconnectingWebSocket = require('reconnecting-websocket')
+if (ReconnectingWebSocket.default) {
+  ReconnectingWebSocket = ReconnectingWebSocket.default
+}
+
+class SocketSignalWebsocketClient extends SocketSignalClient {
+  static createSocket (urlProvider, opts = {}) {
+    assert(Array.isArray(urlProvider) || typeof urlProvider === 'function', 'must be an array or a function')
+
+    const { simpleWebsocket = {}, reconnectingWebsocket = {} } = opts
+
+    if (Array.isArray(urlProvider)) {
+      urlProvider = defaultUrlProvider(urlProvider)
+    }
+
+    if (!reconnectingWebsocket.WebSocket) {
+      reconnectingWebsocket.WebSocket = WebSocket
+    }
+
+    const ws = new ReconnectingWebSocket(urlProvider, reconnectingWebsocket.protocols, reconnectingWebsocket)
+
+    const socket = new Socket({ socket: ws, ...simpleWebsocket })
+
+    const _onopen = ws.onopen
+    const _onclose = ws.onclose
+    const _onerror = ws.onerror
+
+    ws.onopen = (ev) => {
+      if (socket._chunk && !socket._cb) {
+        socket._cb = () => {}
+      }
+      _onopen(ev)
+    }
+
+    ws.onclose = (ev) => {
+      log('socket close', { shouldReconnect: ws._shouldReconnect, ev })
+      if (ws._shouldReconnect) {
+        socket.connected = false
+      } else {
+        _onclose(ev)
+      }
+    }
+
+    ws.onerror = (ev) => {
+      log('socket error', { shouldReconnect: ws._shouldReconnect, ev })
+      if (ws._shouldReconnect) {
+        socket.connected = false
+      } else {
+        _onerror(ev)
+      }
+    }
+    return socket
+  }
+
+  constructor (urlProvider, opts = {}) {
+    super(SocketSignalWebsocketClient.createSocket(urlProvider, opts), opts)
+
+    let reconnected = false
+    this.socket.on('connect', () => {
+      this.emit('connected', reconnected)
+      reconnected = true
+    })
+  }
+
+  get connected () {
+    return this.socket.readyState === this.socket.OPEN
+  }
+}
+
+module.exports = SocketSignalWebsocketClient
+
+},{"debug":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/debug/src/browser.js","isomorphic-ws":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/isomorphic-ws/browser.js","nanocustomassert":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanocustomassert/index.js","reconnecting-websocket":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/reconnecting-websocket/dist/reconnecting-websocket-cjs.js","simple-websocket":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/simple-websocket/index.js","socket-signal":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket-signal/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket-signal/index.js":[function(require,module,exports){
+module.exports = {
+  SocketSignalClient: require('./lib/client'),
+  SocketSignalServer: require('./lib/server'),
+  SocketSignalServerMap: require('./lib/server-map'),
+  Peer: require('./lib/peer'),
+  SignalBatch: require('./lib/signal-batch'),
+  errors: require('./lib/errors')
+}
+
+},{"./lib/client":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket-signal/lib/client.js","./lib/errors":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket-signal/lib/errors.js","./lib/peer":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket-signal/lib/peer.js","./lib/server":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket-signal/lib/server.js","./lib/server-map":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket-signal/lib/server-map.js","./lib/signal-batch":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket-signal/lib/signal-batch.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket-signal/lib/client.js":[function(require,module,exports){
+(function (Buffer,process){(function (){
+const crypto = require('crypto')
+
+const assert = require('nanocustomassert')
+const fastq = require('fastq')
+const pEvent = require('p-event')
+const nanomessagerpc = require('nanomessage-rpc')
+const { NanoresourcePromise } = require('nanoresource-promise/emitter')
+
+const Peer = require('./peer')
+
+const kConnectionsQueue = Symbol('socketsignal.connectionsqueue')
+const kPeers = Symbol('socketsignal.peers')
+const kDefineActions = Symbol('socketsignal.defineactions')
+const kDefineEvents = Symbol('socketsignal.defineevents')
+const kAddPeer = Symbol('socketsignal.addpeer')
+const kCreatePeer = Symbol('socketsignal.createpeer')
+const kOnSignal = Symbol('socketsignal.onsignal')
+
+function worker ({ peer, data }, done) {
+  this.open()
+    .then(() => {
+      this.emit('peer-connecting', peer)
+      return peer.open(data)
+    })
+    .then(() => done())
+    .catch(err => done(err))
+}
+
+class SocketSignalClient extends NanoresourcePromise {
+  /**
+   * @constructor
+   * @param {DuplexStream} socket
+   * @param {Object} opts
+   * @param {Buffer} opts.id Id of 32 bytes
+   * @param {number} opts.requestTimeout How long to wait for peer requests
+   * @param {number} opts.queueConcurrency How many incoming connections in concurrent can handle
+   * @param {Object} opts.metadata Metadata to share across network
+   * @param {Object} opts.simplePeer SimplePeer options
+   */
+  constructor (socket, opts = {}) {
+    super()
+
+    const {
+      id = crypto.randomBytes(32),
+      requestTimeout = 15 * 1000,
+      queueConcurrency = 4,
+      simplePeer = {},
+      metadata
+    } = opts
+
+    assert(!metadata || typeof metadata === 'object', 'metadata must be an object')
+
+    this.socket = socket
+    this.rpc = nanomessagerpc({ timeout: requestTimeout, ...nanomessagerpc.useSocket(socket) })
+    this.id = id
+    this.metadata = metadata
+    this.simplePeer = simplePeer
+    this.requestTimeout = requestTimeout
+
+    this[kPeers] = new Map()
+    this[kConnectionsQueue] = fastq(this, worker, queueConcurrency)
+
+    // rpc
+    this[kDefineActions]()
+    this[kDefineEvents]()
+  }
+
+  /**
+   * Peers
+   *
+   * @type {Array<Peer>}
+   */
+  get peers () {
+    return Array.from(this[kPeers].values())
+  }
+
+  /**
+   * Peers connected
+   *
+   * @type {Array<Peer>}
+   */
+  get peersConnected () {
+    return this.peers.filter(p => p.connected)
+  }
+
+  /**
+   * Peers incoming and connecting
+   *
+   * @type {Array<Peer>}
+   */
+  get peersConnecting () {
+    return this.peers.filter(p => !p.connected)
+  }
+
+  /**
+   * Get peers by the topic
+   *
+   * @param {Buffer} topic
+   * @returns {Array<Peer>}
+   */
+  getPeersByTopic (topic) {
+    assert(Buffer.isBuffer(topic), 'topic is required')
+
+    return this.peers.filter(peer => peer.topic.equals(topic))
+  }
+
+  /**
+   * Join to the network by a topic
+   *
+   * @param {Buffer} topic
+   * @returns {Promise<Array<Peer>>}
+   */
+  async join (topic) {
+    assert(Buffer.isBuffer(topic) && topic.length === 32, 'topic must be a Buffer of 32 bytes')
+
+    await this.open()
+    const peers = await this.rpc.call('join', this._buildMessage({ topic }))
+    this.emit('join', topic, peers)
+    return peers
+  }
+
+  /**
+   * Leave a topic from the network
+   *
+   * IMPORTANT: This will not close the current peers for that topic
+   * you should call closeConnectionsByTopic(topic)
+   *
+   * @param {Buffer} topic
+   * @returns {Promise}
+   */
+  async leave (topic) {
+    assert(!topic || (Buffer.isBuffer(topic) && topic.length === 32), 'topic must be a Buffer of 32 bytes')
+
+    await this.open()
+    await this.rpc.call('leave', this._buildMessage({ topic }))
+    this.emit('leave', topic)
+  }
+
+  /**
+   * Calls a new lookup from the network
+   *
+   * @param {Buffer} topic
+   * @returns {Promise<Array<Peer>>}
+   */
+  async lookup (topic) {
+    assert(Buffer.isBuffer(topic) && topic.length === 32, 'topic must be a Buffer of 32 bytes')
+
+    await this.open()
+    const peers = await this.rpc.call('lookup', this._buildMessage({ topic }))
+    this.emit('lookup', topic, peers)
+    return peers
+  }
+
+  /**
+   * Connects to a peer by their id and topic
+   *
+   * IMPORTANT: This will not returns a connected peer
+   * you should wait for the connection by peer.ready()
+   *
+   * @param {Buffer} topic
+   * @param {Buffer} peerId
+   * @param {(Object|undefined)} opts
+   * @param {Object} opts.metadata
+   * @param {Object} opts.simplePeer
+   * @returns {Peer}
+   */
+  connect (topic, peerId, opts = {}) {
+    assert(Buffer.isBuffer(topic) && topic.length === 32, 'topic must be a Buffer of 32 bytes')
+    assert(Buffer.isBuffer(peerId) && peerId.length === 32, 'peerId must be a Buffer of 32 bytes')
+
+    const { metadata: localMetadata, simplePeer = {} } = opts
+
+    const peer = this[kCreatePeer]({ initiator: true, sessionId: crypto.randomBytes(32), id: peerId, topic, localMetadata, simplePeer })
+
+    this[kAddPeer](peer)
+
+    return peer
+  }
+
+  /**
+   * Async handler for incoming peers, peers that you don't get it from .connect(id, topic)
+   *
+   * This is the right place to define rules to accept or reject connections.
+   *
+   * @param {(peer: Peer) => (Promise|Error)} handler
+   */
+  onIncomingPeer (handler) {
+    this._onIncomingPeer = handler
+    return this
+  }
+
+  /**
+   * Async handler for incoming offer.
+   *
+   * @param {(data: { id, topic, metadata }) => (Promise|Error)} handler
+   */
+  onOffer (handler) {
+    this._onOffer = handler
+    return this
+  }
+
+  /**
+   * Async handler for incoming answer.
+   *
+   * @param {(data: { id, topic, metadata }) => (Promise|Error)} handler
+   */
+  onAnswer (handler) {
+    this._onAnswer = handler
+    return this
+  }
+
+  /**
+   * Close connections by topic
+   *
+   * @param {Buffer} topic
+   * @returns {Promise}
+   */
+  closeConnectionsByTopic (topic) {
+    return Promise.all(this.getPeersByTopic(topic).map(peer => new Promise(resolve => peer.close(() => resolve()))))
+  }
+
+  /**
+   * @abstract
+   */
+  async _onIncomingPeer () {}
+
+  /**
+   * @abstract
+   */
+  async _onOffer (data) {}
+
+  /**
+   * @abstract
+   */
+  async _onAnswer (data) {}
+
+  async _open () {
+    await this.rpc.open()
+  }
+
+  async _close () {
+    this[kConnectionsQueue].kill()
+    await this.rpc.close()
+    await Promise.all(this.peers.map(peer => new Promise(resolve => peer.close(() => resolve()))))
+  }
+
+  _buildMessage (data) {
+    const { localMetadata = {}, ...msg } = data
+    let metadata = this.metadata || {}
+    if (localMetadata) {
+      metadata = { ...metadata, ...localMetadata }
+    }
+    return { ...msg, id: this.id, metadata }
+  }
+
+  /**
+   * @private
+   */
+  [kDefineActions] () {
+    this.rpc.actions({
+      offer: async (message) => {
+        const result = await this._onOffer(message)
+
+        assert(!result || typeof result === 'object')
+
+        const peer = this[kCreatePeer]({
+          initiator: false,
+          sessionId: message.sessionId,
+          id: message.id,
+          topic: message.topic,
+          metadata: message.metadata,
+          localMetadata: result && result.metadata,
+          simplePeer: result && result.simplePeer
+        })
+
+        this[kAddPeer](peer, message.data)
+
+        return pEvent(peer, 'answer', {
+          rejectionEvents: ['error', 'closed']
+        })
+      }
+    })
+  }
+
+  /**
+   * @private
+   */
+  [kDefineEvents] () {
+    this.rpc.on('signal', (message) => {
+      const { sessionId, data = [] } = message
+      const peer = this[kPeers].get(sessionId.toString('hex'))
+      if (!peer || peer.destroyed) return
+      data.forEach(signal => peer.stream.signal(signal))
+    })
+  }
+
+  /**
+   * @private
+   */
+  [kAddPeer] (peer, data) {
+    const sessionId = peer.sessionId.toString('hex')
+
+    this[kPeers].set(sessionId, peer)
+    peer.once('close', () => {
+      this[kPeers].delete(sessionId)
+    })
+    peer.once('error', err => {
+      this.emit('peer-error', err, peer)
+    })
+
+    this[kConnectionsQueue].push({ peer, data }, (err) => {
+      if (err || this.closing || this.closed) return process.nextTick(() => peer.destroy(err))
+      this.emit('peer-connected', peer)
+    })
+
+    // peer queue
+    this.emit('peer-queue', peer)
+  }
+
+  /**
+   * @private
+   */
+  [kCreatePeer] (opts) {
+    opts = Object.assign({}, opts, {
+      onSignal: (peer, batch) => this[kOnSignal](peer, batch),
+      simplePeer: Object.assign({}, this.simplePeer, opts.simplePeer),
+      timeout: this.requestTimeout
+    })
+
+    let peer
+    if (typeof this.simplePeer === 'function') {
+      peer = this.simplePeer(Peer, opts)
+    }
+
+    peer = new Peer(opts)
+
+    return peer
+  }
+
+  /**
+   * @private
+   */
+  async [kOnSignal] (peer, batch) {
+    if (peer.destroyed || (peer.connected && !peer.subscribeMediaStream)) return
+
+    const payload = () => this._buildMessage({
+      remoteId: peer.id,
+      topic: peer.topic,
+      sessionId: peer.sessionId,
+      data: batch,
+      localMetadata: peer.localMetadata
+    })
+
+    if (!peer.connected) {
+      const type = batch[0].type
+
+      if (type === 'offer') {
+        const response = await this.rpc.call('offer', payload())
+        await this._onAnswer(response)
+        response.data.forEach(signal => peer.stream.signal(signal))
+        peer.metadata = response.metadata
+        return
+      }
+
+      if (type === 'answer') {
+        await this._onIncomingPeer(peer)
+        return peer.emit('answer', payload())
+      }
+    }
+
+    await this.rpc.emit('signal', payload())
+  }
+}
+
+module.exports = SocketSignalClient
+
+}).call(this)}).call(this,{"isBuffer":require("../../../../ssb-browser-core/node_modules/is-buffer/index.js")},require('_process'))
+},{"../../../../ssb-browser-core/node_modules/is-buffer/index.js":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/is-buffer/index.js","./peer":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket-signal/lib/peer.js","_process":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/process/browser.js","crypto":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/crypto-browserify/index.js","fastq":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/fastq/queue.js","nanocustomassert":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanocustomassert/index.js","nanomessage-rpc":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage-rpc/index.js","nanoresource-promise/emitter":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanoresource-promise/emitter.js","p-event":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/p-event/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket-signal/lib/errors.js":[function(require,module,exports){
+const nanoerror = require('nanoerror')
+
+function createError (code, message) {
+  exports[code] = nanoerror(code, message)
+}
+
+createError('ERR_ARGUMENT_INVALID', '%s')
+createError('ERR_PEER_NOT_FOUND', 'peer not found: %s')
+createError('ERR_CONNECTION_CLOSED')
+createError('ERR_SIGNAL_TIMEOUT', 'Timeout trying to establish a connection. SIGNALS: %j')
+
+},{"nanoerror":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanoerror/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket-signal/lib/peer.js":[function(require,module,exports){
+(function (Buffer,process){(function (){
+const { NanoresourcePromise } = require('nanoresource-promise/emitter')
+const SimplePeer = require('simple-peer')
+const assert = require('nanocustomassert')
+const pEvent = require('p-event')
+const eos = require('end-of-stream')
+
+const SignalBatch = require('./signal-batch')
+const { ERR_CONNECTION_CLOSED, ERR_SIGNAL_TIMEOUT } = require('./errors')
+
+const kMetadata = Symbol('peer.metadata')
+const kLocalMetadata = Symbol('peer.localmetadata')
+const kOnSignal = Symbol('peer.onsignal')
+const kOffer = Symbol('peer.offer')
+
+module.exports = class Peer extends NanoresourcePromise {
+  constructor (opts = {}) {
+    super()
+
+    const { onSignal, initiator, sessionId, id, topic, metadata, localMetadata, simplePeer = {}, timeout } = opts
+
+    assert(onSignal)
+    assert(initiator !== undefined, 'initiator is required')
+    assert(Buffer.isBuffer(sessionId) && sessionId.length === 32, 'sessionId is required and must be a buffer of 32')
+    assert(Buffer.isBuffer(id) && id.length === 32, 'id is required and must be a buffer of 32')
+    assert(Buffer.isBuffer(topic) && topic.length === 32, 'topic must be a buffer of 32')
+    assert(!metadata || typeof metadata === 'object', 'metadata must be an object')
+    assert(!localMetadata || typeof localMetadata === 'object', 'localMetadata must be an object')
+
+    this.initiator = initiator
+    this.sessionId = sessionId
+    this.id = id
+    this.topic = topic
+    this.simplePeerOptions = simplePeer
+    this.timeout = timeout
+
+    this.subscribeMediaStream = false
+    this.error = null
+    this.signals = []
+
+    this[kOnSignal] = onSignal
+    this[kOffer] = null
+    this[kMetadata] = metadata
+    this[kLocalMetadata] = localMetadata
+    this.once('error', err => {
+      this.error = err
+    })
+
+    this._initializeSimplePeer()
+  }
+
+  get connected () {
+    return this.stream.connected
+  }
+
+  get destroyed () {
+    return this.stream.destroyed
+  }
+
+  get metadata () {
+    return this[kMetadata]
+  }
+
+  set metadata (metadata) {
+    assert(!metadata || typeof metadata === 'object', 'metadata must be an object')
+    this[kMetadata] = metadata
+    this.emit('metadata-updated', this[kMetadata])
+    return this[kMetadata]
+  }
+
+  get localMetadata () {
+    return this[kLocalMetadata]
+  }
+
+  set localMetadata (metadata) {
+    assert(!metadata || typeof metadata === 'object', 'localMetadata must be an object')
+    this[kLocalMetadata] = metadata
+    this.emit('local-metadata-updated', this[kLocalMetadata])
+    return this[kLocalMetadata]
+  }
+
+  async ready () {
+    if (this.connected) return
+    if (this.destroyed) {
+      if (this.error) throw this.error
+      throw new ERR_CONNECTION_CLOSED()
+    }
+    return pEvent(this, 'connect', {
+      rejectionEvents: ['error', 'close']
+    })
+  }
+
+  addStream (stream) {
+    this.ready()
+      .then(() => process.nextTick(() => this._addStream(stream)))
+      .catch(err => process.nextTick(() => this.emit('stream-error', err)))
+    return this
+  }
+
+  destroy (err) {
+    this.stream.destroy(err)
+  }
+
+  open (offer) {
+    if (offer) this[kOffer] = offer
+    return super.open()
+  }
+
+  async _open () {
+    const timeout = setTimeout(() => {
+      this.destroy(new ERR_SIGNAL_TIMEOUT(this.signals))
+    }, this.timeout)
+
+    const signalBatch = new SignalBatch()
+
+    const ready = this.ready()
+
+    const onSignal = signal => signalBatch.add(signal)
+    const clean = () => this.stream.removeListener('signal', onSignal)
+    this.once('close', () => clean())
+
+    signalBatch
+      .onSignal(batch => {
+        this.signals = [...this.signals, ...batch]
+        return this[kOnSignal](this, batch)
+      })
+      .onClose((err) => {
+        clean()
+        if (err) process.nextTick(() => this.destroy(err))
+      })
+      .resolution(() => this.destroyed)
+
+    this.stream.on('signal', onSignal)
+
+    if (!this.initiator && this[kOffer]) {
+      this[kOffer].forEach(signal => this.stream.signal(signal))
+    }
+
+    return ready.finally(() => {
+      clearTimeout(timeout)
+    })
+  }
+
+  _close () {
+    if (this.destroyed) return
+    process.nextTick(() => this.stream.destroy())
+    return new Promise(resolve => eos(this.stream, () => resolve()))
+  }
+
+  _initializeSimplePeer () {
+    const { streams = [], ...opts } = this.simplePeerOptions
+    this.stream = new SimplePeer({ ...opts, initiator: this.initiator })
+    this._addStream = this.stream.addStream.bind(this.stream)
+    streams.forEach(stream => this.addStream(stream))
+
+    // close stream support
+    this.stream.close = () => process.nextTick(() => this.stream.destroy())
+
+    const onStream = eventStream => this.emit('stream', eventStream)
+    const onSignal = signal => this.emit('signal', signal)
+    const onError = err => this.emit('error', err)
+    const onConnect = () => this.emit('connect')
+    const onClose = () => {
+      this.stream.removeListener('stream', onStream)
+      this.stream.removeListener('signal', onSignal)
+      this.stream.removeListener('error', onError)
+      this.stream.removeListener('connect', onConnect)
+      this.close().catch(() => {})
+      this.emit('close')
+    }
+
+    this.stream.on('stream', onStream)
+    this.stream.on('signal', onSignal)
+    this.stream.once('error', onError)
+    this.stream.once('connect', onConnect)
+    this.stream.once('close', onClose)
+  }
+}
+
+}).call(this)}).call(this,{"isBuffer":require("../../../../ssb-browser-core/node_modules/is-buffer/index.js")},require('_process'))
+},{"../../../../ssb-browser-core/node_modules/is-buffer/index.js":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/is-buffer/index.js","./errors":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket-signal/lib/errors.js","./signal-batch":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket-signal/lib/signal-batch.js","_process":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/process/browser.js","end-of-stream":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/end-of-stream/index.js","nanocustomassert":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanocustomassert/index.js","nanoresource-promise/emitter":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanoresource-promise/emitter.js","p-event":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/p-event/index.js","simple-peer":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/simple-peer/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket-signal/lib/server-map.js":[function(require,module,exports){
+const SocketSignalServer = require('./server')
+const { ERR_PEER_NOT_FOUND } = require('./errors')
+const log = require('debug')('socket-signal:server-map')
+
+class SocketSignalServerMap extends SocketSignalServer {
+  constructor (opts = {}) {
+    super(opts)
+
+    this._peersByTopic = new Map()
+  }
+
+  addPeer (rpc, id, topic) {
+    const topicStr = topic.toString('hex')
+    const idStr = id.toString('hex')
+
+    const peers = this._peersByTopic.get(topicStr) || new Map()
+    peers.set(idStr, { rpc, id })
+
+    this._peersByTopic.set(topicStr, peers)
+  }
+
+  deletePeer (id, topic) {
+    const idStr = id.toString('hex')
+
+    if (!topic) {
+      this._peersByTopic.forEach((peers, topic) => {
+        if (peers.delete(idStr)) {
+          log('peer-leave', idStr + ' from ' + topic)
+        }
+      })
+      return
+    }
+
+    const topicStr = topic.toString('hex')
+    if (this._peersByTopic.has(topicStr) && this._peersByTopic.get(topicStr).delete(idStr)) {
+      log('peer-leave', idStr + ' from ' + topicStr)
+    }
+  }
+
+  getPeers (topic) {
+    const topicStr = topic.toString('hex')
+    if (!this._peersByTopic.has(topicStr)) return []
+    return Array.from(this._peersByTopic.get(topicStr).values()).map(peer => peer.id)
+  }
+
+  findPeer (id, topic) {
+    const idStr = id.toString('hex')
+    const peers = this._peersByTopic.get(topic.toString('hex'))
+
+    if (!peers || !peers.has(idStr)) {
+      throw new ERR_PEER_NOT_FOUND(idStr)
+    }
+
+    return peers.get(idStr)
+  }
+
+  async _onDisconnect (rpc) {
+    let id
+    this._peersByTopic.forEach(peers => {
+      for (const [key, peer] of peers) {
+        if (peer.rpc === rpc) {
+          id = peer.id
+          peers.delete(key)
+          break
+        }
+      }
+    })
+    if (id) {
+      log('peer-disconnected', id.toString('hex'))
+    }
+  }
+
+  async _onJoin (rpc, data) {
+    this.addPeer(rpc, data.id, data.topic)
+    log('peer-join', data.id.toString('hex') + ' in ' + data.topic.toString('hex'))
+    return this.getPeers(data.topic)
+  }
+
+  async _onLeave (rpc, data) {
+    this.deletePeer(data.id, data.topic)
+  }
+
+  async _onOffer (rpc, data) {
+    const remotePeer = this.findPeer(data.remoteId, data.topic)
+    log(`peer-offer ${data.id.toString('hex')} -> ${data.remoteId.toString('hex')}`)
+    return remotePeer.rpc.call('offer', data)
+  }
+
+  async _onLookup (rpc, data) {
+    return this.getPeers(data.topic)
+  }
+
+  async _onSignal (rpc, data) {
+    const remotePeer = this.findPeer(data.remoteId, data.topic)
+    log(`peer-signal ${data.id.toString('hex')} -> ${data.remoteId.toString('hex')}`)
+    remotePeer.rpc.emit('signal', data).catch(() => {})
+  }
+}
+
+module.exports = SocketSignalServerMap
+
+},{"./errors":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket-signal/lib/errors.js","./server":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket-signal/lib/server.js","debug":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/debug/src/browser.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket-signal/lib/server.js":[function(require,module,exports){
+/**
+ * @typedef {object} Data
+ * @property {Buffer} id
+ * @property {Buffer} topic
+ * @property {Object} metadata
+*/
+
+/**
+ * @typedef {object} SignalData
+ * @extends Data
+ * @property {Buffer} remoteId
+ * @property {Buffer} sessionId
+ * @property {Array<Object>} data
+*/
+
+const crypto = require('crypto')
+const nanomessagerpc = require('nanomessage-rpc')
+
+const { NanoresourcePromise } = require('nanoresource-promise/emitter')
+const log = require('debug')('socketsignal:server')
+
+const kDefineActions = Symbol('socketsignal.defineactions')
+const kDefineEvents = Symbol('socketsignal.defineevents')
+
+class SocketSignalServer extends NanoresourcePromise {
+  constructor (opts = {}) {
+    super()
+
+    const { onConnect, onDisconnect, onJoin, onLeave, onLookup, onOffer, onSignal, requestTimeout = 10 * 1000, ...rpcOpts } = opts
+
+    if (onConnect) this._onConnect = onConnect
+    if (onDisconnect) this._onDisconnect = onDisconnect
+    if (onJoin) this._onJoin = onJoin
+    if (onLeave) this._onLeave = onLeave
+    if (onLookup) this._onLookup = onLookup
+    if (onOffer) this._onOffer = onOffer
+    if (onSignal) this._onSignal = onSignal
+
+    this._requestTimeout = requestTimeout
+    this._rpcOpts = rpcOpts
+
+    this.connections = new Set()
+  }
+
+  /**
+   * Adds a duplex stream socket
+   *
+   * @param {DuplexStream} socket
+   * @returns {NanomessageRPC}
+   */
+  async addSocket (socket) {
+    await this.open()
+
+    const rpc = nanomessagerpc({ timeout: this._requestTimeout, ...this._rpcOpts, ...nanomessagerpc.useSocket(socket) })
+
+    this[kDefineActions](rpc)
+    this[kDefineEvents](rpc)
+
+    rpc.id = crypto.randomBytes(32)
+
+    const deleteConnection = () => {
+      if (this.connections.delete(rpc)) {
+        log('connection-deleted', rpc.id.toString('hex'))
+        return this._onDisconnect(rpc)
+      }
+    }
+
+    rpc.ee.on('closed', deleteConnection)
+
+    rpc.ee.on('error', err => this.emit('connection-error', err, rpc))
+
+    await rpc.open()
+
+    try {
+      log('connection-added', rpc.id.toString('hex'))
+      await this._onConnect(rpc)
+      this.connections.add(rpc)
+    } catch (err) {
+      rpc.closed()
+        .then(deleteConnection)
+        .catch(deleteConnection)
+        .finally(() => {
+          this.emit('connection-error', err, rpc)
+        })
+    }
+
+    return rpc
+  }
+
+  /**
+   * Defines a behaviour when the nanoresource is opening.
+   *
+   * @returns {Promise}
+   */
+  async _open () {}
+
+  /**
+   * Defines a behaviour when the nanoresource is closing.
+   *
+   * @returns {Promise}
+   */
+  async _close () {
+    await Promise.all(Array.from(this.connections.values()).map(c => c.close()))
+  }
+
+  /**
+   * Event connect
+   *
+   * @abstract
+   * @param {NanomessageRPC} rpc
+   */
+  async _onConnect () {}
+
+  /**
+   * Event disconnect
+   *
+   * @abstract
+   * @param {NanomessageRPC} rpc
+   */
+  async _onDisconnect () {}
+
+  /**
+   * Action join
+   *
+   * @abstract
+   * @param {NanomessageRPC} rpc
+   * @param {Data} data
+   * @returns {Promise<Array<Buffer>>}
+   */
+  async _onJoin () {}
+
+  /**
+   * Action leave
+   *
+   * @abstract
+   * @param {NanomessageRPC} rpc
+   * @param {Data} data
+   * @returns {Promise}
+   */
+  async _onLeave () {}
+
+  /**
+   * Action lookup
+   *
+   * @abstract
+   * @param {NanomessageRPC} rpc
+   * @param {Data} data
+   * @returns {Promise<Array<Buffer>>}
+   */
+  async _onLookup () {}
+
+  /**
+   * Action offer
+   *
+   * @abstract
+   * @param {NanomessageRPC} rpc
+   * @param {SignalData} data
+   * @returns {Promise<SignalData>}
+   */
+  async _onOffer () {}
+
+  /**
+   * Event signal
+   *
+   * @abstract
+   * @param {NanomessageRPC} rpc
+   * @param {SignalData} data
+   */
+  async _onSignal () {}
+
+  /**
+   * @private
+   */
+  [kDefineActions] (rpc) {
+    rpc.actions({
+      join: (data = {}) => {
+        return this._onJoin(rpc, data)
+      },
+      leave: (data = {}) => {
+        return this._onLeave(rpc, data)
+      },
+      offer: (data = {}) => {
+        return this._onOffer(rpc, data)
+      },
+      lookup: (data = {}) => {
+        return this._onLookup(rpc, data)
+      }
+    })
+  }
+
+  /**
+   * @private
+   */
+  [kDefineEvents] (rpc) {
+    rpc.on('signal', async (data = {}) => {
+      try {
+        await this._onSignal(rpc, data)
+      } catch (err) {
+        log('signal error', err)
+      }
+    })
+  }
+}
+
+module.exports = SocketSignalServer
+
+},{"crypto":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/crypto-browserify/index.js","debug":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/debug/src/browser.js","nanomessage-rpc":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanomessage-rpc/index.js","nanoresource-promise/emitter":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/nanoresource-promise/emitter.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/socket-signal/lib/signal-batch.js":[function(require,module,exports){
+const pLimit = require('p-limit')
+
+class SignalBatch {
+  constructor () {
+    this._limit = pLimit(1)
+    this._cache = []
+  }
+
+  onSignal (cb) {
+    this._onSignal = (peer, type, batch) => cb && cb(peer, type, batch)
+    return this
+  }
+
+  onClose (cb) {
+    this._onClose = (err) => cb && cb(err)
+    return this
+  }
+
+  resolution (cb) {
+    this._resolution = () => cb && cb()
+  }
+
+  add (signal) {
+    this._cache.push(signal)
+
+    this._limit(async () => {
+      this._limit.clearQueue()
+      if (this._cache.length === 0 || this._resolution()) return
+
+      let prev
+      let ms = 300
+      do {
+        prev = this._cache.length
+        await new Promise(resolve => setTimeout(resolve, ms))
+        ms = 1
+      } while (prev < this._cache.length && this._cache.length < 4)
+
+      const batch = this._cache
+      this._cache = []
+      return this._onSignal(batch)
+    }).catch(err => {
+      this._limit.clearQueue()
+      this._onClose(err)
+    }).finally(() => {
+      if (this._resolution()) {
+        this._limit.clearQueue()
+        this._onClose()
+      }
+    })
+  }
+}
+
+module.exports = SignalBatch
+
+},{"p-limit":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/p-limit/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/stream-shift/index.js":[function(require,module,exports){
 module.exports = shift
 
 function shift (stream) {
@@ -19603,22 +16900,7 @@ SafeBuffer.allocUnsafeSlow = function (size) {
   return buffer.SlowBuffer(size)
 }
 
-},{"buffer":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browserify/node_modules/buffer/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/to-array/index.js":[function(require,module,exports){
-module.exports = toArray
-
-function toArray(list, index) {
-    var array = []
-
-    index = index || 0
-
-    for (var i = index || 0; i < list.length; i++) {
-        array[i - index] = list[i]
-    }
-
-    return array
-}
-
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/util-deprecate/browser.js":[function(require,module,exports){
+},{"buffer":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browserify/node_modules/buffer/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/util-deprecate/browser.js":[function(require,module,exports){
 (function (global){(function (){
 
 /**
@@ -19801,7 +17083,7 @@ arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules
 },{"process-nextick-args":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/process-nextick-args/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/websocket-stream/node_modules/readable-stream/lib/internal/streams/stream-browser.js":[function(require,module,exports){
 arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/lib/internal/streams/stream-browser.js"][0].apply(exports,arguments)
 },{"events":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/events/events.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/websocket-stream/node_modules/readable-stream/node_modules/safe-buffer/index.js":[function(require,module,exports){
-arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/safe-buffer/index.js"][0].apply(exports,arguments)
+arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/safe-buffer/index.js"][0].apply(exports,arguments)
 },{"buffer":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browserify/node_modules/buffer/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/websocket-stream/node_modules/readable-stream/readable-browser.js":[function(require,module,exports){
 arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/readable-stream/readable-browser.js"][0].apply(exports,arguments)
 },{"./lib/_stream_duplex.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/websocket-stream/node_modules/readable-stream/lib/_stream_duplex.js","./lib/_stream_passthrough.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/websocket-stream/node_modules/readable-stream/lib/_stream_passthrough.js","./lib/_stream_readable.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/websocket-stream/node_modules/readable-stream/lib/_stream_readable.js","./lib/_stream_transform.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/websocket-stream/node_modules/readable-stream/lib/_stream_transform.js","./lib/_stream_writable.js":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/websocket-stream/node_modules/readable-stream/lib/_stream_writable.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/websocket-stream/node_modules/safe-buffer/index.js":[function(require,module,exports){
@@ -19809,7 +17091,7 @@ arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules
 },{"buffer":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browserify/node_modules/buffer/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/websocket-stream/node_modules/string_decoder/lib/string_decoder.js":[function(require,module,exports){
 arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/string_decoder/lib/string_decoder.js"][0].apply(exports,arguments)
 },{"safe-buffer":"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/websocket-stream/node_modules/string_decoder/node_modules/safe-buffer/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/websocket-stream/node_modules/string_decoder/node_modules/safe-buffer/index.js":[function(require,module,exports){
-arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/safe-buffer/index.js"][0].apply(exports,arguments)
+arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/safe-buffer/index.js"][0].apply(exports,arguments)
 },{"buffer":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browserify/node_modules/buffer/index.js"}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/websocket-stream/stream.js":[function(require,module,exports){
 (function (process,global){(function (){
 'use strict'
@@ -20106,75 +17388,75 @@ function extend() {
     return target
 }
 
-},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/yeast/index.js":[function(require,module,exports){
-'use strict';
+},{}],"/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/yocto-queue/index.js":[function(require,module,exports){
+class Node {
+	/// value;
+	/// next;
 
-var alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_'.split('')
-  , length = 64
-  , map = {}
-  , seed = 0
-  , i = 0
-  , prev;
+	constructor(value) {
+		this.value = value;
 
-/**
- * Return a string representing the specified number.
- *
- * @param {Number} num The number to convert.
- * @returns {String} The string representation of the number.
- * @api public
- */
-function encode(num) {
-  var encoded = '';
-
-  do {
-    encoded = alphabet[num % length] + encoded;
-    num = Math.floor(num / length);
-  } while (num > 0);
-
-  return encoded;
+		// TODO: Remove this when targeting Node.js 12.
+		this.next = undefined;
+	}
 }
 
-/**
- * Return the integer value specified by the given string.
- *
- * @param {String} str The string to convert.
- * @returns {Number} The integer value represented by the string.
- * @api public
- */
-function decode(str) {
-  var decoded = 0;
+class Queue {
+	// TODO: Use private class fields when targeting Node.js 12.
+	// #_head;
+	// #_tail;
+	// #_size;
 
-  for (i = 0; i < str.length; i++) {
-    decoded = decoded * length + map[str.charAt(i)];
-  }
+	constructor() {
+		this.clear();
+	}
 
-  return decoded;
+	enqueue(value) {
+		const node = new Node(value);
+
+		if (this._head) {
+			this._tail.next = node;
+			this._tail = node;
+		} else {
+			this._head = node;
+			this._tail = node;
+		}
+
+		this._size++;
+	}
+
+	dequeue() {
+		const current = this._head;
+		if (!current) {
+			return;
+		}
+
+		this._head = this._head.next;
+		this._size--;
+		return current.value;
+	}
+
+	clear() {
+		this._head = undefined;
+		this._tail = undefined;
+		this._size = 0;
+	}
+
+	get size() {
+		return this._size;
+	}
+
+	* [Symbol.iterator]() {
+		let current = this._head;
+
+		while (current) {
+			yield current.value;
+			current = current.next;
+		}
+	}
 }
 
-/**
- * Yeast: A tiny growing id generator.
- *
- * @returns {String} A unique id.
- * @api public
- */
-function yeast() {
-  var now = encode(+new Date());
-
-  if (now !== prev) return seed = 0, prev = now;
-  return now +'.'+ encode(seed++);
-}
-
-//
-// Map each character to its index.
-//
-for (; i < length; i++) map[alphabet[i]] = i;
-
-//
-// Expose the `yeast`, `encode` and `decode` functions.
-//
-yeast.encode = encode;
-yeast.decode = decode;
-module.exports = yeast;
+module.exports = Queue;
 
 },{}],"/home/kylemaas/Programming/JavaScript/ssb-browser-core/browser.js":[function(require,module,exports){
 const os = require('os')
@@ -52172,6 +49454,43 @@ function loadTypedArrayFile(filename, Type, cb) {
     .catch(cb)
 }
 
+function savePrefixMapFile(filename, version, offset, count, map, cb) {
+  if (!cb)
+    cb = (err) => {
+      if (err) console.error(err)
+    }
+
+  const jsonMap = JSON.stringify(map)
+  const b = Buffer.alloc(4 * FIELD_SIZE + jsonMap.length)
+  b.writeUInt32LE(version, 0)
+  b.writeUInt32LE(offset, FIELD_SIZE)
+  b.writeUInt32LE(count, 2 * FIELD_SIZE)
+  Buffer.from(jsonMap).copy(b, 4 * FIELD_SIZE)
+
+  writeFile(filename, b)
+    .then(() => cb())
+    .catch(cb)
+}
+
+function loadPrefixMapFile(filename, cb) {
+  readFile(filename)
+    .then((buf) => {
+      const version = buf.readUInt32LE(0)
+      const offset = buf.readUInt32LE(FIELD_SIZE)
+      const count = buf.readUInt32LE(2 * FIELD_SIZE)
+      const body = buf.slice(4 * FIELD_SIZE)
+      const map = JSON.parse(body)
+
+      cb(null, {
+        version,
+        offset,
+        count,
+        map,
+      })
+    })
+    .catch(cb)
+}
+
 function saveBitsetFile(filename, version, offset, bitset, cb) {
   bitset.trim()
   const count = bitset.words.length
@@ -52225,6 +49544,8 @@ function safeFilename(filename) {
 module.exports = {
   saveTypedArrayFile,
   loadTypedArrayFile,
+  savePrefixMapFile,
+  loadPrefixMapFile,
   saveBitsetFile,
   loadBitsetFile,
   listFilesIDB,
@@ -52248,6 +49569,8 @@ const debug = require('debug')('jitdb')
 const {
   saveTypedArrayFile,
   loadTypedArrayFile,
+  savePrefixMapFile,
+  loadPrefixMapFile,
   saveBitsetFile,
   loadBitsetFile,
   safeFilename,
@@ -52350,6 +49673,17 @@ module.exports = function (log, indexesPath) {
               filepath: path.join(indexesPath, file),
             }
             cb()
+          } else if (file.endsWith('.32prefixmap')) {
+            // Don't load it yet, just tag it `lazy`
+            indexes[indexName] = {
+              offset: -1,
+              count: 0,
+              map: {},
+              lazy: true,
+              prefix: 32,
+              filepath: path.join(indexesPath, file),
+            }
+            cb()
           } else if (file.endsWith('.index')) {
             // Don't load it yet, just tag it `lazy`
             indexes[indexName] = {
@@ -52414,6 +49748,21 @@ module.exports = function (log, indexesPath) {
       prefixIndex.offset,
       count,
       prefixIndex.tarr,
+      cb
+    )
+  }
+
+  function savePrefixMapIndex(name, prefixIndex, count, cb) {
+    if (prefixIndex.offset < 0) return
+    debug('saving prefix map index: %s', name)
+    const num = prefixIndex.prefix
+    const filename = path.join(indexesPath, name + `.${num}prefixmap`)
+    savePrefixMapFile(
+      filename,
+      prefixIndex.version || 1,
+      prefixIndex.offset,
+      count,
+      prefixIndex.map,
       cb
     )
   }
@@ -52511,13 +49860,36 @@ module.exports = function (log, indexesPath) {
     }
   }
 
-  function safeReadUint32(buf) {
+  function safeReadUint32(buf, prefixOffset = 0) {
     if (buf.length < 4) {
       const bigger = Buffer.alloc(4)
       buf.copy(bigger)
-      return bigger.readUInt32LE(0)
+      return bigger.readUInt32LE(prefixOffset)
     } else {
-      return buf.readUInt32LE(0)
+      return buf.readUInt32LE(prefixOffset)
+    }
+  }
+
+  function addToPrefixMap(map, seq, prefix) {
+    if (prefix === 0) return
+
+    const arr = map[prefix] || (map[prefix] = [])
+    arr.push(seq)
+  }
+
+  function updatePrefixMapIndex(opData, index, buffer, seq, offset) {
+    if (seq > index.count - 1) {
+      const fieldStart = opData.seek(buffer)
+      if (~fieldStart) {
+        const buf = bipf.slice(buffer, fieldStart)
+        if (buf.length) {
+          const prefix = safeReadUint32(buf, opData.prefixOffset)
+          addToPrefixMap(index.map, seq, prefix)
+        }
+      }
+
+      index.offset = offset
+      index.count = seq + 1
     }
   }
 
@@ -52526,9 +49898,11 @@ module.exports = function (log, indexesPath) {
       if (seq > index.tarr.length - 1) growTarrIndex(index, Uint32Array)
 
       const fieldStart = opData.seek(buffer)
-      if (fieldStart) {
+      if (~fieldStart) {
         const buf = bipf.slice(buffer, fieldStart)
-        index.tarr[seq] = buf.length ? safeReadUint32(buf) : 0
+        index.tarr[seq] = buf.length
+          ? safeReadUint32(buf, opData.prefixOffset)
+          : 0
       } else {
         index.tarr[seq] = 0
       }
@@ -52559,8 +49933,17 @@ module.exports = function (log, indexesPath) {
     newIndexes[indexName].bitset.add(seq)
   }
 
+  // concurrent index update
+  const waitingIndexUpdate = new Map()
+
   function updateIndex(op, cb) {
     const index = indexes[op.data.indexName]
+
+    const waitingKey = op.data.indexName
+    if (waitingIndexUpdate.has(waitingKey)) {
+      waitingIndexUpdate.get(waitingKey).push(cb)
+      return // wait for other index update
+    } else waitingIndexUpdate.set(waitingKey, [])
 
     // find the next possible seq
     let seq = 0
@@ -52605,7 +49988,9 @@ module.exports = function (log, indexesPath) {
           updatedSequenceIndex = true
 
         if (indexNeedsUpdate) {
-          if (op.data.prefix)
+          if (op.data.prefix && op.data.useMap)
+            updatePrefixMapIndex(op.data, index, buffer, seq, offset)
+          else if (op.data.prefix)
             updatePrefixIndex(op.data, index, buffer, seq, offset)
           else updateIndexValue(op, index, buffer, seq)
         }
@@ -52626,19 +50011,44 @@ module.exports = function (log, indexesPath) {
 
         index.offset = indexes['seq'].offset
         if (indexNeedsUpdate) {
-          if (index.prefix) savePrefixIndex(op.data.indexName, index, count)
+          if (index.prefix && index.map)
+            savePrefixMapIndex(op.data.indexName, index, count)
+          else if (index.prefix)
+            savePrefixIndex(op.data.indexName, index, count)
           else saveIndex(op.data.indexName, index)
         }
+
+        waitingIndexUpdate.get(waitingKey).forEach((cb) => cb())
+        waitingIndexUpdate.delete(waitingKey)
 
         cb()
       },
     })
   }
 
+  // concurrent index create
+  const waitingIndexCreate = new Map()
+
   function createIndexes(opsMissingIndexes, cb) {
     const newIndexes = {}
+
+    const waitingKey = opsMissingIndexes
+      .map((op) => op.data.indexName)
+      .join('|')
+    if (waitingIndexCreate.has(waitingKey)) {
+      waitingIndexCreate.get(waitingKey).push(cb)
+      return // wait for other index update
+    } else waitingIndexCreate.set(waitingKey, [])
+
     opsMissingIndexes.forEach((op) => {
-      if (op.data.prefix)
+      if (op.data.prefix && op.data.useMap) {
+        newIndexes[op.data.indexName] = {
+          offset: 0,
+          count: 0,
+          map: {},
+          prefix: typeof op.data.prefix === 'number' ? op.data.prefix : 32,
+        }
+      } else if (op.data.prefix)
         newIndexes[op.data.indexName] = {
           offset: 0,
           count: 0,
@@ -52680,6 +50090,14 @@ module.exports = function (log, indexesPath) {
           updatedSequenceIndex = true
 
         opsMissingIndexes.forEach((op) => {
+          if (op.data.prefix && op.data.useMap)
+            updatePrefixMapIndex(
+              op.data,
+              newIndexes[op.data.indexName],
+              buffer,
+              seq,
+              offset
+            )
           if (op.data.prefix)
             updatePrefixIndex(
               op.data,
@@ -52710,9 +50128,14 @@ module.exports = function (log, indexesPath) {
         for (var indexName in newIndexes) {
           const index = (indexes[indexName] = newIndexes[indexName])
           index.offset = indexes['seq'].offset
-          if (index.prefix) savePrefixIndex(indexName, index, count)
+          if (index.prefix && index.map)
+            savePrefixMapIndex(indexName, index, count)
+          else if (index.prefix) savePrefixIndex(indexName, index, count)
           else saveIndex(indexName, index)
         }
+
+        waitingIndexCreate.get(waitingKey).forEach((cb) => cb())
+        waitingIndexCreate.delete(waitingKey)
 
         cb()
       },
@@ -52722,7 +50145,18 @@ module.exports = function (log, indexesPath) {
   function loadLazyIndex(indexName, cb) {
     debug('lazy loading %s', indexName)
     let index = indexes[indexName]
-    if (index.prefix) {
+    if (index.prefix && index.map) {
+      loadPrefixMapFile(index.filepath, (err, data) => {
+        if (err) return cb(err)
+        const { version, offset, count, map } = data
+        index.version = version
+        index.offset = offset
+        index.count = count
+        index.map = map
+        index.lazy = false
+        cb()
+      })
+    } else if (index.prefix) {
       loadTypedArrayFile(index.filepath, Uint32Array, (err, data) => {
         if (err) return cb(err)
         const { version, offset, count, tarr } = data
@@ -52812,17 +50246,30 @@ module.exports = function (log, indexesPath) {
 
   function matchAgainstPrefix(op, prefixIndex, cb) {
     const target = op.data.value
-    const targetPrefix = target ? safeReadUint32(target) : 0
-    const count = prefixIndex.count
-    const tarr = prefixIndex.tarr
+    const targetPrefix = target
+      ? safeReadUint32(target, op.data.prefixOffset)
+      : 0
     const bitset = new TypedFastBitSet()
     const done = multicb({ pluck: 1 })
-    for (let seq = 0; seq < count; ++seq) {
-      if (tarr[seq] === targetPrefix) {
-        bitset.add(seq)
-        getRecord(seq, done())
+
+    if (prefixIndex.map) {
+      if (prefixIndex.map[targetPrefix]) {
+        prefixIndex.map[targetPrefix].forEach((seq) => {
+          bitset.add(seq)
+          getRecord(seq, done())
+        })
+      }
+    } else {
+      const count = prefixIndex.count
+      const tarr = prefixIndex.tarr
+      for (let seq = 0; seq < count; ++seq) {
+        if (tarr[seq] === targetPrefix) {
+          bitset.add(seq)
+          getRecord(seq, done())
+        }
       }
     }
+
     done((err, recs) => {
       // FIXME: handle error better, this cb() should support 2 args
       if (err) return console.error(err)
@@ -53261,15 +50708,23 @@ function debug() {
 //#endregion
 //#region "Unit operators": they create objects that JITDB interprets
 
+function getIndexName(opts, indexType, valueName) {
+  return safeFilename(
+    opts.prefix
+      ? opts.useMap
+        ? indexType + '__map'
+        : indexType
+      : indexType + '_' + valueName
+  )
+}
+
 function slowEqual(seekDesc, target, opts) {
   opts = opts || {}
   const seek = seekFromDesc(seekDesc)
   const value = toBufferOrFalsy(target)
   const valueName = !value ? '' : value.toString()
   const indexType = seekDesc.replace(/\./g, '_')
-  const indexName = opts.prefix
-    ? safeFilename(indexType)
-    : safeFilename(indexType + '_' + valueName)
+  const indexName = getIndexName(opts, indexType, valueName)
   return {
     type: 'EQUAL',
     data: {
@@ -53277,6 +50732,7 @@ function slowEqual(seekDesc, target, opts) {
       value,
       indexType,
       indexName,
+      useMap: opts.useMap,
       indexAll: opts.indexAll,
       prefix: opts.prefix,
     },
@@ -53290,9 +50746,7 @@ function equal(seek, target, opts) {
   const value = toBufferOrFalsy(target)
   const valueName = !value ? '' : value.toString()
   const indexType = opts.indexType
-  const indexName = opts.prefix
-    ? safeFilename(indexType)
-    : safeFilename(indexType + '_' + valueName)
+  const indexName = getIndexName(opts, indexType, valueName)
   return {
     type: 'EQUAL',
     data: {
@@ -53300,6 +50754,7 @@ function equal(seek, target, opts) {
       value,
       indexType,
       indexName,
+      useMap: opts.useMap,
       indexAll: opts.indexAll,
       prefix: opts.prefix,
     },
@@ -79294,6 +76749,8 @@ const { and, equal, includes } = jitdbOperators
 function key(value) {
   return equal(seekKey, value, {
     prefix: 32,
+    prefixOffset: 1,
+    useMap: true,
     indexType: 'key',
   })
 }
@@ -79307,6 +76764,7 @@ function type(value) {
 function author(value) {
   return equal(seekAuthor, value, {
     prefix: 32,
+    prefixOffset: 1,
     indexType: 'value_author',
   })
 }
@@ -79322,6 +76780,8 @@ function votesFor(msgKey) {
     type('vote'),
     equal(seekVoteLink, msgKey, {
       prefix: 32,
+      prefixOffset: 1,
+      useMap: true,
       indexType: 'value_content_vote_link',
     })
   )()
@@ -79332,6 +76792,8 @@ function contact(feedId) {
     type('contact'),
     equal(seekContact, feedId, {
       prefix: 32,
+      prefixOffset: 1,
+      useMap: true,
       indexType: 'value_content_contact',
     })
   )()
@@ -79347,6 +76809,8 @@ function mentions(key) {
 function hasRoot(msgKey) {
   return equal(seekRoot, msgKey, {
     prefix: 32,
+    prefixOffset: 1,
+    useMap: true,
     indexType: 'value_content_root',
   })
 }
@@ -79354,6 +76818,8 @@ function hasRoot(msgKey) {
 function hasFork(msgKey) {
   return equal(seekFork, msgKey, {
     prefix: 32,
+    prefixOffset: 1,
+    useMap: true,
     indexType: 'value_content_fork',
   })
 }
@@ -79361,6 +76827,8 @@ function hasFork(msgKey) {
 function hasBranch(msgKey) {
   return equal(seekBranch, msgKey, {
     prefix: 32,
+    prefixOffset: 1,
+    useMap: true,
     indexType: 'value_content_branch',
   })
 }
@@ -82903,7 +80371,7 @@ arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules
 },{}],"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/string_decoder/lib/string_decoder.js":[function(require,module,exports){
 arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/string_decoder/lib/string_decoder.js"][0].apply(exports,arguments)
 },{"safe-buffer":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/string_decoder/node_modules/safe-buffer/index.js"}],"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/string_decoder/node_modules/safe-buffer/index.js":[function(require,module,exports){
-arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/safe-buffer/index.js"][0].apply(exports,arguments)
+arguments[4]["/home/kylemaas/Programming/JavaScript/multiserver-dht/node_modules/duplexify/node_modules/safe-buffer/index.js"][0].apply(exports,arguments)
 },{"buffer":"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/browserify/node_modules/buffer/index.js"}],"/home/kylemaas/Programming/JavaScript/ssb-browser-core/node_modules/timers-browserify/main.js":[function(require,module,exports){
 (function (setImmediate,clearImmediate){(function (){
 var nextTick = require('process/browser.js').nextTick;
