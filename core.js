@@ -1,5 +1,6 @@
 exports.init = function (dir, config) {
   const FeedSyncer = require('./feed-syncer')
+  const pull = require('pull-stream')
 
   const EventEmitter = require('events')
   SSB = {
@@ -45,6 +46,10 @@ exports.init = function (dir, config) {
 
     // helper for rooms to allow connecting to friends directly
     SSB.net.friends = {
+      hopStream: function(options) {
+        // This is here to get ssb-suggest to work.
+        return pull.values()
+      },
       hops: function(cb) {
         net.db.getIndex('contacts').getGraphForFeed(SSB.net.id, (err, graph) => {
           let hops = {}

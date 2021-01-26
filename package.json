@@ -32,7 +32,9 @@
     "ssb-no-auth": "^1.0.0",
     "ssb-ref": "^2.14.3",
     "ssb-room": "^1.3.0",
+    "ssb-social-index": "git://github.com/ssbc/ssb-social-index.git#db2",
     "ssb-sort": "^1.1.3",
+    "ssb-suggest": "git://github.com/ssbc/ssb-suggest.git#db2",
     "ssb-validate": "^4.1.3",
     "ssb-ws": "^6.2.3"
   },
