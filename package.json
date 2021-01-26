@@ -29,7 +29,7 @@
     "ssb-caps": "^1.1.0",
     "ssb-conn": "^0.19.1",
     "ssb-db2": "^1.3.0",
-    "ssb-dht-invite": "file:../ssb-dht-invite",
+    "ssb-dht-invite": "git://github.com/KyleMaas/ssb-dht-invite.git#hyperswarm-v2",
     "ssb-keys": "^8.0.1",
     "ssb-no-auth": "^1.0.0",
     "ssb-ref": "^2.14.3",
