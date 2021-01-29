@@ -42,6 +42,8 @@ exports.init = function (sbot, config) {
   }
 
   function httpGet(url, responseType, cb) {
+    if (!url) return cb()
+
     if (waiting[url]) return waiting[url].push(cb)
 
     if (Object.keys(waiting).length > maxConcurrentRequests)
@@ -158,6 +160,8 @@ exports.init = function (sbot, config) {
   }
 
   function remoteURL(id) {
+    if (!id) return ""
+
     const peer = SSB.getPeer()
     if (!peer) return ''
 
@@ -351,7 +355,7 @@ exports.init = function (sbot, config) {
       if (stat && stat.size == 0) {
         httpGet(remoteURL(id), 'blob', (err, data) => {
           if (err) cb(err)
-          else if (data.size < max)
+          else if (data && data.size < max)
             add(id, data, () => { fsURL(id, cb) })
           else
             cb(null, remoteURL(id))
