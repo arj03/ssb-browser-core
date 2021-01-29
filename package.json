@@ -1,7 +1,7 @@
 {
   "name": "ssb-browser-core",
   "description": "",
-  "version": "6.0.5",
+  "version": "7.0.0",
   "homepage": "https://github.com/arj03/ssb-browser-core",
   "repository": {
     "type": "git",
@@ -11,7 +11,7 @@
     "atomic-file": "^2.1.1",
     "atomically-universal": "^0.1.1",
     "bipf": "^1.4.0",
-    "epidemic-broadcast-trees": "^8.0.0",
+    "epidemic-broadcast-trees": "^8.0.1",
     "gossip-query": "^2.0.2",
     "polyraf": "^1.1.0",
     "promisify-4loc": "^1.0.0",
@@ -26,7 +26,7 @@
     "secret-stack": "^6.3.2",
     "ssb-blob-files": "https://github.com/ssbc/ssb-blob-files#browser-support",
     "ssb-caps": "^1.1.0",
-    "ssb-conn": "^0.19.1",
+    "ssb-conn": "^1.0.0",
     "ssb-db2": "^1.7.0",
     "ssb-keys": "^8.0.1",
     "ssb-no-auth": "^1.0.0",
