@@ -60,7 +60,10 @@ exports.init = function (dir, config) {
       }
     }
 
-    SSB.net.conn.start()
+    // delay startup a bit
+    setTimeout(() => {
+      SSB.net.conn.start()
+    }, 2000)
 
     SSB.events.emit("SSB: loaded")
   })
