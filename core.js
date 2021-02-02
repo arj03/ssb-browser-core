@@ -61,9 +61,11 @@ exports.init = function (dir, config) {
     }
 
     // delay startup a bit
-    setTimeout(() => {
-      SSB.net.conn.start()
-    }, 2000)
+    if (!config.core || !config.core.startOffline) {
+      setTimeout(() => {
+        SSB.net.conn.start()
+      }, 2000)
+    }
 
     SSB.events.emit("SSB: loaded")
   })
