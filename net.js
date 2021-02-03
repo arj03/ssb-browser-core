@@ -11,6 +11,10 @@ exports.init = function(dir, overwriteConfig) {
   var config = Object.assign({
     caps: { shs: Buffer.from(caps.shs, 'base64') },
     keys,
+    friends: {
+      hops: 2,
+      hookReplicate: false
+    },
     connections: {
       incoming: {
 	tunnel: [{ scope: 'public', transform: 'shs' }]
@@ -49,11 +53,7 @@ exports.init = function(dir, overwriteConfig) {
       sbot.db.registerIndex(require('ssb-db2/indexes/full-mentions'))
     }
   })
-  .use({
-    init: function (sbot, config) {
-      sbot.db.registerIndex(require('./indexes/contacts'))
-    }
-  })
+  .use(require('ssb-friends'))
   .use(require('./ssb-partial-replication'))
   .use(require('./simple-ooo'))
   .use(require('ssb-ws'))
