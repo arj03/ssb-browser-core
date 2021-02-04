@@ -6,7 +6,7 @@ module.exports = function (net, partial) {
   // cache for sync calls
   let lastGraph = { following: [], extended: [] }
 
-  function convertHopsIntoGraph(hops) { 
+  function convertHopsIntoGraph(hops, isSelf = true) { 
     const following = []
     const blocking = []
     const extended = []
@@ -20,11 +20,12 @@ module.exports = function (net, partial) {
         extended.push(feed)
       else if (hops[feed] == -1) // FIXME: respect hops setting
         blocking.push(feed) 
-   }
+    }
 
-    lastGraph = { following, extended, blocking }
-
-    return lastGraph
+    if (isSelf) {
+      lastGraph = { following, extended, blocking }
+      return lastGraph
+    } else return { following, extended, blocking }
   }
 
   function syncMessages(feed, key, rpcCall, partialState, cb) {
