@@ -64,74 +64,72 @@ module.exports = function (net, partial) {
     syncing = true
     console.log("syncing feeds")
     partial.get((err, partialState) => {
-      SSB.net.db.onDrain('contacts', () => {
-        SSB.net.friends.hops((err, hops) => {
-          const graph = convertHopsIntoGraph(hops)
-          console.time("full feeds")
-          pull(
-            pull.values(graph.following),
-            pull.asyncMap((feed, cb) => {
-              if (!partialState[feed] || !partialState[feed]['full']) {
-                net.db.getAllLatest((err, latest) => {
-                  const latestSeq = latest[feed] ? latest[feed].sequence + 1 : 0
-                  pull(
-                    rpc.partialReplication.getFeed({ id: feed, seq: latestSeq, keys: false }),
-                    pull.asyncMap(net.db.add),
-                    pull.collect((err) => {
-                      if (err) throw err
-
-                      partial.updateState(feed, { full: true }, cb)
-                    })
-                  )
-                })
-              } else
-                cb()
-            }),
-            pull.collect(() => {
-              console.timeEnd("full feeds")
-
-              console.time("partial feeds")
-
-              SSB.net.friends.hops((err, hops) => {
-                const graph = convertHopsIntoGraph(hops)
-
+      SSB.net.friends.hops((err, hops) => {
+        const graph = convertHopsIntoGraph(hops)
+        console.time("full feeds")
+        pull(
+          pull.values(graph.following),
+          pull.asyncMap((feed, cb) => {
+            if (!partialState[feed] || !partialState[feed]['full']) {
+              net.db.getAllLatest((err, latest) => {
+                const latestSeq = latest[feed] ? latest[feed].sequence + 1 : 0
                 pull(
-                  pull.values(graph.extended),
-                  paramap((feed, cb) => {
-                    syncMessages(feed, 'syncedMessages',
-                                 () => rpc.partialReplication.getFeedReverse({ id: feed, keys: false, limit: 25 }),
-                                 partialState, cb)
-                  }, 5),
-                  paramap((feed, cb) => {
-                    syncMessages(feed, 'syncedProfile',
-                                 () => rpc.partialReplication.getMessagesOfType({id: feed, type: 'about'}),
-                                 partialState, cb)
-                  }, 5),
-                  paramap((feed, cb) => {
-                    syncMessages(feed, 'syncedContacts',
-                                 () => rpc.partialReplication.getMessagesOfType({id: feed, type: 'contact'}),
-                                 partialState, cb)
-                  }, 5),
-                  pull.collect(() => {
-                    console.timeEnd("partial feeds")
+                  rpc.partialReplication.getFeed({ id: feed, seq: latestSeq, keys: false }),
+                  pull.asyncMap(net.db.add),
+                  pull.collect((err) => {
+                    if (err) throw err
 
-                    // check for changes that happened while running syncFeeds
-                    SSB.net.friends.hops((err, hops) => {
-                      const newGraph = convertHopsIntoGraph(hops)
-                      if (JSON.stringify(graph) === JSON.stringify(newGraph)) {
-                        syncing = false
-
-                        if (cb) cb(rpc)
-                      }
-                      else // sync new changes
-                        syncFeeds(rpc, cb)
-                    })
+                    partial.updateState(feed, { full: true }, cb)
                   })
                 )
               })
+            } else
+              cb()
+          }),
+          pull.collect(() => {
+            console.timeEnd("full feeds")
+
+            console.time("partial feeds")
+
+            SSB.net.friends.hops((err, hops) => {
+              const graph = convertHopsIntoGraph(hops)
+
+              pull(
+                pull.values(graph.extended),
+                paramap((feed, cb) => {
+                  syncMessages(feed, 'syncedMessages',
+                               () => rpc.partialReplication.getFeedReverse({ id: feed, keys: false, limit: 25 }),
+                               partialState, cb)
+                }, 5),
+                paramap((feed, cb) => {
+                  syncMessages(feed, 'syncedProfile',
+                               () => rpc.partialReplication.getMessagesOfType({id: feed, type: 'about'}),
+                               partialState, cb)
+                }, 5),
+                paramap((feed, cb) => {
+                  syncMessages(feed, 'syncedContacts',
+                               () => rpc.partialReplication.getMessagesOfType({id: feed, type: 'contact'}),
+                               partialState, cb)
+                }, 5),
+                pull.collect(() => {
+                  console.timeEnd("partial feeds")
+
+                  // check for changes that happened while running syncFeeds
+                  SSB.net.friends.hops((err, hops) => {
+                    const newGraph = convertHopsIntoGraph(hops)
+                    if (JSON.stringify(graph) === JSON.stringify(newGraph)) {
+                      syncing = false
+
+                      if (cb) cb(rpc)
+                    }
+                    else // sync new changes
+                      syncFeeds(rpc, cb)
+                  })
+                })
+              )
             })
-          )
-        })
+          })
+        )
       })
     })
   }

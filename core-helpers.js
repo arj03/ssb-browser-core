@@ -70,20 +70,16 @@ exports.removeBlobs = function() {
 }
 
 exports.getGraphForFeed = function(feedId, cb) {
-  SSB.net.db.onDrain('contacts', () => {
-    SSB.net.friends.hops({ start: feedId }, (err, hops) => {
-      if (err) return cb(err)
-      else cb(null, SSB.feedSyncer.convertHopsIntoGraph(hops, false))
-    })
+  SSB.net.friends.hops({ start: feedId }, (err, hops) => {
+    if (err) return cb(err)
+    else cb(null, SSB.feedSyncer.convertHopsIntoGraph(hops, false))
   })
 }
 
 exports.getGraph = function(cb) {
-  SSB.net.db.onDrain('contacts', () => {
-    SSB.net.friends.hops((err, hops) => {
-      if (err) return cb(err)
-      else cb(null, SSB.feedSyncer.convertHopsIntoGraph(hops))
-    })
+  SSB.net.friends.hops((err, hops) => {
+    if (err) return cb(err)
+    else cb(null, SSB.feedSyncer.convertHopsIntoGraph(hops))
   })
 }
 
