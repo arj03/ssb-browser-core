@@ -37,6 +37,7 @@ exports.init = function (dir, config) {
 
       getGraph: helpers.getGraph,
       getGraphSync: helpers.getGraphSync,
+      getGraphForFeed: helpers.getGraphForFeed,
 
       box: require('ssb-keys').box,
       blobFiles: require('ssb-blob-files'),

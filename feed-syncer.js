@@ -8,6 +8,7 @@ module.exports = function (net, partial) {
 
   function convertHopsIntoGraph(hops) { 
     const following = []
+    const blocking = []
     const extended = []
 
     const feeds = Object.keys(hops)
@@ -17,9 +18,11 @@ module.exports = function (net, partial) {
         following.push(feed)
       else if (hops[feed] == 2) // FIXME: respect hops setting
         extended.push(feed)
-    }
+      else if (hops[feed] == -1) // FIXME: respect hops setting
+        blocking.push(feed) 
+   }
 
-    lastGraph = { following, extended }
+    lastGraph = { following, extended, blocking }
 
     return lastGraph
   }

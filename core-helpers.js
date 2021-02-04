@@ -69,6 +69,15 @@ exports.removeBlobs = function() {
   })
 }
 
+exports.getGraphForFeed = function(feedId, cb) {
+  SSB.net.db.onDrain('contacts', () => {
+    SSB.net.friends.hops({ start: feedId }, (err, hops) => {
+      if (err) return cb(err)
+      else cb(null, SSB.feedSyncer.convertHopsIntoGraph(hops))
+    })
+  })
+}
+
 exports.getGraph = function(cb) {
   SSB.net.db.onDrain('contacts', () => {
     SSB.net.friends.hops((err, hops) => {
