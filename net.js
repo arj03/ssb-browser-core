@@ -53,6 +53,11 @@ exports.init = function(dir, overwriteConfig) {
       sbot.db.registerIndex(require('ssb-db2/indexes/full-mentions'))
     }
   })
+  .use({
+    init: function (sbot, config) {
+      sbot.db.registerIndex(require('./indexes/about-profile'))
+    }
+  })
   .use(require('ssb-friends'))
   .use(require('./ssb-partial-replication'))
   .use(require('./simple-ooo'))
@@ -62,12 +67,6 @@ exports.init = function(dir, overwriteConfig) {
   .use(require('ssb-room/tunnel/client'))
   .use(require('ssb-no-auth'))
   .use(require("./simple-blobs"))
-  .use(require("ssb-suggest"))
-  .use(require('ssb-social-index')({
-    namespace: 'about',
-    type: 'about',
-    destField: 'about'
-  }))
   ()
 
   r.sync = function(rpc) {
