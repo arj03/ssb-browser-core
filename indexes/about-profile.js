@@ -22,7 +22,7 @@ module.exports = function (log, dir) {
   const { level, offset, stateLoaded, onData, writeBatch } = Plugin(
     dir,
     name,
-    2,
+    3,
     handleData,
     writeData,
     beforeIndexUpdate
@@ -75,6 +75,9 @@ module.exports = function (log, dir) {
     if (content.name)
       profile.name = content.name
 
+    if (content.description)
+      profile.description = content.description
+
     if (content.image && typeof content.image.link === 'string')
       profile.image = content.image.link
     else if (typeof content.image === 'string')
@@ -86,8 +89,7 @@ module.exports = function (log, dir) {
   let profiles = {}
   
   function beforeIndexUpdate(cb) {
-    console.time("getting profiles")
-    // FIXME: maybe just drain this
+    console.time("start profiles get")
     pull(
       pl.read(level, {
         gte: '',
@@ -96,12 +98,12 @@ module.exports = function (log, dir) {
         valueEncoding: jsonCodec,
         keys: true
       }),
-      pull.collect((err, data) => {
-        console.timeEnd("getting profiles")
-        profiles = {}
-        data.forEach(x => profiles[x.key] = x.value)
-        cb()
-      })
+      pull.drain(
+        (data) => profiles[data.key] = data.value,
+        () => {
+          console.timeEnd("start profiles get")
+          cb()
+        })
     )
   }
 
