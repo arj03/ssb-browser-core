@@ -28,7 +28,7 @@
     "ssb-caps": "^1.1.0",
     "ssb-conn": "^1.0.0",
     "ssb-db2": "^1.9.1",
-    "ssb-friends": "git+https://github.com/ssbc/ssb-friends.git#db2",
+    "ssb-friends": "^4.4.0",
     "ssb-keys": "^8.0.2",
     "ssb-no-auth": "^1.0.0",
     "ssb-ref": "^2.14.3",
