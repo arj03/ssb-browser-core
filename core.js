@@ -35,6 +35,10 @@ exports.init = function (dir, config) {
       removeIndexes: helpers.removeIndexes,
       removeBlobs: helpers.removeBlobs,
 
+      getGraph: helpers.getGraph,
+      getGraphSync: helpers.getGraphSync,
+      getGraphForFeed: helpers.getGraphForFeed,
+
       box: require('ssb-keys').box,
       blobFiles: require('ssb-blob-files'),
 
@@ -43,22 +47,6 @@ exports.init = function (dir, config) {
       // config
       hops: 1, // this means download full log for hops and partial logs for hops + 1
     })
-
-    // helper for rooms to allow connecting to friends directly
-    SSB.net.friends = {
-      hopStream: function(options) {
-        // This is here to get ssb-suggest to work.
-        return pull.values()
-      },
-      hops: function(cb) {
-        net.db.getIndex('contacts').getGraphForFeed(SSB.net.id, (err, graph) => {
-          let hops = {}
-          graph.following.forEach(f => hops[f] = 1)
-          graph.extended.forEach(f => hops[f] = 2)
-          cb(err, hops)
-        })
-      }
-    }
 
     // delay startup a bit
     setTimeout(() => {

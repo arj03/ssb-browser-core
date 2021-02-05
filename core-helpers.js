@@ -69,12 +69,35 @@ exports.removeBlobs = function() {
   })
 }
 
+exports.getGraphForFeed = function(feedId, cb) {
+  SSB.net.friends.hops({ start: feedId }, (err, hops) => {
+    if (err) return cb(err)
+    else cb(null, SSB.feedSyncer.convertHopsIntoGraph(hops, false))
+  })
+}
+
+exports.getGraph = function(cb) {
+  SSB.net.friends.hops((err, hops) => {
+    if (err) return cb(err)
+    else cb(null, SSB.feedSyncer.convertHopsIntoGraph(hops))
+  })
+}
+
+exports.getGraphSync = function(cb) {
+  return SSB.feedSyncer.getLastGraph()
+}
+
 exports.EBTSync = function(rpc)
 {
+  // FIXME: live update graph
+
   console.log("doing ebt with", rpc.id)
-  SSB.db.getIndex('contacts').getGraphForFeed(SSB.net.id, (err, graph) => {
+  exports.getGraph((err, graph) => {
     SSB.net.ebt.updateClock(() => {
       SSB.net.ebt.request(SSB.net.id, true)
+
+      console.log("got graph", graph)
+
       graph.following.forEach(feed => SSB.net.ebt.request(feed, true))
       graph.extended.forEach(feed => SSB.net.ebt.request(feed, true))
 
