@@ -45,10 +45,10 @@ module.exports = function (log, dir) {
 
     if (bipf.compareString(recBuffer, pType, bPost) === 0) {
       const content = bipf.decode(recBuffer, pContent)
-      const channel = content.channel
-      if (!channel || channel == '') return batch.length
+      if (!content.channel || content.channel == '') return batch.length
+      const channel = content.channel.replace(/^[#]+/, '')
 
-      updateChannelData(content.channel)
+      updateChannelData(channel)
 
       batch.push({
         type: 'put',
@@ -63,8 +63,6 @@ module.exports = function (log, dir) {
   function updateChannelData(channel) {
     if (!channels[channel])
       channels[channel] = { id: channel, count: 0 }
-    if (!channels[channel].count) // For compatibility with existing index, if it exists.
-      channels[channel].count = 0
     ++channels[channel].count
   }
 
