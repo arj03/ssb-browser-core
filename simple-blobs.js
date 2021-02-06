@@ -353,13 +353,18 @@ exports.init = function (sbot, config) {
     const file = raf(sanitizedPath(id))
     file.stat((err, stat) => {
       if (stat && stat.size == 0) {
-        httpGet(remoteURL(id), 'blob', (err, data) => {
-          if (err) cb(err)
-          else if (data && data.size < max)
-            add(id, data, () => { fsURL(id, cb) })
-          else
-            cb(null, remoteURL(id))
-        })
+        const url = remoteURL(id)
+        if (url && url != '') {
+          httpGet(url, 'blob', (err, data) => {
+            if (err) cb(err)
+            else if (data && data.size < max)
+              add(id, data, () => { fsURL(id, cb) })
+            else
+              cb(null, url)
+          })
+        } else {
+          cb("Blob not in local storage")
+        }
       }
       else
       {
