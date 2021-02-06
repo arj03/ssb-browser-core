@@ -4,11 +4,6 @@ const pl = require('pull-level')
 const jsonCodec = require('flumecodec/json')
 const Plugin = require('ssb-db2/indexes/plugin')
 
-const isFeed = require('ssb-ref').isFeed
-
-// 1 index:
-// - feed => hydrated about
-
 module.exports = function (log, dir) {
   const bValue = Buffer.from('value')
   const bContent = Buffer.from('content')
@@ -22,7 +17,7 @@ module.exports = function (log, dir) {
   const { level, offset, stateLoaded, onData, writeBatch } = Plugin(
     dir,
     name,
-    3,
+    1,
     handleData,
     writeData,
     beforeIndexUpdate
@@ -66,7 +61,11 @@ module.exports = function (log, dir) {
   }
   
   function updateChannelData(channel) {
-    channels[channel] = { id: channel }
+    if (!channels[channel])
+      channels[channel] = { id: channel, count: 0 }
+    if (!channels[channel].count) // For compatibility with existing index, if it exists.
+      channels[channel].count = 0
+    ++channels[channel].count
   }
 
   let channels = {}
@@ -94,6 +93,10 @@ module.exports = function (log, dir) {
     return Object.keys(channels)
   }
 
+  function getChannelUsage(channel) {
+    return (channels[channel] && channels[channel].count)
+  }
+
   return {
     offset,
     stateLoaded,
@@ -104,6 +107,7 @@ module.exports = function (log, dir) {
     remove: level.clear,
     close: level.close.bind(level),
 
-    getChannels
+    getChannels,
+    getChannelUsage
   }
 }
