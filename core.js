@@ -49,7 +49,7 @@ exports.init = function (dir, config) {
     })
 
     // delay startup a bit
-    const startOffline = config.core && config.core.startOffline
+    const startOffline = config && config.core && config.core.startOffline
     if (!startOffline) {
       setTimeout(() => {
         SSB.net.conn.start()
