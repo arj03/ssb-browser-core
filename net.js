@@ -58,6 +58,11 @@ exports.init = function(dir, overwriteConfig) {
       sbot.db.registerIndex(require('./indexes/about-profile'))
     }
   })
+  .use({
+    init: function (sbot, config) {
+      sbot.db.registerIndex(require('./indexes/channels'))
+    }
+  })
   .use(require('ssb-friends'))
   .use(require('./ssb-partial-replication'))
   .use(require('./simple-ooo'))
