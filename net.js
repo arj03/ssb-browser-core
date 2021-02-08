@@ -74,13 +74,25 @@ exports.init = function(dir, overwriteConfig) {
   .use(require("./simple-blobs"))
   ()
 
-  r.sync = function(rpc) {
+  function rpcSync(rpc) {
     if (SSB.feedSyncer.syncing)
       ; // only one can sync at a time
     else if (SSB.feedSyncer.inSync())
       helpers.EBTSync(rpc)
     else
       helpers.fullSync(rpc)
+  }
+
+  r.sync = function(rpc) {
+    if (localStorage["/.ssb-lite/restoreFeed"] === "true") {
+      SSB.feedSyncer.syncing = true
+      SSB.syncFeedFromSequence(SSB.net.id, 0, () => {
+        SSB.feedSyncer.syncing = false        
+        rpcSync(rpc)
+      })
+      delete localStorage["/.ssb-lite/restoreFeed"]
+    } else
+      rpcSync(rpc)
   }
 
   var timer
