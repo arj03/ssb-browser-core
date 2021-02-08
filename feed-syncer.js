@@ -16,7 +16,7 @@ module.exports = function (net, partial) {
       const feed = feeds[i]
       if (hops[feed] == 1)
         following.push(feed)
-      else if (hops[feed] == 2) // FIXME: respect hops setting
+      else if (hops[feed] > 0 && hops[feed] <= net.config.hops)
         extended.push(feed)
       else if (hops[feed] == -1) // FIXME: respect hops setting
         blocking.push(feed) 
