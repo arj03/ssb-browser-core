@@ -4,25 +4,20 @@ const pl = require('pull-level')
 const jsonCodec = require('flumecodec/json')
 const Plugin = require('ssb-db2/indexes/plugin')
 
-const isFeed = require('ssb-ref').isFeed
-
-// 1 index:
-// - feed => hydrated about
-
 module.exports = function (log, dir) {
   const bValue = Buffer.from('value')
-  const bAuthor = Buffer.from('author')
   const bContent = Buffer.from('content')
   const bType = Buffer.from('type')
-  const bAbout = Buffer.from('about')
+  const bChannel = Buffer.from('channel')
+  const bPost = Buffer.from('post')
 
   let batch = []
 
-  const name = 'profiles'
+  const name = 'channels'
   const { level, offset, stateLoaded, onData, writeBatch } = Plugin(
     dir,
     name,
-    3,
+    1,
     handleData,
     writeData,
     beforeIndexUpdate
@@ -42,54 +37,39 @@ module.exports = function (log, dir) {
     p = bipf.seekKey(recBuffer, p, bValue)
     if (!~p) return batch.length
 
-    const pAuthor = bipf.seekKey(recBuffer, p, bAuthor)
-    const author = bipf.decode(recBuffer, pAuthor)
-
     const pContent = bipf.seekKey(recBuffer, p, bContent)
     if (!~pContent) return batch.length
 
     const pType = bipf.seekKey(recBuffer, pContent, bType)
     if (!~pType) return batch.length
 
-    if (bipf.compareString(recBuffer, pType, bAbout) === 0) {
+    if (bipf.compareString(recBuffer, pType, bPost) === 0) {
       const content = bipf.decode(recBuffer, pContent)
-      if (content.about != author) return batch.length
+      if (!content.channel || content.channel == '') return batch.length
+      const channel = content.channel.replace(/^[#]+/, '')
 
-      updateProfileData(author, content)
+      updateChannelData(channel)
 
-      if (isFeed(author)) {
-        batch.push({
-          type: 'put',
-          key: author,
-          value: profiles[author]
-        })
-      }
+      batch.push({
+        type: 'put',
+        key: channel,
+        value: channels[channel]
+      })
     }
 
     return batch.length
   }
   
-  function updateProfileData(author, content) {
-    let profile = profiles[author] || {}
-
-    if (content.name)
-      profile.name = content.name
-
-    if (content.description)
-      profile.description = content.description
-
-    if (content.image && typeof content.image.link === 'string')
-      profile.image = content.image.link
-    else if (typeof content.image === 'string')
-      profile.image = content.image
-
-    profiles[author] = profile
+  function updateChannelData(channel) {
+    if (!channels[channel])
+      channels[channel] = { id: channel, count: 0 }
+    ++channels[channel].count
   }
 
-  let profiles = {}
+  let channels = {}
   
   function beforeIndexUpdate(cb) {
-    console.time("start profiles get")
+    console.time("start channels get")
     pull(
       pl.read(level, {
         gte: '',
@@ -99,20 +79,20 @@ module.exports = function (log, dir) {
         keys: true
       }),
       pull.drain(
-        (data) => profiles[data.key] = data.value,
+        (data) => channels[data.key] = data.value,
         () => {
-          console.timeEnd("start profiles get")
+          console.timeEnd("start channels get")
           cb()
         })
     )
   }
 
-  function getProfile(feedId) {
-    return profiles[feedId] || {}
+  function getChannels() {
+    return Object.keys(channels)
   }
 
-  function getProfiles() {
-    return profiles
+  function getChannelUsage(channel) {
+    return (channels[channel] && channels[channel].count)
   }
 
   return {
@@ -125,7 +105,7 @@ module.exports = function (log, dir) {
     remove: level.clear,
     close: level.close.bind(level),
 
-    getProfile,
-    getProfiles
+    getChannels,
+    getChannelUsage
   }
 }

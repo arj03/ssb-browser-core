@@ -11,6 +11,10 @@ exports.init = function(dir, overwriteConfig) {
   var config = Object.assign({
     caps: { shs: Buffer.from(caps.shs, 'base64') },
     keys,
+    friends: {
+      hops: 2,
+      hookReplicate: false
+    },
     connections: {
       incoming: {
 	tunnel: [{ scope: 'public', transform: 'shs' }],
@@ -53,14 +57,15 @@ exports.init = function(dir, overwriteConfig) {
   })
   .use({
     init: function (sbot, config) {
-      sbot.db.registerIndex(require('./indexes/contacts'))
+      sbot.db.registerIndex(require('./indexes/about-profile'))
     }
   })
   .use({
     init: function (sbot, config) {
-      sbot.db.registerIndex(require('./indexes/about-profile'))
+      sbot.db.registerIndex(require('./indexes/channels'))
     }
   })
+  .use(require('ssb-friends'))
   .use(require('./ssb-partial-replication'))
   .use(require('./simple-ooo'))
   .use(require('ssb-ws'))
@@ -72,13 +77,25 @@ exports.init = function(dir, overwriteConfig) {
   .use(require('ssb-dht-invite'))
   ()
 
-  r.sync = function(rpc) {
+  function rpcSync(rpc) {
     if (SSB.feedSyncer.syncing)
       ; // only one can sync at a time
     else if (SSB.feedSyncer.inSync())
       helpers.EBTSync(rpc)
     else
       helpers.fullSync(rpc)
+  }
+
+  r.sync = function(rpc) {
+    if (localStorage["/.ssb-lite/restoreFeed"] === "true") {
+      SSB.feedSyncer.syncing = true
+      SSB.syncFeedFromSequence(SSB.net.id, 0, () => {
+        SSB.feedSyncer.syncing = false        
+        rpcSync(rpc)
+      })
+      delete localStorage["/.ssb-lite/restoreFeed"]
+    } else
+      rpcSync(rpc)
   }
 
   var timer

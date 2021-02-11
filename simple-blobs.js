@@ -42,6 +42,8 @@ exports.init = function (sbot, config) {
   }
 
   function httpGet(url, responseType, cb) {
+    if (!url) return cb()
+
     if (waiting[url]) return waiting[url].push(cb)
 
     if (Object.keys(waiting).length > maxConcurrentRequests)
@@ -158,6 +160,8 @@ exports.init = function (sbot, config) {
   }
 
   function remoteURL(id) {
+    if (!id) return ""
+
     const peer = SSB.getPeer()
     if (!peer) return ''
 
@@ -349,13 +353,18 @@ exports.init = function (sbot, config) {
     const file = raf(sanitizedPath(id))
     file.stat((err, stat) => {
       if (stat && stat.size == 0) {
-        httpGet(remoteURL(id), 'blob', (err, data) => {
-          if (err) cb(err)
-          else if (data.size < max)
-            add(id, data, () => { fsURL(id, cb) })
-          else
-            cb(null, remoteURL(id))
-        })
+        const url = remoteURL(id)
+        if (url && url != '') {
+          httpGet(url, 'blob', (err, data) => {
+            if (err) cb(err)
+            else if (data && data.size < max)
+              add(id, data, () => { fsURL(id, cb) })
+            else
+              cb(null, url)
+          })
+        } else {
+          cb("Blob not in local storage")
+        }
       }
       else
       {

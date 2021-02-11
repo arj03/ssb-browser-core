@@ -1,5 +1,6 @@
 exports.init = function (dir, config) {
   const FeedSyncer = require('./feed-syncer')
+  const pull = require('pull-stream')
 
   const EventEmitter = require('events')
   SSB = {
@@ -34,6 +35,10 @@ exports.init = function (dir, config) {
       removeIndexes: helpers.removeIndexes,
       removeBlobs: helpers.removeBlobs,
 
+      getGraph: helpers.getGraph,
+      getGraphSync: helpers.getGraphSync,
+      getGraphForFeed: helpers.getGraphForFeed,
+
       box: require('ssb-keys').box,
       blobFiles: require('ssb-blob-files'),
 
@@ -43,27 +48,16 @@ exports.init = function (dir, config) {
       hops: 1, // this means download full log for hops and partial logs for hops + 1
     })
 
-    // helper for rooms to allow connecting to friends directly
-    SSB.net.friends = {
-      hops: function(cb) {
-        net.db.getIndex('contacts').getGraphForFeed(SSB.net.id, (err, graph) => {
-          let hops = {}
-          graph.following.forEach(f => hops[f] = 1)
-          graph.extended.forEach(f => hops[f] = 2)
-          cb(err, hops)
-        })
-      },
-      isFollowing: function(opts, cb) {
-          // See https://github.com/ssbc/ssb-friends/blob/master/index.js#L33
-          console.log('isFollowing shim until ssb-friends can be ported to new database');
-          cb(null, net.db.getIndex('contacts').isFollowing(opts.source, opts.dest));
-        }
+    // delay startup a bit
+    const startOffline = config && config.core && config.core.startOffline
+    if (!startOffline) {
+      setTimeout(() => {
+        SSB.net.conn.start()
+    
+        // Also listen for DHT connections.
+        SSB.net.dhtInvite.start((err, success) => { })
+      }, 2000)
     }
-
-    SSB.net.conn.start()
-
-    // Also listen for DHT connections.
-    SSB.net.dhtInvite.start((err, success) => { })
 
     SSB.events.emit("SSB: loaded")
   })
