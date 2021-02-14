@@ -43,9 +43,6 @@ exports.init = function (dir, config) {
       blobFiles: require('ssb-blob-files'),
 
       partial,
-
-      // config
-      hops: 1, // this means download full log for hops and partial logs for hops + 1
     })
 
     // delay startup a bit

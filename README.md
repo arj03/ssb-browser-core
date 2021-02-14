@@ -70,16 +70,6 @@ require('../core.js').init(dir, { blobs: { max: 512 * 1024 } })
 
 Default config options are defined in `net.js`.
 
-## Runtime configurations
-
-### hops
-
-The number of hops from which to store feeds in full. Hops + 1 will be
-stored in partial state, meaning profiles, contacts and latest
-messages will be stored.
-
-Default is 1.
-
 ## db
 
 This is the [ssb-db2] module.

@@ -6,7 +6,7 @@ module.exports = function (net, partial) {
   // cache for sync calls
   let lastGraph = { following: [], extended: [] }
 
-  function convertHopsIntoGraph(hops, isSelf = true) { 
+  function convertHopsIntoGraph(hops, isSelf = true) {
     const following = []
     const blocking = []
     const extended = []
@@ -16,7 +16,7 @@ module.exports = function (net, partial) {
       const feed = feeds[i]
       if (hops[feed] == 1)
         following.push(feed)
-      else if (hops[feed] > 0 && hops[feed] <= net.config.hops)
+      else if (hops[feed] > 0 && hops[feed] <= net.config.friends.hops)
         extended.push(feed)
       else if (hops[feed] == -1) // FIXME: respect hops setting
         blocking.push(feed) 
@@ -34,12 +34,13 @@ module.exports = function (net, partial) {
       if (key == 'syncedMessages') { // false for go!
         const oooState = validate.initial()
         adder = (msg, cb) => net.db.addOOOStrictOrder(msg, oooState, cb)
-      } else { // hack
+      } else { // hack, FIXME: creates duplicate messages
         adder = (msg, cb) => {
           const oooState = validate.initial()
           net.db.addOOOStrictOrder(msg, oooState, cb)
         }
       }
+
       pull(
         rpcCall(),
         pull.asyncMap(adder),

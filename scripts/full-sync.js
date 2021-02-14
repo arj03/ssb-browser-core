@@ -41,7 +41,8 @@ SSB.events.on('SSB: loaded', function() {
 
         console.log("starting sync")
         SSB.feedSyncer.syncFeeds(rpc, () => {
-          console.log(Object.assign(SSB.db.getStatus(), SSB.feedSyncer.status()))
+          console.log("db", SSB.db.getStatus())
+          console.log("feed", SSB.feedSyncer.status())
           console.time("query")
           SSB.db.query(
             and(type('post'), isPublic()),
@@ -50,7 +51,8 @@ SSB.events.on('SSB: loaded', function() {
             toCallback((err, answer) => {
               console.timeEnd("query")
               console.log("got", answer.results.length)
-              console.log(Object.assign(SSB.db.getStatus(), SSB.feedSyncer.status()))
+              console.log("db", SSB.db.getStatus())
+              console.log("feed", SSB.feedSyncer.status())
             })
           )
         })
