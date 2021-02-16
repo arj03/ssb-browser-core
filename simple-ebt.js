@@ -43,7 +43,7 @@ exports.init = function (sbot, config) {
     },
     setClock: function (id, clock) {
       cleanClock(clock, 'non-feed key when saving clock')
-      writeFile(path.join(config.path, 'ebt', id), Buffer.from(JSON.stringify(clock)))
+      writeFile(path.join(config.path, 'ebt', id), JSON.stringify(clock))
     },
     getAt: function (pair, cb) {
       sbot.getAtSequence([pair.id, pair.sequence], (err, data) => {
