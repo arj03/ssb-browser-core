@@ -8,7 +8,6 @@
     "url": "git@github.com:arj03/ssb-browser-core.git"
   },
   "dependencies": {
-    "atomic-file": "^2.1.1",
     "atomically-universal": "^0.1.1",
     "bipf": "^1.4.0",
     "epidemic-broadcast-trees": "^8.0.1",
