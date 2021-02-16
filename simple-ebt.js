@@ -5,7 +5,7 @@ var path = require('path')
 var toPull = require('push-stream-to-pull-stream')
 var isFeed = require('ssb-ref').isFeed
 
-var AtomicFile = require('atomic-file')
+var { readFile, writeFile } = require('atomically-universal')
 
 exports.name = 'ebt'
 
@@ -35,17 +35,15 @@ exports.init = function (sbot, config) {
     logging: config.ebt && config.ebt.logging,
     id: sbot.id,
     getClock: function (id, cb) {
-      var f = AtomicFile(path.join(config.path, 'ebt', id))
-      f.get(function(err, clock) {
-        clock = clock || {}
+      readFile(path.join(config.path, 'ebt', id)).then(clock => {
+        clock = JSON.parse(clock) || {}
         cleanClock(clock)
         cb(null, clock)
       })
     },
     setClock: function (id, clock) {
       cleanClock(clock, 'non-feed key when saving clock')
-      var f = AtomicFile(path.join(config.path, 'ebt', id))
-      f.set(clock)
+      writeFile(path.join(config.path, 'ebt', id), Buffer.from(JSON.stringify(clock)))
     },
     getAt: function (pair, cb) {
       sbot.getAtSequence([pair.id, pair.sequence], (err, data) => {
