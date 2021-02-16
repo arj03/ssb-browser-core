@@ -55,7 +55,7 @@ exports.init = function(dir, overwriteConfig) {
   })
   .use({
     init: function (sbot, config) {
-      sbot.db.registerIndex(require('./indexes/about-profile'))
+      sbot.db.registerIndex(require('ssb-db2/indexes/about-self'))
     }
   })
   .use({
