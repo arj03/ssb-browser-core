@@ -36,7 +36,7 @@ exports.init = function (sbot, config) {
     id: sbot.id,
     getClock: function (id, cb) {
       readFile(path.join(config.path, 'ebt', id)).then(clock => {
-        clock = JSON.parse(clock) || {}
+        clock = (clock && JSON.parse(clock)) || {}
         cleanClock(clock)
         cb(null, clock)
       })
