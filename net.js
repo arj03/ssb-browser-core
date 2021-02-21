@@ -72,6 +72,7 @@ exports.init = function(dir, overwriteConfig) {
   .use(require('ssb-room/tunnel/client'))
   .use(require('ssb-no-auth'))
   .use(require("./simple-blobs"))
+  .use(require("ssb-threads"))
   ()
 
   function rpcSync(rpc) {
