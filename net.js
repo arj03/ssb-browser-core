@@ -75,7 +75,7 @@ exports.init = function(dir, overwriteConfig) {
   ()
 
   function rpcSync(rpc) {
-    if (SSB.feedSyncer.syncing)
+    if (SSB.feedSyncer.syncing.value)
       ; // only one can sync at a time
     else if (SSB.feedSyncer.inSync())
       helpers.EBTSync(rpc)
@@ -85,9 +85,9 @@ exports.init = function(dir, overwriteConfig) {
 
   r.sync = function(rpc) {
     if (localStorage["/.ssb-lite/restoreFeed"] === "true") {
-      SSB.feedSyncer.syncing = true
+      SSB.feedSyncer.syncing.set(true)
       SSB.syncFeedFromSequence(SSB.net.id, 0, () => {
-        SSB.feedSyncer.syncing = false        
+        SSB.feedSyncer.syncing.set(false)
         rpcSync(rpc)
       })
       delete localStorage["/.ssb-lite/restoreFeed"]

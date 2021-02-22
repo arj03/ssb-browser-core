@@ -2,6 +2,7 @@ module.exports = function (net, partial) {
   const pull = require('pull-stream')
   const paramap = require('pull-paramap')
   const validate = require('ssb-validate')
+  const Obz = require('obz')
 
   // cache for sync calls
   let lastGraph = { following: [], extended: [] }
@@ -59,10 +60,10 @@ module.exports = function (net, partial) {
       cb(null, feed)
   }
 
-  var syncing = false
+  var syncing = Obz(false)
   
   function syncFeeds(rpc, cb) {
-    syncing = true
+    syncing.set(true)
     console.log("syncing feeds")
     partial.get((err, partialState) => {
       SSB.net.friends.hops((err, hops) => {
@@ -119,7 +120,7 @@ module.exports = function (net, partial) {
                   SSB.net.friends.hops((err, hops) => {
                     const newGraph = convertHopsIntoGraph(hops)
                     if (JSON.stringify(graph) === JSON.stringify(newGraph)) {
-                      syncing = false
+                      syncing.set(false)
 
                       if (cb) cb(rpc)
                     }
