@@ -73,7 +73,7 @@ exports.init = function (sbot, config) {
     })
   }
 
-  SSB.events.on('SSB: loaded', updateClock)
+  sbot.events.on('SSB: loaded', updateClock)
 
   sbot.db.post(function (msg) {
     // FIXME: maybe handle block and follow here
