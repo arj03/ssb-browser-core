@@ -1,7 +1,7 @@
 {
   "name": "ssb-browser-core",
   "description": "",
-  "version": "8.3.2",
+  "version": "8.3.3",
   "homepage": "https://github.com/arj03/ssb-browser-core",
   "repository": {
     "type": "git",
@@ -12,6 +12,7 @@
     "bipf": "^1.4.0",
     "epidemic-broadcast-trees": "^8.0.1",
     "gossip-query": "^2.0.2",
+    "obz": "^1.0.3",
     "polyraf": "^1.1.0",
     "promisify-4loc": "^1.0.0",
     "pull-cont": "^0.1.1",
