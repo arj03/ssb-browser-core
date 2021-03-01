@@ -66,7 +66,7 @@ module.exports = function (net, partial) {
     syncing.set(true)
     console.log("syncing feeds")
     partial.get((err, partialState) => {
-      SSB.net.friends.hops((err, hops) => {
+      net.friends.hops((err, hops) => {
         const graph = convertHopsIntoGraph(hops)
         console.time("full feeds")
         pull(
@@ -93,7 +93,7 @@ module.exports = function (net, partial) {
 
             console.time("partial feeds")
 
-            SSB.net.friends.hops((err, hops) => {
+            net.friends.hops((err, hops) => {
               const graph = convertHopsIntoGraph(hops)
 
               pull(
@@ -117,7 +117,7 @@ module.exports = function (net, partial) {
                   console.timeEnd("partial feeds")
 
                   // check for changes that happened while running syncFeeds
-                  SSB.net.friends.hops((err, hops) => {
+                  net.friends.hops((err, hops) => {
                     const newGraph = convertHopsIntoGraph(hops)
                     if (JSON.stringify(graph) === JSON.stringify(newGraph)) {
                       syncing.set(false)
