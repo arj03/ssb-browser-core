@@ -65,10 +65,14 @@ default options. It is also possible to overwrite config options,
 like:
 
 ```
-require('../core.js').init(dir, { blobs: { max: 512 * 1024 } })
+require('../core.js').init(dir, { blobs: { max: 512 * 1024 } }, extraModules)
 ```
 
 Default config options are defined in `net.js`.
+
+`extraModules` is a function that takes a secret stack and attaches
+extra modules. This allow you to add db2 indexes or extra plugins like
+ssb-threads.
 
 ## db
 

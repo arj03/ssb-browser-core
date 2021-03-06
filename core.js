@@ -1,4 +1,4 @@
-exports.init = function (dir, config) {
+exports.init = function (dir, config, extraModules) {
   const FeedSyncer = require('./feed-syncer')
   const pull = require('pull-stream')
 
@@ -14,7 +14,7 @@ exports.init = function (dir, config) {
 
     console.log("wasm loaded")
 
-    var net = require('./net').init(dir, config)
+    var net = require('./net').init(dir, config, extraModules)
 
     console.log("my id: ", net.id)
 

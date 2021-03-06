@@ -5,7 +5,7 @@ const helpers = require('./core-helpers')
 
 const path = require('path')
 
-exports.init = function(dir, overwriteConfig) {
+exports.init = function(dir, overwriteConfig, extraModules) {
   var keys = ssbKeys.loadOrCreateSync(path.join(dir, 'secret'))
 
   var config = Object.assign({
@@ -45,35 +45,23 @@ exports.init = function(dir, overwriteConfig) {
     }
   }, overwriteConfig)
 
-  var r = SecretStack(config)
-  .use(require('ssb-db2/db'))
-  .use(require('ssb-db2/compat'))
-  .use({
-    init: function (sbot, config) {
-      sbot.db.registerIndex(require('ssb-db2/indexes/full-mentions'))
-    }
-  })
-  .use({
-    init: function (sbot, config) {
-      sbot.db.registerIndex(require('ssb-db2/indexes/about-self'))
-    }
-  })
-  .use({
-    init: function (sbot, config) {
-      sbot.db.registerIndex(require('./indexes/channels'))
-    }
-  })
-  .use(require('ssb-friends'))
-  .use(require('./ssb-partial-replication'))
-  .use(require('./simple-ooo'))
-  .use(require('ssb-ws'))
-  .use(require('./simple-ebt'))
-  .use(require('ssb-conn'))
-  .use(require('ssb-room/tunnel/client'))
-  .use(require('ssb-no-auth'))
-  .use(require("./simple-blobs"))
-  .use(require("ssb-threads"))
-  ()
+  let secretStack = SecretStack(config)
+      .use(require('ssb-db2/db'))
+      .use(require('ssb-db2/compat'))
+      .use(require('ssb-friends'))
+      .use(require('./ssb-partial-replication'))
+      .use(require('./simple-ooo'))
+      .use(require('ssb-ws'))
+      .use(require('./simple-ebt'))
+      .use(require('ssb-conn'))
+      .use(require('ssb-room/tunnel/client'))
+      .use(require('ssb-no-auth'))
+      .use(require("./simple-blobs"))
+
+  if (extraModules)
+    secretStack = extraModules(secretStack)
+
+  var r = secretStack()
 
   function rpcSync(rpc) {
     if (SSB.feedSyncer.syncing.value)
