@@ -55,6 +55,10 @@ The api is not meant to be 100% compatible with regular
 ssb-db. Overall there are two major parts: [`db`](#db) and
 [`net`](#net).
 
+If you use ssb-browser-core in an app where the user can open multiple
+tabs, it is *highly* recommended to use the ssb-singleton as you
+otherwise will corrupt your database.
+
 I highly recommend looking at [ssb-browser-demo] for an example of how
 this library can be used to build applications.
 
@@ -84,10 +88,6 @@ The contacts index for the friends graph.
 
 Contains the method `getGraphForFeed(feed, cb)` that will return an
 object of: following, blocking and extended given the feed.
-
-### profiles.get(cb)
-
-Returns the profiles index.
 
 ## net
 
