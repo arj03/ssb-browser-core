@@ -54,7 +54,7 @@ exports.init = function(dir, overwriteConfig, extraModules) {
       .use(require('ssb-ws'))
       .use(require('./simple-ebt'))
       .use(require('ssb-conn'))
-      .use(require('ssb-room/tunnel/client'))
+      .use(require('ssb-room-client'))
       .use(require('ssb-no-auth'))
       .use(require("./simple-blobs"))
 
