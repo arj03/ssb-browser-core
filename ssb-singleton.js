@@ -18,7 +18,7 @@ module.exports.init = function (config, extraModules, ssbLoaded) {
     if (window.updateFirstTimeLoading)
       window.updateFirstTimeLoading()
 
-    require('ssb-browser-core/core').init("/.ssb-lite", config, extraModules)
+    require('./core').init("/.ssb-lite", config, extraModules)
     SSB.uniqueID = (new Date()).getTime()
     window.singletonSSB = SSB // Using a different name so that anything trying to use the non-singleton global will fail so we can find them.
 
