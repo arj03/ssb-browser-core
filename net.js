@@ -117,7 +117,8 @@ exports.init = function(dir, overwriteConfig, extraModules) {
       })
     }
 
-    ping()
+    if (peer.data.type != 'dht')
+      ping()
   })
 
   r.on('replicate:finish', function () {
