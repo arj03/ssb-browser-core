@@ -50,6 +50,9 @@ exports.init = function (dir, config, extraModules) {
     if (!startOffline) {
       setTimeout(() => {
         SSB.net.conn.start()
+
+        // Also listen for DHT connections.
+        SSB.net.dhtInvite.start((err, success) => { })
       }, 2000)
     }
 
