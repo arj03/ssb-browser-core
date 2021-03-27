@@ -78,6 +78,10 @@ Default config options are defined in `net.js`.
 extra modules. This allow you to add db2 indexes or extra plugins like
 ssb-threads.
 
+DHT connections are enabled by default. If you don't want that, you
+can configure `connections` to not include DHT in incoming and
+outgoing.
+
 ## db
 
 This is the [ssb-db2] module.
