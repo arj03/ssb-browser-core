@@ -26,7 +26,7 @@
     "ssb-blob-files": "https://github.com/ssbc/ssb-blob-files#browser-support",
     "ssb-caps": "^1.1.0",
     "ssb-conn": "^2.0.2",
-    "ssb-db2": "^1.17.0",
+    "ssb-db2": "^1.18.6",
     "ssb-dht-invite": "^2.0.0",
     "ssb-friends": "^4.4.4",
     "ssb-keys": "^8.0.2",
