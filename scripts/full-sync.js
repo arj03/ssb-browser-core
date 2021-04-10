@@ -13,7 +13,7 @@ require('../core.js').init(dir)
 
 SSB.events.on('SSB: loaded', function() {
 
-  const { and, isPublic, type, paginate, descending, toCallback } = SSB.dbOperators
+  const { where, and, isPublic, type, paginate, descending, toCallback } = SSB.dbOperators
 
   process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = 0 // wtf
   // var remoteAddress = 'wss://between-two-worlds.dk:8990~noauth:lbocEWqF2Fg6WMYLgmfYvqJlMfL7hiqVAV6ANjHWNw8='
@@ -27,6 +27,8 @@ SSB.events.on('SSB: loaded', function() {
   SSB.net.connect(remoteAddress, (err, rpc) => {
     console.time("downloading main profile")
 
+    if (err) console.error(err)
+    
     pull(
       rpc.partialReplication.getFeed({
         id: "@VIOn+8a/vaQvv/Ew3+KriCngyUXHxHbjXkj4GafBAY0=.ed25519",
@@ -45,7 +47,12 @@ SSB.events.on('SSB: loaded', function() {
           console.log("feed", SSB.feedSyncer.status())
           console.time("query")
           SSB.db.query(
-            and(type('post'), isPublic()),
+            where(
+              and(
+                type('post'),
+                isPublic()
+              )
+            ),
             paginate(25),
             descending(),
             toCallback((err, answer) => {
