@@ -29,6 +29,10 @@ module.exports = function (net, partial) {
     } else return { following, extended, blocking }
   }
 
+  let contactMsgs = 0
+  let aboutMsgs = 0
+  let otherMsgs = 0
+
   function syncMessages(feed, key, rpcCall, partialState, cb) {
     if (!partialState[feed] || !partialState[feed][key]) {
       let adder = net.db.addOOO // this should be default, but is too slow
@@ -50,6 +54,13 @@ module.exports = function (net, partial) {
             console.error(err.message)
             return cb(err)
           }
+
+          if (key === 'syncedProfile')
+            aboutMsgs += msgs.length
+          else if (key === 'syncedContacts')
+            contactMsgs += msgs.length
+          else
+            otherMsgs += msgs.length
 
           var newState = {}
           newState[key] = true
@@ -115,6 +126,10 @@ module.exports = function (net, partial) {
                 }, 5),
                 pull.collect(() => {
                   console.timeEnd("partial feeds")
+
+                  console.log("abouts", aboutMsgs)
+                  console.log("contacts", contactMsgs)
+                  console.log("other", otherMsgs)
 
                   // check for changes that happened while running syncFeeds
                   net.friends.hops((err, hops) => {
