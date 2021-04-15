@@ -25,7 +25,7 @@
     "secret-stack": "^6.3.2",
     "ssb-blob-files": "https://github.com/ssbc/ssb-blob-files#browser-support",
     "ssb-caps": "^1.1.0",
-    "ssb-conn": "^2.0.2",
+    "ssb-conn": "^3.0.0",
     "ssb-db2": "^2.0.0",
     "ssb-dht-invite": "^2.0.0",
     "ssb-friends": "^4.4.5",
