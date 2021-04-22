@@ -9,7 +9,7 @@
 */
 
 module.exports = function (dir) {
-  const { readFile, writeFile } = require('atomically-universal')
+  const { readFile, writeFile } = require('atomic-file-rw')
   const debounce = require('lodash.debounce')
   const path = require('path')
   const DeferredPromise = require('p-defer')
@@ -20,22 +20,24 @@ module.exports = function (dir) {
   const filename = path.join(dir, "indexes/partial.json")
 
   function get(cb) {
-    readFile(filename).then((data) => {
+    readFile(filename, (err, data) => {
+      if (err) {
+        stateLoaded.resolve()
+        return cb(err, {})
+      }
+
       if (data)
         state = JSON.parse(data).state
 
       stateLoaded.resolve()
       cb(null, state)
-    }).catch((err) => {
-      stateLoaded.resolve()
-      cb(err, {})
     })
   }
 
   function atomicSave()
   {
-    writeFile(filename, JSON.stringify({ state }), { fsyncWait: false }).catch((err) => {
-      console.error("error saving partial", err)
+    writeFile(filename, JSON.stringify({ state }), (err) => {
+      if (err) console.error("error saving partial", err)
     })
   }
   var saveState = debounce(atomicSave, 1000, { leading: true })
