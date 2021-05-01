@@ -90,16 +90,6 @@ exports.init = function(dir, overwriteConfig, extraModules) {
   r.on('rpc:connect', function (rpc, isClient) {
     console.log("connected to:", rpc.id)
 
-    let connPeers = Array.from(SSB.net.conn.hub().entries())
-    connPeers = connPeers.filter(([, x]) => !!x.key).map(([address, data]) => ({ address, data }))
-    var peer = connPeers.find(x => x.data.key == rpc.id)
-    if (!peer || peer.data.type === 'room') return
-
-    if (isClient) {
-      console.log("syncing with", rpc.id)
-      r.sync(rpc)
-    }
-
     let timer
 
     // the problem is that the browser will close a connection after
@@ -118,6 +108,16 @@ exports.init = function(dir, overwriteConfig, extraModules) {
     }
 
     ping()
+
+    let connPeers = Array.from(SSB.net.conn.hub().entries())
+    connPeers = connPeers.filter(([, x]) => !!x.key).map(([address, data]) => ({ address, data }))
+    var peer = connPeers.find(x => x.data.key == rpc.id)
+    if (!peer || peer.data.type === 'room') return
+
+    if (isClient) {
+      console.log("syncing with", rpc.id)
+      r.sync(rpc)
+    }
   })
 
   r.on('replicate:finish', function () {
