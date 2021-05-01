@@ -126,7 +126,8 @@ exports.init = function (sbot, config) {
       var opts = {version: 3}
       var a = toPull.duplex(ebt.createStream(rpc.id, opts.version, true))
       var b = rpc.ebt.replicate(opts, function (err) {
-        if(err) {
+        if (err) {
+          console.log("got an ebt error", err)
           rpc.removeListener('closed', onClose)
           rpc._emit('fallback:replicate', err)
         }

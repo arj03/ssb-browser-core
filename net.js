@@ -87,8 +87,6 @@ exports.init = function(dir, overwriteConfig, extraModules) {
       rpcSync(rpc)
   }
 
-  var timer
-
   r.on('rpc:connect', function (rpc, isClient) {
     console.log("connected to:", rpc.id)
 
@@ -101,6 +99,8 @@ exports.init = function(dir, overwriteConfig, extraModules) {
       console.log("syncing with", rpc.id)
       r.sync(rpc)
     }
+
+    let timer
 
     // the problem is that the browser will close a connection after
     // 30 seconds if there is no activity, the default ping "timeout"
