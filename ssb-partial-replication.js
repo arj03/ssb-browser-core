@@ -3,6 +3,7 @@ const pullCont = require('pull-cont')
 const sort = require('ssb-sort')
 const { reEncrypt } = require('ssb-db2/indexes/private')
 const {
+  where,
   and,
   toCallback,
   hasRoot,
@@ -60,7 +61,7 @@ exports.init = function (sbot, config) {
         if (err) return cb(err)
         if (msg.meta && msg.meta.private === true) return cb(null, [])
         SSB.db.query(
-          and(hasRoot(msgId)),
+          where(and(hasRoot(msgId))),
           toCallback((err, msgs) => {
             if (err) return cb(err)
             msgs = msgs.filter(x => !x.meta || x.meta.private !== true)
@@ -82,7 +83,7 @@ exports.init = function (sbot, config) {
       return pull(
         pullCont(function(cb) {
           let q = SSB.db.query(
-            and(author(opts.id), type(opts.type))
+            where(and(author(opts.id), type(opts.type)))
           )
 
           if (seq) // sequences starts with 1, offset starts with 0 ;-)

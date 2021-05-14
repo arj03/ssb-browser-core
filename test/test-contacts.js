@@ -18,7 +18,7 @@ SSB.events.on('SSB: loaded', function() {
         t.equal(graph.following[0], contactMsg.contact)
         t.end()
       }
-      SSB.db.getIndex('contacts').getGraphForFeed(SSB.net.id, onGraph)
+      SSB.getGraphForFeed(SSB.net.id, onGraph)
     })
   })
 })
