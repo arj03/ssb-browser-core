@@ -23,7 +23,7 @@ function WindowController () {
         that.sendPing();
         that._pingTimeout = setTimeout( ping, 500 );
     };
-    this._checkTimeout = setTimeout( check, 2000 ); // This is low so initial window opening isn't unnecessarily delayed.
+    this._checkTimeout = setTimeout( check, 500 ); // This is low so initial window opening isn't unnecessarily delayed.
     this._pingTimeout = setTimeout( ping, 500 );
 }
 

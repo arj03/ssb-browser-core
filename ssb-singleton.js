@@ -78,6 +78,7 @@ module.exports.getSSB = function() {
       delete window.singletonSSB
     }
   }
+
   var err = "Acquiring database lock - Only one instance of ssb-browser is allowed to run at a time."
   if (windowController.isMaster) {
     // We've been elected as the SSB holder window but have no SSB yet.  Initialize an SSB object.
@@ -92,7 +93,7 @@ module.exports.getSSB = function() {
       if (otherWindow != window && otherWindow.windowController && otherWindow.getSSBSingleton) {
         if (window.windowController.others && window.windowController.others[otherWindow.windowController.id]) {
           // They're still responding to pings.
-          [ err, otherSSB ] = otherWindow.getSSBSingleton().getSSB()
+          let [ err, otherSSB ] = otherWindow.getSSBSingleton().getSSB()
           if (otherSSB) {
             runOnChangeIfNeeded(otherSSB)
             runOnSuccess()
@@ -102,34 +103,59 @@ module.exports.getSSB = function() {
       }
     }
   }
+
   runOnError(err)
   return [ err, null ]
 }
 
-module.exports.getSSBEventually = function(timeout, isRelevantCB, ssbCheckCB, resultCB) {
-  // If the caller no longer needs a result, return right away before processing anything.
-  if (isRelevantCB && !isRelevantCB()) return
+var ssbEventuallyCB = []
 
-  [ err, maybeSSB ] = this.getSSB()
+function checkSSBEventually()
+{
+  let [ err, maybeSSB ] = module.exports.getSSB()
 
-  // Do this here so that if we time out and return, SSB is set to null if it doesn't pass.
-  // That way a simple if(SSB) is all it takes on the client end.
-  maybeSSB = (!err && ssbCheckCB(maybeSSB) ? maybeSSB : null)
+  for (let i = 0; i < ssbEventuallyCB.length; ++i)
+  {
+    const check = ssbEventuallyCB[i]
+    if (check.isRelevantCB && !check.isRelevantCB())
+      ssbEventuallyCB.splice(i, 1)
 
-  if (!maybeSSB) {
-    if (timeout != 0) {
-      // Try again.
-      var self = this
-      setTimeout(function() {
-        self.getSSBEventually((timeout > 0 ? Math.max(0, timeout - 500) : timeout), isRelevantCB, ssbCheckCB, resultCB)
-      }, 500)
-      return
-    } else if (!err) {
-      // We timed out but don't have an error, so we should set one before the callback below runs.
-      err = "Could not lock database"
+    let isOk = false
+    if (!err)
+      try { isOk = check.ssbCheckCB(maybeSSB) } catch (e) {}
+
+    if (isOk) {
+      try { check.resultCB(err, maybeSSB) } catch (e) {}
+      ssbEventuallyCB.splice(i, 1)
+    } else if (check.retries > 0) {
+      check.retries -= 1
+    } else {
+      try { check.resultCB("Could not lock database", null) } catch (e) {}
+      ssbEventuallyCB.splice(i, 1)
     }
   }
-  resultCB(err, maybeSSB)
+
+  if (ssbEventuallyCB.length > 0)
+    setTimeout(checkSSBEventually, 250)
+}
+
+module.exports.getSSBEventually = function(timeout, isRelevantCB, ssbCheckCB, resultCB) {
+  let [ err, maybeSSB ] = this.getSSB()
+
+  const isOk = ssbCheckCB(maybeSSB)
+
+  if (!isOk) {
+    if (timeout != 0) {
+      ssbEventuallyCB.push({ retries: timeout === -1 ? 10000 : timeout / 250,
+                             isRelevantCB, ssbCheckCB, resultCB })
+      if (ssbEventuallyCB.length === 1)
+        setTimeout(checkSSBEventually, 250)
+
+      return
+    }
+  }
+
+  resultCB(err, isOk ? maybeSSB : null)
 }
 
 module.exports.getSimpleSSBEventually = function(isRelevantCB, resultCB) {
