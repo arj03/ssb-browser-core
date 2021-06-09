@@ -31,29 +31,22 @@ module.exports = function (net, partial) {
 
   function syncMessages(feed, key, rpcCall, partialState, cb) {
     if (!partialState[feed] || !partialState[feed][key]) {
-      let adder = net.db.addOOO // this should be default, but is too slow
-      if (key == 'syncedMessages') { // false for go!
-        const oooState = validate.initial()
-        adder = (msg, cb) => net.db.addOOOStrictOrder(msg, oooState, cb)
-      } else { // hack, FIXME: creates duplicate messages
-        adder = (msg, cb) => {
-          const oooState = validate.initial()
-          net.db.addOOOStrictOrder(msg, oooState, cb)
-        }
-      }
-
       pull(
         rpcCall(),
-        pull.asyncMap(adder),
         pull.collect((err, msgs) => {
           if (err) {
             console.error(err.message)
             return cb(err)
           }
 
-          var newState = {}
-          newState[key] = true
-          partial.updateState(feed, newState, (err) => { cb(err, feed) })
+          // prune contact and about from latest 25 messages
+
+          net.db.addOOOBatch(msgs, (err) => {
+            if (err) return cb(err)
+            var newState = {}
+            newState[key] = true
+            partial.updateState(feed, newState, (err) => { cb(err, feed) })
+          })
         })
       )
     } else
