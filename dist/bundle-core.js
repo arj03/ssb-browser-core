@@ -3756,9 +3756,9 @@ var exports=module.exports=require("./duplex");exports.source=require("./source"
 
 }).call(this)}).call(this,require('_process'),require("timers").setImmediate)
 },{"./ready":557,"_process":435,"timers":824}],559:[function(require,module,exports){
-"use strict";var Buffer=require("safe-buffer").Buffer;function isArrayBuffer(r){return r instanceof ArrayBuffer||null!=r&&null!=r.constructor&&"ArrayBuffer"===r.constructor.name&&"number"==typeof r.byteLength}module.exports=function(r,e){var n,t,u=[],f=!1;return r.addEventListener("message",function(r){var e=r.data;if(isArrayBuffer(e)&&(e=Buffer.from(e)),n)return n(null,e);u.push(e)}),r.addEventListener("close",function(r){t||n&&n(t=!0)}),r.addEventListener("error",function(r){t||(t=r,f||(f=!0,e&&e(r.error)),n&&n(t.error))}),r.addEventListener("open",function(r){f||t||(f=!0)}),function(e,f){if(n=null,t)return f(t);e?(n=f,r.close()):u.length>0?f(null,u.shift()):n=f}};
+"use strict";var toBuffer=require("typedarray-to-buffer");function isArrayBuffer(r){return r instanceof ArrayBuffer||null!=r&&null!=r.constructor&&"ArrayBuffer"===r.constructor.name&&"number"==typeof r.byteLength}module.exports=function(r,e){var n,t,u=[],f=!1;return r.addEventListener("message",function(r){var e=r.data;if(isArrayBuffer(e)&&(e=toBuffer(e)),n)return n(null,e);u.push(e)}),r.addEventListener("close",function(r){t||n&&n(t=!0)}),r.addEventListener("error",function(r){t||(t=r,f||(f=!0,e&&e(r.error)),n&&n(t.error))}),r.addEventListener("open",function(r){f||t||(f=!0)}),function(e,f){if(n=null,t)return f(t);e?(n=f,r.close()):u.length>0?f(null,u.shift()):n=f}};
 
-},{"safe-buffer":623}],560:[function(require,module,exports){
+},{"typedarray-to-buffer":832}],560:[function(require,module,exports){
 module.exports="undefined"==typeof WebSocket?require("ws"):WebSocket;
 
 },{"ws":54}],561:[function(require,module,exports){
