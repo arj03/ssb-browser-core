@@ -1,7 +1,4 @@
 exports.init = function (dir, config, extraModules) {
-  const FeedSyncer = require('./feed-syncer')
-  const pull = require('pull-stream')
-
   const EventEmitter = require('events')
   SSB = {
     events: new EventEmitter(),
@@ -20,14 +17,10 @@ exports.init = function (dir, config, extraModules) {
 
     var helpers = require('./core-helpers')
 
-    const Partial = require('./partial')
-    const partial = Partial(dir)
-
     SSB = Object.assign(SSB, {
       db: net.db,
       net,
       dir,
-      feedSyncer: FeedSyncer(net, partial),
 
       getPeer: helpers.getPeer,
 
@@ -41,8 +34,6 @@ exports.init = function (dir, config, extraModules) {
 
       box: require('ssb-keys').box,
       blobFiles: require('ssb-blob-files'),
-
-      partial,
     })
 
     // delay startup a bit

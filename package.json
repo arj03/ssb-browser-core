@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "atomic-file-rw": "^0.2.2",
+    "fastpriorityqueue": "^0.7.1",
     "gossip-query": "^2.0.2",
     "obz": "^1.0.3",
     "polyraf": "^1.1.0",
@@ -32,6 +33,7 @@
     "ssb-keys": "^8.0.2",
     "ssb-no-auth": "^1.0.0",
     "ssb-ref": "^2.14.3",
+    "ssb-replication-scheduler": "github:arj03/ssb-replication-scheduler",
     "ssb-room-client": "^0.21.0",
     "ssb-sort": "^1.1.3",
     "ssb-validate": "^4.1.4",
