@@ -62,12 +62,13 @@ exports.init = function (sbot, config) {
   
   function syncFeed(feed, hops, cb) {
     // idempotent
-    if (synced[feed]) return
+    if (synced[feed]) return cb()
 
     synced[feed] = 1
 
     if (hops === 0) { // selfie
       // move along
+      cb()
     } else if (hops === 1) {
       console.log("full replication of", feed)
       sbot.db.getAllLatest((err, latest) => {
@@ -79,15 +80,13 @@ exports.init = function (sbot, config) {
           pull.collect((err) => {
             if (err) return cb(err)
 
-            console.log("done full replication of", feed)
-
             sbot.ebt.request(feed, true)
             partial.updateState(feed, { full: true }, cb)
           })
         )
       })
     } else {
-      console.log("partial replication of", feed)
+      //console.log("partial replication of", feed)
       pull(
         pull.values([feed]),
         pull.asyncMap((feed, cb) => {
@@ -105,7 +104,6 @@ exports.init = function (sbot, config) {
         pull.collect((err) => {
           if (err) return cb(err)
 
-          console.log("done partial replication of", feed)
           sbot.ebt.request(feed, true)
           cb()
         })
@@ -160,7 +158,7 @@ exports.init = function (sbot, config) {
 
   function runQueue() {
     // prerequisites
-    if (queue.isEmpty()) return
+    if (queue.isEmpty()) return //{ console.log(new Date()); return }
     if (partialState === null) return
     if (!rpc) return
 

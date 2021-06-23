@@ -47,7 +47,7 @@ SSB.events.on('SSB: loaded', function() {
             console.log("replication", SSB.net.feedReplication.partialStatus())
             updateDB()
             //console.log("feed", SSB.feedSyncer.status())
-          }, 2000)
+          }, 5 * 1000)
         }
 
         updateDB()
