@@ -80,7 +80,7 @@ exports.init = function (sbot, config) {
           pull.collect((err) => {
             if (err) return cb(err)
 
-            sbot.ebt.request(feed, true)
+            waitingEBTRequests.set(feed, true)
             partial.updateState(feed, { full: true }, cb)
           })
         )
@@ -104,7 +104,7 @@ exports.init = function (sbot, config) {
         pull.collect((err) => {
           if (err) return cb(err)
 
-          sbot.ebt.request(feed, true)
+          waitingEBTRequests.set(feed, true)
           cb()
         })
       )
@@ -140,7 +140,7 @@ exports.init = function (sbot, config) {
     if (replicating)
       queue.add({ feed: destination, hops, validFrom: (+new Date()) + 200 })
     else {
-      // FIXME: handle running queries
+      waitingEBTRequests.delete(destination)
       queue.removeMany((e) => e.feed === destination)
       sbot.ebt.request(destination, false)
     }
@@ -150,6 +150,7 @@ exports.init = function (sbot, config) {
 
   let concurrent = 0
   let waitingQueue = false
+  let waitingEBTRequests = new Map()
 
   function endWaitingQueue() {
     waitingQueue = false
@@ -158,7 +159,17 @@ exports.init = function (sbot, config) {
 
   function runQueue() {
     // prerequisites
-    if (queue.isEmpty()) return //{ console.log(new Date()); return }
+    if (queue.isEmpty()) {
+      console.log(new Date())
+
+      sbot.db.onDrain('ebt', () => {
+        for (let feed of waitingEBTRequests.keys())
+          sbot.ebt.request(feed, true)
+        waitingEBTRequests.clear()
+      })
+
+      return
+    }
     if (partialState === null) return
     if (!rpc) return
 
