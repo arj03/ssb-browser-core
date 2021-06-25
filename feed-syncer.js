@@ -61,6 +61,27 @@ module.exports = function (net, partial) {
   }
 
   var syncing = Obz(false)
+
+  function ebtHasData(feed, cb) {
+    net.ebt.peerStatus((err, status) => {
+      if (err) return cb(err)
+
+      cb(null, status.seq > 0)
+    })
+  }
+
+  function ebtCallbackWhenData(feed, cb) {
+    ebtHasData(feed, (err, hasData) => {
+      if (hasData) return cb()
+
+      setTimeout(1000, ebtCallbackWhenData)
+    })
+  }
+
+  function onboardViaEBT(rpc, feed, cb) {
+    net.ebt.request(feed, true)
+    ebtCallbackWhenData(feed, cb)
+  }
   
   function syncFeeds(rpc, cb) {
     syncing.set(true)
@@ -79,9 +100,16 @@ module.exports = function (net, partial) {
                   rpc.partialReplication.getFeed({ id: feed, seq: latestSeq, keys: false }),
                   pull.asyncMap(net.db.add),
                   pull.collect((err) => {
-                    if (err) throw err
+                    if (err) {
+                      if (!err.message || err.message.indexOf("is not in list of allowed methods") < 0) throw err
 
-                    partial.updateState(feed, { full: true }, cb)
+                      // Try it without partial replication.
+                      onboardViaEBT(rpc, feed, function() {
+                        partial.updateState(feed, { full: true }, cb)
+                      })
+                    } else {
+                      partial.updateState(feed, { full: true }, cb)
+                    }
                   })
                 )
               })
