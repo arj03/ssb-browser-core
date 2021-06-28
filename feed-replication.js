@@ -117,16 +117,6 @@ exports.init = function (sbot, config) {
   pull(
     sbot.conn.hub().listen(),
     pull.filter(event => {
-      // FIXME: we need to filter out rooms and non-partial replication
-      /*
-        let connPeers = Array.from(sbot.conn.hub().entries())
-        connPeers = connPeers.filter(([, x]) => !!x.key).map(([address, data]) => ({ address, data }))
-        var peer = connPeers.find(x => x.data.key == rpcConnect.id)
-        console.log(connPeers)
-        console.log(peer)
-        if (!peer || peer.data.type === 'room') return
-      */
-
       const okType = event.type === 'connected' || event.type === 'disconnected'
       if (okType && event.details) {
         let connPeers = Array.from(sbot.conn.hub().entries())
