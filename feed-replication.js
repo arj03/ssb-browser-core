@@ -66,25 +66,26 @@ exports.init = function (sbot, config) {
 
     synced[feed] = 1
 
-    if (hops === 0) { // selfie
-      // move along
-      cb()
+    if (hops === 0) {
+      cb() // move along selfie
     } else if (hops === 1) {
-      console.log("full replication of", feed)
-      sbot.db.getAllLatest((err, latest) => {
-        // fixme: not super efficient on already synced full feeds
-        const latestSeq = latest[feed] ? latest[feed].sequence + 1 : 0
-        pull(
-          rpc.partialReplication.getFeed({ id: feed, seq: latestSeq, keys: false }),
-          pull.asyncMap(sbot.db.add),
-          pull.collect((err) => {
-            if (err) return cb(err)
+      if (!partialState[feed] || !partialState[feed][full]) {
+        console.log("full replication of", feed)
+        sbot.db.getAllLatest((err, latest) => {
+          const latestSeq = latest[feed] ? latest[feed].sequence + 1 : 0
+          pull(
+            rpc.partialReplication.getFeed({ id: feed, seq: latestSeq, keys: false }),
+            pull.asyncMap(sbot.db.add),
+            pull.collect((err) => {
+              if (err) return cb(err)
 
-            waitingEBTRequests.set(feed, true)
-            partial.updateState(feed, { full: true }, cb)
-          })
-        )
-      })
+              waitingEBTRequests.set(feed, true)
+              partial.updateState(feed, { full: true }, cb)
+            })
+          )
+        })
+      } else
+        cb()
     } else {
       //console.log("partial replication of", feed)
       pull(
@@ -111,22 +112,24 @@ exports.init = function (sbot, config) {
     }
   }
   
+  // FIXME: use the following code for a better way to utilize
+  // multiple connections
+
+  /*
+    pull(
+      ssb.conn.hub().listen(),
+      // FIXME: also handle disconnect
+      pull.filter(event => event.type === 'connected'),
+      pull.drain(event => {
+        // FIXME:     if (!peer || peer.data.type === 'room') return
+        const rpc = event.details.rpc
+      })
+    )
+  */
+
   let rpc
-
   sbot.on('rpc:connect', function (rpcConnect, isClient) {
-    // FIXME: a better way to utilize multiple connections
-
-    /* FIXME: does't work, concurrency!
-    let connPeers = Array.from(sbot.conn.hub().entries())
-    connPeers = connPeers.filter(([, x]) => !!x.key).map(([address, data]) => ({ address, data }))
-    var peer = connPeers.find(x => x.data.key == rpcConnect.id)
-    console.log(connPeers)
-    console.log(peer)
-    if (!peer || peer.data.type === 'room') return
-    */
-
     rpc = rpcConnect
-
     runQueue()
   })
 
@@ -173,7 +176,7 @@ exports.init = function (sbot, config) {
     if (partialState === null) return
     if (!rpc) return
 
-    if (concurrent === 5) return
+    if (concurrent === 7) return
 
     let el = queue.peek()
 
