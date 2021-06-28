@@ -23,8 +23,7 @@ SSB.events.on('SSB: loaded', function() {
   // var remoteAddress = 'ws://localhost:8989~shs:6CAxOI3f+LUOVrbAl0IemqiS7ATpQvr9Mdw9LC4+Uv0='
 
   //SSB.net.id = '@VIOn+8a/vaQvv/Ew3+KriCngyUXHxHbjXkj4GafBAY0=.ed25519'
-
-  SSB.net.connect(remoteAddress, (err, rpc) => {
+  SSB.net.conn.connect(remoteAddress, (err, rpc) => {
     console.time("downloading main profile")
 
     if (err) console.error(err)

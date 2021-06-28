@@ -60,7 +60,7 @@ exports.init = function (sbot, config) {
 
   let synced = {}
   
-  function syncFeed(feed, hops, cb) {
+  function syncFeed(rpc, feed, hops, cb) {
     // idempotent
     if (synced[feed]) return cb()
 
@@ -112,26 +112,31 @@ exports.init = function (sbot, config) {
     }
   }
   
-  // FIXME: use the following code for a better way to utilize
-  // multiple connections
+  pull(
+    sbot.conn.hub().listen(),
+    pull.filter(event => {
+      //console.log("event", event)
 
-  /*
-    pull(
-      ssb.conn.hub().listen(),
-      // FIXME: also handle disconnect
-      pull.filter(event => event.type === 'connected'),
-      pull.drain(event => {
-        // FIXME:     if (!peer || peer.data.type === 'room') return
-        const rpc = event.details.rpc
-      })
-    )
-  */
+      // FIXME: we need to filter out rooms and non-partial replication
+      /*
+        let connPeers = Array.from(sbot.conn.hub().entries())
+        connPeers = connPeers.filter(([, x]) => !!x.key).map(([address, data]) => ({ address, data }))
+        var peer = connPeers.find(x => x.data.key == rpcConnect.id)
+        console.log(connPeers)
+        console.log(peer)
+        if (!peer || peer.data.type === 'room') return
+      */
 
-  let rpc
-  sbot.on('rpc:connect', function (rpcConnect, isClient) {
-    rpc = rpcConnect
-    runQueue()
-  })
+      return event.type === 'connected' || event.type === 'disconnected'
+    }),
+    pull.drain(event => {
+      if (event.type === 'connected')
+        remotes.set(event.details.rpc, 0)
+      else
+        remotes.delete(event.details.rpc)
+      runQueue()
+    })
+  )
 
   // queue of { feed, hops, validFrom }
   var queue = new FastPriorityQueue(function(lhs, rhs) {
@@ -151,7 +156,7 @@ exports.init = function (sbot, config) {
     runQueue()
   }
 
-  let concurrent = 0
+  let remotes = new Map() // rpc -> concurrent requests
   let waitingQueue = false
   let waitingEBTRequests = new Map()
 
@@ -174,17 +179,28 @@ exports.init = function (sbot, config) {
       return
     }
     if (partialState === null) return
-    if (!rpc) return
+    if (remotes.size == 0) return
 
-    if (concurrent === 7) return
+    let lowest = null
+    let concurrentRequests = 0
+    for (let [rpc, concurrent] of remotes) {
+      if (lowest === null)
+        lowest = { rpc, concurrent }
+      else if (lowest.concurrent < concurrent)
+        lowest = { rpc, concurrent }
+      concurrentRequests += concurrent
+    }
+
+    if (concurrentRequests === 7) return
 
     let el = queue.peek()
 
     if (el.validFrom < +new Date()) {
       queue.poll()
-      ++concurrent
-      syncFeed(el.feed, el.hops, () => {
-        --concurrent
+
+      remotes.set(lowest.rpc, lowest.concurrent + 1)
+      syncFeed(lowest.rpc, el.feed, el.hops, () => {
+        remotes.set(lowest.rpc, remotes.get(lowest.rpc) - 1)
         runQueue()
       })
 
