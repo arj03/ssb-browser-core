@@ -28,7 +28,6 @@ exports.init = function (dir, config, extraModules) {
       removeIndexes: helpers.removeIndexes,
       removeBlobs: helpers.removeBlobs,
 
-      getGraph: helpers.getGraph,
       getGraphSync: helpers.getGraphSync,
       getGraphForFeed: helpers.getGraphForFeed,
 
