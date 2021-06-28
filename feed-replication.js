@@ -140,8 +140,12 @@ exports.init = function (sbot, config) {
     return rhs.hops > lhs.hops
   })
 
+  let currentHops = {}
+
   // wrapper around EBT
   function request(destination, hops, replicating) {
+    currentHops[destination] = hops
+
     if (replicating)
       queue.add({ feed: destination, hops, validFrom: (+new Date()) + 200 })
     else {
@@ -214,11 +218,14 @@ exports.init = function (sbot, config) {
 
   function partialStatus() {
     let partialState = partial.getSync()
+    let currentGraph = SSB.convertHopsIntoGraph(currentHops)
 
     // full
+    let totalFull = currentGraph.following.length
     let fullSynced = 0
 
     // partial
+    let totalPartial = currentGraph.extended.length
     let profilesSynced = 0
     let contactsSynced = 0
     let messagesSynced = 0
@@ -237,11 +244,17 @@ exports.init = function (sbot, config) {
     }
 
     return {
+      totalPartial,
       profilesSynced,
       contactsSynced,
       messagesSynced,
+      totalFull,
       fullSynced,
     }
+  }
+
+  function getGraph() {
+    return SSB.convertHopsIntoGraph(currentHops)
   }
 
   function inSync() {
@@ -252,6 +265,7 @@ exports.init = function (sbot, config) {
     request,
     updatePartialState,
     partialStatus,
-    inSync
+    inSync,
+    getGraph
   }
 }

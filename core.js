@@ -28,7 +28,7 @@ exports.init = function (dir, config, extraModules) {
       removeIndexes: helpers.removeIndexes,
       removeBlobs: helpers.removeBlobs,
 
-      getGraphSync: helpers.getGraphSync,
+      convertHopsIntoGraph: helpers.convertHopsIntoGraph,
       getGraphForFeed: helpers.getGraphForFeed,
 
       box: require('ssb-keys').box,

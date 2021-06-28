@@ -69,9 +69,7 @@ exports.removeBlobs = function() {
   })
 }
 
-let lastGraph
-
-function convertHopsIntoGraph(hops, isSelf = true) {
+exports.convertHopsIntoGraph = function(hops) {
   const following = []
   const blocking = []
   const extended = []
@@ -83,14 +81,11 @@ function convertHopsIntoGraph(hops, isSelf = true) {
       following.push(feed)
     else if (hops[feed] > 0 && hops[feed] <= SSB.net.config.friends.hops)
       extended.push(feed)
-    else if (hops[feed] == -1) // FIXME: respect hops setting
+    else if (hops[feed] == -1)
       blocking.push(feed) 
   }
 
-  if (isSelf) {
-    lastGraph = { following, extended, blocking }
-    return lastGraph
-  } else return { following, extended, blocking }
+  return { following, extended, blocking }
 }
 
 exports.getGraphForFeed = function(feedId, cb) {
@@ -98,8 +93,4 @@ exports.getGraphForFeed = function(feedId, cb) {
     if (err) return cb(err)
     else cb(null, convertHopsIntoGraph(hops, feedId == SSB.net.id))
   })
-}
-
-exports.getGraphSync = function(cb) {
-  return lastGraph
 }
