@@ -86,13 +86,6 @@ outgoing.
 
 This is the [ssb-db2] module.
 
-### contacts
-
-The contacts index for the friends graph.
-
-Contains the method `getGraphForFeed(feed, cb)` that will return an
-object of: following, blocking and extended given the feed.
-
 ## net
 
 This is the [secret-stack] module with a few extra modules
@@ -118,7 +111,7 @@ SSB.net.on('rpc:connect', (rpc) => {
 Will connect and store as to automatically reconnect on
 reload. Options are as described in [ssb-conn].
 
-### connect(addr, cb)
+### directConnect(addr, cb)
 
 Connect to addr only once. Cb is (err, rpc)
 
@@ -194,6 +187,10 @@ The path to where the database and blobs are stored.
 ### getPeer()
 
 Gets one of the connected peers that is not a room server.
+
+### getGraphForFeed(feed, cb)
+
+Returns an object of: following, blocking and extended given the feed.
 
 ### box
 
