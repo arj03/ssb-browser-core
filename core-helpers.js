@@ -91,6 +91,6 @@ exports.convertHopsIntoGraph = function(hops) {
 exports.getGraphForFeed = function(feedId, cb) {
   SSB.net.friends.hops({ start: feedId }, (err, hops) => {
     if (err) return cb(err)
-    else cb(null, convertHopsIntoGraph(hops, feedId == SSB.net.id))
+    else cb(null, exports.convertHopsIntoGraph(hops, feedId == SSB.net.id))
   })
 }
