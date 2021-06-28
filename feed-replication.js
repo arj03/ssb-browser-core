@@ -7,7 +7,9 @@ exports.name = 'feedReplication'
 exports.version = '1.0.0'
 exports.manifest = {
   request: 'sync',
-  partialStatus: 'sync'
+  updatePartialState: 'async',
+  partialStatus: 'sync',
+  inSync: 'sync'
 }
 exports.permissions = {
   anonymous: {allow: []}
@@ -69,7 +71,7 @@ exports.init = function (sbot, config) {
     if (hops === 0) {
       cb() // move along selfie
     } else if (hops === 1) {
-      if (!partialState[feed] || !partialState[feed][full]) {
+      if (!partialState[feed] || !partialState[feed]['full']) {
         console.log("full replication of", feed)
         sbot.db.getAllLatest((err, latest) => {
           const latestSeq = latest[feed] ? latest[feed].sequence + 1 : 0
@@ -115,8 +117,6 @@ exports.init = function (sbot, config) {
   pull(
     sbot.conn.hub().listen(),
     pull.filter(event => {
-      //console.log("event", event)
-
       // FIXME: we need to filter out rooms and non-partial replication
       /*
         let connPeers = Array.from(sbot.conn.hub().entries())
@@ -127,7 +127,14 @@ exports.init = function (sbot, config) {
         if (!peer || peer.data.type === 'room') return
       */
 
-      return event.type === 'connected' || event.type === 'disconnected'
+      const okType = event.type === 'connected' || event.type === 'disconnected'
+      if (okType && event.details) {
+        let connPeers = Array.from(sbot.conn.hub().entries())
+        connPeers = connPeers.filter(([, x]) => !!x.key).map(([address, data]) => ({ address, data }))
+        const peer = connPeers.find(x => x.data.key == event.details.rpc.id)
+        return peer && peer.data.type !== 'room'
+      } else
+        return false
     }),
     pull.drain(event => {
       if (event.type === 'connected')
@@ -168,7 +175,7 @@ exports.init = function (sbot, config) {
   function runQueue() {
     // prerequisites
     if (queue.isEmpty()) {
-      console.log(new Date())
+      //console.log(new Date())
 
       sbot.db.onDrain('ebt', () => {
         for (let feed of waitingEBTRequests.keys())
@@ -211,18 +218,20 @@ exports.init = function (sbot, config) {
     }
   }
 
+  function updatePartialState(feed, changes, cb) {
+    partial.updateState(feed, changes, cb)
+  }
+
   function partialStatus() {
     let partialState = partial.getSync()
 
     // full
     let fullSynced = 0
-    let totalFull = 0
 
     // partial
     let profilesSynced = 0
     let contactsSynced = 0
     let messagesSynced = 0
-    let totalPartial = 0
 
     for (var relation in partialState) {
       const status = partialState[relation]
@@ -235,22 +244,24 @@ exports.init = function (sbot, config) {
         contactsSynced += 1
       if (status.syncedMessages)
         messagesSynced += 1
-
-      totalPartial += 1
     }
 
     return {
-      totalPartial,
       profilesSynced,
       contactsSynced,
       messagesSynced,
-      totalFull,
       fullSynced,
     }
   }
 
+  function inSync() {
+    return queue.isEmpty()
+  }
+
   return {
     request,
-    partialStatus
+    updatePartialState,
+    partialStatus,
+    inSync
   }
 }
