@@ -1,7 +1,4 @@
 exports.init = function (dir, config, extraModules) {
-  const FeedSyncer = require('./feed-syncer')
-  const pull = require('pull-stream')
-
   const EventEmitter = require('events')
   SSB = {
     events: new EventEmitter(),
@@ -20,14 +17,10 @@ exports.init = function (dir, config, extraModules) {
 
     var helpers = require('./core-helpers')
 
-    const Partial = require('./partial')
-    const partial = Partial(dir)
-
     SSB = Object.assign(SSB, {
       db: net.db,
       net,
       dir,
-      feedSyncer: FeedSyncer(net, partial),
 
       getPeer: helpers.getPeer,
 
@@ -35,14 +28,11 @@ exports.init = function (dir, config, extraModules) {
       removeIndexes: helpers.removeIndexes,
       removeBlobs: helpers.removeBlobs,
 
-      getGraph: helpers.getGraph,
-      getGraphSync: helpers.getGraphSync,
+      convertHopsIntoGraph: helpers.convertHopsIntoGraph,
       getGraphForFeed: helpers.getGraphForFeed,
 
       box: require('ssb-keys').box,
       blobFiles: require('ssb-blob-files'),
-
-      partial,
     })
 
     // delay startup a bit

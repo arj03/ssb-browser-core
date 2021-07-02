@@ -50,12 +50,14 @@ exports.init = function(dir, overwriteConfig, extraModules) {
   let secretStack = SecretStack(config)
       .use(require('ssb-db2/db'))
       .use(require('ssb-db2/compat'))
+      .use(require('ssb-conn'))
       .use(require('ssb-friends'))
+      .use(require('ssb-ebt'))
+      .use(require('./feed-replication'))
+      .use(require('ssb-replication-scheduler'))
       .use(require('./ssb-partial-replication'))
       .use(require('./simple-ooo'))
       .use(require('ssb-ws'))
-      .use(require('./simple-ebt'))
-      .use(require('ssb-conn'))
       .use(require('ssb-room-client'))
       .use(require('ssb-no-auth'))
       .use(require("./simple-blobs"))
@@ -65,27 +67,6 @@ exports.init = function(dir, overwriteConfig, extraModules) {
     secretStack = extraModules(secretStack)
 
   var r = secretStack()
-
-  function rpcSync(rpc) {
-    if (SSB.feedSyncer.syncing.value)
-      ; // only one can sync at a time
-    else if (SSB.feedSyncer.inSync())
-      helpers.EBTSync(rpc)
-    else
-      helpers.fullSync(rpc)
-  }
-
-  r.sync = function(rpc) {
-    if (localStorage["/.ssb-lite/restoreFeed"] === "true") {
-      SSB.feedSyncer.syncing.set(true)
-      SSB.syncFeedFromSequence(SSB.net.id, 0, () => {
-        SSB.feedSyncer.syncing.set(false)
-        rpcSync(rpc)
-      })
-      delete localStorage["/.ssb-lite/restoreFeed"]
-    } else
-      rpcSync(rpc)
-  }
 
   r.on('rpc:connect', function (rpc, isClient) {
     console.log("connected to:", rpc.id)
@@ -108,20 +89,6 @@ exports.init = function(dir, overwriteConfig, extraModules) {
     }
 
     ping()
-
-    let connPeers = Array.from(SSB.net.conn.hub().entries())
-    connPeers = connPeers.filter(([, x]) => !!x.key).map(([address, data]) => ({ address, data }))
-    var peer = connPeers.find(x => x.data.key == rpc.id)
-    if (!peer || peer.data.type === 'room') return
-
-    if (isClient) {
-      console.log("syncing with", rpc.id)
-      r.sync(rpc)
-    }
-  })
-
-  r.on('replicate:finish', function () {
-    console.log("finished ebt replicate")
   })
 
   r.connectAndRemember = function(addr, data) {

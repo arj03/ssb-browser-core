@@ -169,6 +169,7 @@ exports.init = function (sbot, config) {
     let remoteHost = remoteAddress.split("~")[0]
 
     if (remoteHost === 'undefined') return ''
+    else if (remoteHost.startsWith("dht:")) return ''
 
     if (remoteAddress.includes("wss:"))
       return remoteHost.replace("wss:", "https://") + '/blobs/get/' + id
@@ -374,6 +375,10 @@ exports.init = function (sbot, config) {
     })
   }
 
+  function imageId(id) {
+    return (typeof id === 'object' && id !== null && id.link) ? id.link : id
+  }
+
   return {
     hash,
     add,
@@ -409,7 +414,8 @@ exports.init = function (sbot, config) {
 
     // internal
 
-    privateGet: function(id, unboxKey, cb) {
+    privateGet: function(imgId, unboxKey, cb) {
+      const id = imageId(imgId)
       const file = raf(sanitizedPrivatePath(id))
       file.stat((err, stat) => {
         if (stat.size == 0) {
@@ -442,11 +448,11 @@ exports.init = function (sbot, config) {
     },
 
     localGet: function (id, cb) {
-      localGetHelper(max, id, cb)
+      localGetHelper(max, imageId(id), cb)
     },
 
     localProfileGet: function (id, cb) {
-      localGetHelper(2048*1024, id, cb)
+      localGetHelper(2048*1024, imageId(id), cb)
     },
 
     remoteGet: function(id, type, cb) {

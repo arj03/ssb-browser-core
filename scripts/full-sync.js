@@ -23,12 +23,11 @@ SSB.events.on('SSB: loaded', function() {
   // var remoteAddress = 'ws://localhost:8989~shs:6CAxOI3f+LUOVrbAl0IemqiS7ATpQvr9Mdw9LC4+Uv0='
 
   //SSB.net.id = '@VIOn+8a/vaQvv/Ew3+KriCngyUXHxHbjXkj4GafBAY0=.ed25519'
-
-  SSB.net.connect(remoteAddress, (err, rpc) => {
+  SSB.net.conn.connect(remoteAddress, (err, rpc) => {
     console.time("downloading main profile")
 
     if (err) console.error(err)
-    
+
     pull(
       rpc.partialReplication.getFeed({
         id: "@VIOn+8a/vaQvv/Ew3+KriCngyUXHxHbjXkj4GafBAY0=.ed25519",
@@ -41,28 +40,16 @@ SSB.events.on('SSB: loaded', function() {
         console.timeEnd("downloading main profile")
         console.log(msgs.length)
 
-        console.log("starting sync")
-        SSB.feedSyncer.syncFeeds(rpc, () => {
-          console.log("db", SSB.db.getStatus())
-          console.log("feed", SSB.feedSyncer.status())
-          console.time("query")
-          SSB.db.query(
-            where(
-              and(
-                type('post'),
-                isPublic()
-              )
-            ),
-            paginate(25),
-            descending(),
-            toCallback((err, answer) => {
-              console.timeEnd("query")
-              console.log("got", answer.results.length)
-              console.log("db", SSB.db.getStatus())
-              console.log("feed", SSB.feedSyncer.status())
-            })
-          )
-        })
+        function updateDB() {
+          setTimeout(() => {
+            console.log("db", SSB.db.getStatus().value)
+            console.log("replication", SSB.net.feedReplication.partialStatus())
+            updateDB()
+            //console.log("feed", SSB.feedSyncer.status())
+          }, 5 * 1000)
+        }
+
+        updateDB()
       })
     )
   })
