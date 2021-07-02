@@ -169,6 +169,7 @@ exports.init = function (sbot, config) {
     let remoteHost = remoteAddress.split("~")[0]
 
     if (remoteHost === 'undefined') return ''
+    else if (remoteHost.startsWith("dht:")) return ''
 
     if (remoteAddress.includes("wss:"))
       return remoteHost.replace("wss:", "https://") + '/blobs/get/' + id
