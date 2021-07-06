@@ -202,7 +202,7 @@ exports.init = function (sbot, config) {
       remotes.set(lowest.rpc, lowest.concurrent + 1)
       syncFeed(lowest.rpc, el.feed, el.hops, () => {
         remotes.set(lowest.rpc, remotes.get(lowest.rpc) - 1)
-        runQueue()
+        setImmediate(runQueue) // don't blow up the stack
       })
 
       runQueue()
