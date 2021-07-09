@@ -33,7 +33,6 @@ exports.init = function(dir, overwriteConfig, extraModules) {
     },
     conn: {
       autostart: false,
-      hops: 1,
       populatePubs: false,
     },
     ebt: {
