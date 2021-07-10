@@ -1,5 +1,6 @@
-module.exports.init = function (config, extraModules, ssbLoaded) {
+module.exports.setup = function (dir, config, extraModules, ssbLoaded) {
   const { WindowController } = require("./window-controller.js")
+  const path = require('path')
 
   window.windowController = new WindowController()
 
@@ -10,7 +11,7 @@ module.exports.init = function (config, extraModules, ssbLoaded) {
     const ssbKeys = require('ssb-keys')
     window.firstTimeLoading = false
     try {
-      ssbKeys.loadSync('/.ssb-lite/secret')
+      ssbKeys.loadSync(path.join(dir, 'secret'))
     } catch(err) {
       window.firstTimeLoading = true
     }
@@ -18,7 +19,7 @@ module.exports.init = function (config, extraModules, ssbLoaded) {
     if (window.updateFirstTimeLoading)
       window.updateFirstTimeLoading()
 
-    require('./core').init("/.ssb-lite", config, extraModules)
+    require('./core').init(dir, config, extraModules)
     SSB.uniqueID = (new Date()).getTime()
     window.singletonSSB = SSB // Using a different name so that anything trying to use the non-singleton global will fail so we can find them.
 
@@ -27,6 +28,10 @@ module.exports.init = function (config, extraModules, ssbLoaded) {
     else
       SSB.events.once('SSB: loaded', ssbLoaded)
   }
+}
+
+module.exports.init = function (config, extraModules, ssbLoaded) {
+  module.exports.setup("/.ssb-lite", config, extraModules, ssbLoaded) 
 }
 
 var onErrorCallbacks = []
