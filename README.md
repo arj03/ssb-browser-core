@@ -247,7 +247,7 @@ Initialize the SSB Singleton module. Does *not* actually trigger the
 initialization of SSB (see `getSSBEventually`). This is required to be
 called before trying to access SSB.
 
-* `dir` - *String*, A name  "/.ssb-lite".
+* `dir` - *String*, A name like "/.ssb-lite".
 * `config` - *Object*, configuration object to pass through to `ssb-browser-core/core`'s `init` function.
 * `extraModules` - *Function (optional)*, function to call to add more modules to the SecretStack during initialization - passed through to `ssb-browser-core/core`'s `init` function.
 * `ssbLoaded` - *Function*, function which is called if we are the primary controller window and SSB is completely done initializing.  No parameters are passed - it is just a notification function to let you know that our window has just initialized an SSB object, in case any other initialization steps have to be done.
