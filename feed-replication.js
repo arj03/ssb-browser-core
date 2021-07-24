@@ -79,19 +79,21 @@ exports.init = function (sbot, config) {
         getLatestSequence(feed, (err, latestSeq) => {
           pull(
             rpc.partialReplication.getFeed({ id: feed, seq: latestSeq, keys: false }),
-            pull.asyncMap(sbot.db.add),
-            pull.collect((err) => {
+            //pull.asyncMap(sbot.db.add),
+            pull.collect((err, messages) => {
               if (err) return cb(err)
 
-              waitingEBTRequests.set(feed, true)
-              partial.updateState(feed, { full: true }, cb)
+              sbot.db.addBatch(messages, () => {
+                waitingEBTRequests.set(feed, true)
+                partial.updateState(feed, { full: true }, cb)
+              })
             })
           )
         })
       } else
         cb()
     } else {
-      console.log("partial replication of", feed)
+      //console.log("partial replication of", feed)
       pull(
         pull.values([feed]),
         pull.asyncMap((feed, cb) => {
