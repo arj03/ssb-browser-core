@@ -30,30 +30,21 @@ exports.init = function (sbot, config) {
 
   function syncMessages(feed, key, rpcCall, cb) {
     if (!partialState[feed] || !partialState[feed][key]) {
-      // FIXME: this will be much better with rusty validation
-      let adder = sbot.db.addOOO // this should be default, but is too slow
-      if (key == 'syncedMessages') { // false for go!
-        const oooState = validate.initial()
-        adder = (msg, cb) => sbot.db.addOOOStrictOrder(msg, oooState, cb)
-      } else { // hack, FIXME: creates duplicate messages
-        adder = (msg, cb) => {
-          const oooState = validate.initial()
-          sbot.db.addOOOStrictOrder(msg, oooState, cb)
-        }
-      }
-
       pull(
         rpcCall(),
-        pull.asyncMap(adder),
         pull.collect((err, msgs) => {
           if (err) {
             console.error(err.message)
             return cb(err)
           }
 
-          var newState = {}
-          newState[key] = true
-          partial.updateState(feed, newState, (err) => { cb(err, feed) })
+          // FIXME: prune contact and about from latest 25 messages
+          sbot.db.addOOOBatch(msgs, (err) => {
+            if (err) return cb(err)
+            var newState = {}
+            newState[key] = true
+            partial.updateState(feed, newState, (err) => { cb(err, feed) })
+          })
         })
       )
     } else
@@ -61,6 +52,18 @@ exports.init = function (sbot, config) {
   }
 
   let synced = {}
+
+  function getLatestSequence(feed, cb) {
+    pull(
+      sbot.db.getAllLatest(),
+      pull.collect((err, latest) => {
+        if (err) return cb(err)
+
+        const l = latest.find(l => l.key === feed)
+        cb(null, l ? l.sequence + 1 : 0)
+      })
+    )
+  }
   
   function syncFeed(rpc, feed, hops, cb) {
     // idempotent
@@ -73,8 +76,7 @@ exports.init = function (sbot, config) {
     } else if (hops === 1) {
       if (!partialState[feed] || !partialState[feed]['full']) {
         console.log("full replication of", feed)
-        sbot.db.getAllLatest((err, latest) => {
-          const latestSeq = latest[feed] ? latest[feed].sequence + 1 : 0
+        getLatestSequence(feed, (err, latestSeq) => {
           pull(
             rpc.partialReplication.getFeed({ id: feed, seq: latestSeq, keys: false }),
             pull.asyncMap(sbot.db.add),
@@ -89,7 +91,7 @@ exports.init = function (sbot, config) {
       } else
         cb()
     } else {
-      //console.log("partial replication of", feed)
+      console.log("partial replication of", feed)
       pull(
         pull.values([feed]),
         pull.asyncMap((feed, cb) => {
