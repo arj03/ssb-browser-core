@@ -26,7 +26,7 @@
     "ssb-blob-files": "https://github.com/ssbc/ssb-blob-files#browser-support",
     "ssb-caps": "^1.1.0",
     "ssb-conn": "^5.1.0",
-    "ssb-db2": "github:ssb-ngi-pointer/ssb-db2#validate2",
+    "ssb-db2": "github:ssb-ngi-pointer/ssb-db2#validate2-changes",
     "ssb-dht-invite": "^2.0.0",
     "ssb-ebt": "^7.0.0",
     "ssb-friends": "^5.0.0",
