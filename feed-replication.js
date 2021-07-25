@@ -38,9 +38,13 @@ exports.init = function (sbot, config) {
             return cb(err)
           }
 
-          if (key === 'syncedMessages')
+          if (key === 'syncedMessages') {
+            const lastMsgValue = msgs[msgs.length - 1]
             msgs = msgs.filter(m => m.content.type !== 'contact' &&
                                m.content.type !== 'about')
+            const kvt = validate.toKeyValueTimestamp(lastMsgValue)
+            sbot.db.setPost(kvt)
+          }
 
           sbot.db.addOOOBatch(msgs, (err) => {
             if (err) return cb(err)
@@ -99,16 +103,16 @@ exports.init = function (sbot, config) {
       pull(
         pull.values([feed]),
         pull.asyncMap((feed, cb) => {
-          syncMessages(feed, 'syncedMessages',
-                       () => rpc.partialReplication.getFeedReverse({ id: feed, keys: false, limit: 25 }), cb)
-        }),
-        pull.asyncMap((feed, cb) => {
           syncMessages(feed, 'syncedProfile',
                        () => rpc.partialReplication.getMessagesOfType({ id: feed, type: 'about' }), cb)
         }),
         pull.asyncMap((feed, cb) => {
           syncMessages(feed, 'syncedContacts',
                        () => rpc.partialReplication.getMessagesOfType({ id: feed, type: 'contact' }), cb)
+        }),
+        pull.asyncMap((feed, cb) => {
+          syncMessages(feed, 'syncedMessages',
+                       () => rpc.partialReplication.getFeedReverse({ id: feed, keys: false, limit: 25 }), cb)
         }),
         pull.collect((err) => {
           if (err) return cb(err)
