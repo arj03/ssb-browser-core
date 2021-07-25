@@ -61,15 +61,11 @@ exports.init = function (sbot, config) {
   let synced = {}
 
   function getLatestSequence(feed, cb) {
-    pull(
-      sbot.db.getAllLatest(),
-      pull.collect((err, latest) => {
-        if (err) return cb(err)
+    sbot.db.getLatest(feed, (err, latest) => {
+      if (err) return cb(err)
 
-        const l = latest.find(l => l.key === feed)
-        cb(null, l ? l.sequence + 1 : 0)
-      })
-    )
+      cb(null, latest ? latest.sequence + 1 : 0)
+    })
   }
   
   function syncFeed(rpc, feed, hops, cb) {
