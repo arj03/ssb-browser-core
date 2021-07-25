@@ -38,7 +38,10 @@ exports.init = function (sbot, config) {
             return cb(err)
           }
 
-          // FIXME: prune contact and about from latest 25 messages
+          if (key === 'syncedMessages')
+            msgs = msgs.filter(m => m.content.type !== 'contact' &&
+                               m.content.type !== 'about')
+
           sbot.db.addOOOBatch(msgs, (err) => {
             if (err) return cb(err)
             var newState = {}
@@ -79,7 +82,6 @@ exports.init = function (sbot, config) {
         getLatestSequence(feed, (err, latestSeq) => {
           pull(
             rpc.partialReplication.getFeed({ id: feed, seq: latestSeq, keys: false }),
-            //pull.asyncMap(sbot.db.add),
             pull.collect((err, messages) => {
               if (err) return cb(err)
 
