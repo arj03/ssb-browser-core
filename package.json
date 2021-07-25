@@ -28,7 +28,7 @@
     "ssb-conn": "^5.1.0",
     "ssb-db2": "github:ssb-ngi-pointer/ssb-db2#validate2-changes",
     "ssb-dht-invite": "^2.0.0",
-    "ssb-ebt": "^7.0.0",
+    "ssb-ebt": "github:ssbc/ssb-ebt#lossy-store-upgrade",
     "ssb-friends": "^5.0.0",
     "ssb-keys": "^8.0.2",
     "ssb-no-auth": "^1.0.0",
