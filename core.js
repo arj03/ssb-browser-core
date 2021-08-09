@@ -43,7 +43,7 @@ exports.init = function (dir, config, extraModules) {
 
         // Also listen for DHT connections.
         SSB.net.dhtInvite.start((err, success) => { })
-      }, 5000)
+      }, 2500)
     }
 
     SSB.events.emit("SSB: loaded")
