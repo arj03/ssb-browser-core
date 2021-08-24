@@ -459,6 +459,53 @@ exports.init = function (sbot, config) {
       httpGet(remoteURL(id), type, cb)
     },
 
+    getBlob: function (blobId, peersInfo, cb) {
+      const id = imageId(blobId)
+      const file = raf(sanitizedPath(id))
+      file.stat((err, stat) => {
+        if (stat && stat.size == 0) {
+          function checkPeer(i) {
+            if (i >= peersInfo.length) return cb('no peers has blob', id)
+
+            const peerInfo = peersInfo[i]
+            if (peerInfo[1].type === 'room') return checkPeer(i+1)
+
+            const peer = peers[peerInfo[1].key]
+            if (!peer) return checkPeer(i+1)
+
+            pull(
+              peer.blobs.get({ key: id, max }),
+              pull.collect(function(err, data) {
+                if (err) {
+                  console.log("got blobs err", err)
+                  return checkPeer(i+1)
+                }
+                else {
+                  hash(data[0], (err, hash) => {
+                    if (err) return cb(err)
+                    if ('&' + hash != id) return cb(`wrong blob hash in blobs.add, expected ${id} got &${hash}`)
+                    const file = raf(sanitizedPath(id))
+                    file.write(0, data[0], (err) => {
+                      if (err) return cb(err)
+                      console.log("wrote to local filesystem:", id)
+                      fsURL(id, cb)
+                    })
+                  })
+                }
+              })
+            )
+          }
+
+          checkPeer(0)
+        }
+        else
+        {
+          //console.log("reading from local filesystem")
+          fsURL(id, cb)
+        }
+      })
+    },
+
     fsURL,
     privateFsURL,
     remoteURL
