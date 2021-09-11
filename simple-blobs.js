@@ -96,8 +96,8 @@ exports.init = function (sbot, config) {
   }
 
   function add(id, blob, cb) {
-    blob.arrayBuffer().then(function (buffer) {
-      hash(new Uint8Array(buffer), (err, hash) => {
+    function addData(data) {
+      hash(data, (err, hash) => {
         if (err) return cb(err)
         if ('&' + hash != id) return cb(`wrong blob hash in blobs.add, expected ${id} got &${hash}`)
 
@@ -110,7 +110,17 @@ exports.init = function (sbot, config) {
           cb()
         })
       })
-    })
+    }
+
+    if (blob.arrayBuffer) {
+      // upload
+      blob.arrayBuffer().then(function (buffer) {
+        addData(new Uint8Array(buffer))
+      })
+    } else {
+      // network
+      addData(blob)
+    }
   }
 
   function pushBlob(id, cb) {
