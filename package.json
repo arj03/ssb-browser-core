@@ -34,7 +34,7 @@
     "ssb-no-auth": "^1.0.0",
     "ssb-ref": "^2.14.3",
     "ssb-replication-scheduler": "github:arj03/ssb-replication-scheduler",
-    "ssb-room-client": "^0.22.0",
+    "ssb-room-client": "^1.0.0",
     "ssb-sort": "^1.1.3",
     "ssb-validate": "^4.1.4",
     "ssb-ws": "^6.2.3"
