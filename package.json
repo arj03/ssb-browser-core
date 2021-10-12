@@ -28,7 +28,7 @@
     "ssb-conn": "^5.1.0",
     "ssb-db2": "^2.4.0",
     "ssb-dht-invite": "^2.0.0",
-    "ssb-ebt": "https://github.com/ssbc/ssb-ebt#partial-replication-changes",
+    "ssb-ebt": "^8.0.0",
     "ssb-friends": "^5.0.0",
     "ssb-keys": "^8.0.2",
     "ssb-no-auth": "^1.0.0",
