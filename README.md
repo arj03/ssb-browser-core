@@ -197,10 +197,6 @@ Returns an object of: following, blocking and extended given the feed.
 [box](https://github.com/ssbc/ssb-keys#boxcontent-recipients--boxed)
 method from ssb-keys. Useful for private messages.
 
-### blobFiles
-
-The [ssb-blob-files] module.
-
 ### SSB: loaded event
 
 Because loading wasm is async, an event will be fired when `SSB` is

@@ -23,7 +23,6 @@
     "push-stream-to-pull-stream": "^1.0.3",
     "sanitize-filename": "^1.6.3",
     "secret-stack": "^6.3.2",
-    "ssb-blob-files": "https://github.com/ssbc/ssb-blob-files#browser-support",
     "ssb-caps": "^1.1.0",
     "ssb-conn": "^5.1.0",
     "ssb-db2": "^2.6.5",
