@@ -65,12 +65,13 @@ const config = {
   blobs: { max: 512 * 1024 }
 }
 
-ssbSingleton.setup("/.ssb-example", config, extraModules, () => {})
+ssbSingleton.setup("/.ssb-example", config, extraModules)
 ```
 
 ## API
 
-The `SSB` object one gets from the singleton has the following:
+The `SSB` object one gets from the [`singleton`](#ssb-singleton) has
+the following:
 
 ### db
 
@@ -334,7 +335,6 @@ battery.
 
 
 [ssb-server]: https://github.com/ssbc/ssb-server
-[ssb-browser-demo]: https://github.com/arj03/ssb-browser-demo
 [secret-stack]: https://github.com/ssbc/secret-stack
 [ssb-blob-files]: https://github.com/ssbc/ssb-blob-files
 [ssb-ooo]: https://github.com/ssbc/ssb-ooo
