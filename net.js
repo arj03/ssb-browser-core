@@ -17,14 +17,12 @@ exports.init = function(dir, overwriteConfig, extraModules) {
     },
     connections: {
       incoming: {
-        tunnel: [{ scope: 'public', transform: 'shs' }],
-        dht: [{ scope: 'public', transform: 'shs' }]
+        tunnel: [{ scope: 'public', transform: 'shs' }]
       },
       outgoing: {
         net: [{ transform: 'shs' }],
         ws: [{ transform: 'shs' }, { transform: 'noauth' }],
-        tunnel: [{ transform: 'shs' }],
-        dht: [{ transform: 'shs' }]
+        tunnel: [{ transform: 'shs' }]
       }
     },
     path: dir,
@@ -60,7 +58,6 @@ exports.init = function(dir, overwriteConfig, extraModules) {
       .use(require('ssb-room-client'))
       .use(require('ssb-no-auth'))
       .use(require("./simple-blobs"))
-      .use(require('ssb-dht-invite'))
 
   if (extraModules)
     secretStack = extraModules(secretStack)

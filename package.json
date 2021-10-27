@@ -26,7 +26,6 @@
     "ssb-caps": "^1.1.0",
     "ssb-conn": "^5.1.0",
     "ssb-db2": "^2.6.5",
-    "ssb-dht-invite": "^2.0.0",
     "ssb-ebt": "^8.0.0",
     "ssb-friends": "^5.0.0",
     "ssb-keys": "^8.0.2",
@@ -46,7 +45,6 @@
     "uglifyify": "^5.0.2"
   },
   "scripts": {
-    "postinstall": "./fix-dht-invite.sh",
     "build": "mkdir -p dist && browserify --full-paths browser.js > dist/bundle-core.js",
     "release": "mkdir -p dist && browserify -g uglifyify browser.js > dist/bundle-core.js",
     "test": "set -e; for t in test/*.js; do tape $t | tap-spec; done"

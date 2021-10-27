@@ -7,7 +7,7 @@ browser only (but not limited to, of course). Your feed key is stored
 in the browser together with the log, indexes and smaller images. Wasm
 is used for crypto and is around 90% the speed of the C
 implementation. A WebSocket is used to connect to pubs or [rooms]. The
-`bundle-core.js` file in dist/ is roughly 2.5 mb.
+size of the bundle is roughly 2 mb.
 
 ## Usage
 
@@ -67,10 +67,6 @@ const config = {
 
 ssbSingleton.setup("/.ssb-example", config, extraModules, () => {})
 ```
-
-DHT connections are enabled by default. If you don't want that, you
-can configure `connections` to not include DHT in incoming and
-outgoing.
 
 ## db
 
