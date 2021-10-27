@@ -1,4 +1,4 @@
-module.exports.setup = function (dir, config, extraModules, ssbLoaded) {
+module.exports.setup = function (dir, config, extraModules) {
   const { WindowController } = require("./window-controller.js")
   const path = require('path')
 
@@ -22,16 +22,7 @@ module.exports.setup = function (dir, config, extraModules, ssbLoaded) {
     require('./core').init(dir, config, extraModules)
     SSB.uniqueID = (new Date()).getTime()
     window.singletonSSB = SSB // Using a different name so that anything trying to use the non-singleton global will fail so we can find them.
-
-    if (SSB.events._events["SSB: loaded"])
-      ssbLoaded()
-    else
-      SSB.events.once('SSB: loaded', ssbLoaded)
   }
-}
-
-module.exports.init = function (config, extraModules, ssbLoaded) {
-  module.exports.setup("/.ssb-lite", config, extraModules, ssbLoaded) 
 }
 
 var onErrorCallbacks = []

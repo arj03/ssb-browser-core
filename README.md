@@ -207,23 +207,74 @@ has been initialized.  Here is a rough idea of how the API works:
 
 ### SSB Singleton API
 
-#### `setup(dir, config, extraModules, ssbLoaded)`
+#### `setup(dir, config, extraModules)`
 
-Initialize the SSB Singleton module. Does *not* actually trigger the
-initialization of SSB (see `getSSBEventually`). This is required to be
-called before trying to access SSB.
+Setup the SSB Singleton module. This is required to be called before
+trying to access SSB. Does *not* actually trigger the initialization
+of SSB (see `getSSBEventually`).
 
 * `dir` - *String*, A name like "/.ssb-lite".
-* `config` - *Object*, configuration object to pass through to `ssb-browser-core/core`'s `init` function.
-* `extraModules` - *Function (optional)*, function to call to add more modules to the SecretStack during initialization - passed through to `ssb-browser-core/core`'s `init` function.
-* `ssbLoaded` - *Function*, function which is called if we are the primary controller window and SSB is completely done initializing.  No parameters are passed - it is just a notification function to let you know that our window has just initialized an SSB object, in case any other initialization steps have to be done.
+* `config` - *Object*, configuration object to pass through to
+  `ssb-browser-core/core`'s `init` function.
+* `extraModules` - *Function (optional)*, function to call to add more
+  modules to the SecretStack during initialization - passed through to
+  `ssb-browser-core/core`'s `init` function.
 
+#### `getSimpleSSBEventually(isRelevant, cb)`
 
-#### `init(config, extraModules, ssbLoaded)`
+Shorthand easy version of `getSSBEventually`. Retries indefinitely
+(without timing out) and assumes that an SSB which has initialized its
+database is suitable for your use (see `ssbCheckCB` for how this
+works).
 
-Similar to setup. Defaults to "/.ssb-lite" as dir, because of this it
-is recommended to use setup instead so multiple apps on the same
-domain can choose their own store!
+* `isRelevant` - See `getSSBEventually` for more information.
+* `cb` - See `getSSBEventually` for more information.
+
+#### `getSSBEventually(timeout, isRelevant, ssbCheck, result)`
+
+Asynchronous function to keep trying to get an SSB object, even if one
+is not currently available.
+
+* `timeout` - *Number*, number of milliseconds to keep trying to get
+  an SSB object before giving up and timing out with an error.  Pass a
+  negative value to disable timing out and keep trying indefinitely.
+* `isRelevant` - *Function*, a function which is called with zero
+  arguments and is expected to return a boolean value of whether or
+  not the caller still needs the SSB object. This can be used, for
+  example, to bail on running calls to `getSSBEventually` when a Vue
+  component using it has been unloaded, so we don't waste resources
+  retrying forever.
+* `ssbCheck` - *Function*, since `getSSBEventually` might be called
+  while an SSB object is still initializing, this function is called
+  to ask whether the SSB object is initialized enough to use. The
+  function is passed SSB and is expected to return a boolean value for
+  whether it's good enough to use. This could be: `return SSB &&
+  SSB.db`.
+* `cb` - *Function*, called when either there's an error, a timeout,
+  or we successfully acquired SSB and it has been declared suitable by
+  `ssbCheck`. Note if `isRelevant` this is not called.
+
+#### `getSSB() => [ err, SSB ]`
+
+Attempt to get an SSB object and immediately fail if it is not
+available. If the SSB object is available, `err` will be null and
+`SSB` will contain the SSB object even if it's not yet fully and
+completely initialized yet. Otherwise `err` will contain the reason.
+
+#### `openWindow(href)`
+
+Since we can only have one SSB object active, if we want child windows
+to be able to operate concurrently with us, we need to be able to
+coordinate with other windows. This function programmatically opens a
+new window and adds the new window's handle to a tracking list so that
+child windows can coordinate with their parent window's SSB as well as
+other windows within the same family in case the parent window is
+closed and a new SSB holder needs to be elected. In other words, for
+best results, make sure that everything in your app which can open a
+window calls this function.
+
+* `href` - *String*, URL to open in the new window, just like you
+  would normally pass to `window.open`.
 
 #### `onChangeSSB(cb)`
 
@@ -234,7 +285,8 @@ list of callbacks is not cleared when the controller changes, so you
 only need to register here once to be notified every time a change
 happens.
 
-* `cb` - *Function*, callback with zero parameters to be called when the primary controller changes.
+* `cb` - *Function*, callback with zero parameters to be called when
+  the primary controller changes.
 
 #### `onError(cb)`
 
@@ -244,7 +296,8 @@ acquire an SSB.  The intended use of this is to display an error to
 the user.  The list of callbacks is not cleared when an error occurs,
 so you only need to register here once.
 
-* `cb` - *Function*, callback with zero parameters to be called when an error occurs in acquiring an SSB object.
+* `cb` - *Function*, callback with zero parameters to be called when
+  an error occurs in acquiring an SSB object.
 
 #### `onSuccess(cb)`
 
@@ -255,50 +308,9 @@ not cleared when SSB is successfully acquired, so expect your callback
 to be called many, many times over the course of the application's
 operation.  Keep your callback short, sweet, and to the point.
 
-* `cb` - *Function*, callback with zero parameters to be called when an SSB object has been successfully acquired.  Does not provide the actual SSB object - this is strictly a notification function.
-
-#### `getSSB() => [ err, SSB ]`
-
-Attempt to get an SSB object and immediately fail if it is not
-available.  If the SSB object is available, `err` will be null and
-`SSB` will contain the SSB object.  Even if it's not yet fully and
-completely initialized yet, whatever is available will be returned.
-If an SSB object is not available, `err` will contain a String reason
-why.
-
-#### `getSSBEventually(timeout, isRelevantCB, ssbCheckCB, resultCB)`
-
-Asynchronous function to keep trying to get an SSB object, even if one
-is not currently available.
-
-* `timeout` - *Number*, number of milliseconds to keep trying to get an SSB object before giving up and timing out with an error.  Pass a negative value to disable timing out and keep trying indefinitely.
-* `isRelevantCB` - *Function*, callback function which is called with zero arguments and is expected to return a boolean value of whether or not the caller still needs an SSB object.  This can be used, for example, to bail on running calls to `getSSBEventually` when a Vue component using it has been unloaded, so we don't waste resources retrying forever.
-* `ssbCheckCB` - *Function*, since `getSSBEventually` might be called while an SSB object is still initializing, this function is called to ask whether what we have for an SSB object is initiailized enough to use.  The function is passed what we have for an SSB and is expected to return a boolean value for whether it's good enough to use.  A callback like this might want to return something like `(SSB && SSB.db)` or `(SSB && SSB.net)`.
-* `resultCB` - *Function*, function which takes two arguments `(err, SSB)` which is called when either there's an error, a timeout, or we successfully acquired an SSB and it has been declared suitable by `ssbCheckCB`.  Basically the only situation this is not called for an end result is if `isRelevantCB` returns false.
-
-#### `getSimpleSSBEventually(isRelevantCB, resultCB)`
-
-Shorthand easy version of `getSSBEventually`. Retries indefinitely
-(without timing out) and assumes that an SSB which has initialized its
-database is suitable for your use (see `ssbCheckCB` for how this
-works).
-
-* `isRelevantCB` - Passed through.  See `getSSBEventually` for more information.
-* `resultCB` - Passed through.  See `getSSBEventually` for more information.
-
-#### `openWindow(href)`
-
-Since we can only have one SSB object active, if we want child windows
-to be able to operate concurrently with us, we need to be able to
-coordinate with other windows.  This function programmatically opens a
-new window and adds the new window's handle to a tracking list so that
-child windows can coordinate with their parent window's SSB as well as
-other windows within the same family in case the parent window is
-closed and a new SSB holder needs to be elected.  In other words, for
-best results, make sure that everything in your app which can open a
-window calls this function.
-
-* `href` - *String*, URL to open in the new window, just like you would normally pass to `window.open`.
+* `cb` - *Function*, callback with zero parameters to be called when
+  an SSB object has been successfully acquired.  Does not provide the
+  actual SSB object - this is strictly a notification function.
 
 ## Building
 
