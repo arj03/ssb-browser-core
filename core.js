@@ -31,8 +31,7 @@ exports.init = function (dir, config, extraModules) {
       convertHopsIntoGraph: helpers.convertHopsIntoGraph,
       getGraphForFeed: helpers.getGraphForFeed,
 
-      box: require('ssb-keys').box,
-      blobFiles: require('ssb-blob-files'),
+      box: require('ssb-keys').box
     })
 
     // delay startup a bit
