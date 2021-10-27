@@ -40,14 +40,13 @@
   "devDependencies": {
     "browserify": "^17.0.0",
     "rimraf": "^3.0.2",
-    "tap-spec": "^5.0.0",
     "tape": "^5.2.2",
     "uglifyify": "^5.0.2"
   },
   "scripts": {
     "build": "mkdir -p dist && browserify --full-paths browser.js > dist/bundle-core.js",
     "release": "mkdir -p dist && browserify -g uglifyify browser.js > dist/bundle-core.js",
-    "test": "set -e; for t in test/*.js; do tape $t | tap-spec; done"
+    "test": "set -e; for t in test/*.js; do tape $t; done"
   },
   "author": "arj",
   "license": "Beerware"
