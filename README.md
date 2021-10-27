@@ -1,6 +1,6 @@
 # SSB browser core
 
-Secure Scuttlebutt (similar to [ssb-server]) in a browser.
+Run Secure Scuttlebutt (similar to [ssb-server]) in a browser.
 
 SSB browser core is a full implementation of SSB running in the
 browser only (but not limited to, of course). Your feed key is stored
@@ -12,7 +12,12 @@ implementation. A WebSocket is used to connect to pubs or [rooms]. The
 ## Usage
 
 The simplest way to get started using ssb-browser-core is to look at
-the [example repo]. For a more full fledged example see [8K demo].
+the [ssb-browser-example] repo. For a more full fledged example see
+[8K demo].
+
+Note a browser can have multiple tabs open and for this reason you
+need to use [`SSB Singleton`](#SSB Singleton) to avoid data
+corruption.
 
 ## Browser compatibility
 
@@ -44,22 +49,6 @@ Feed [shape=ellipse style=filled]
 SSBBrowserCore->{Network Connections Sync SSBDB2 Feed} Feed->{Validate Keys} Connections->{SSBConn Rooms} Network->{MultiServer MuxRPC SecretHandshake} Sync->{FeedSyncer EBT Blobs} SSBDB2->{Indexes JITDB AsyncAppendOnlyLog } }
 3`
 </details>
-
-## api
-
-Once you load the `bundle-core.js` file in a browser a global SSB
-object will be available.
-
-The api is not meant to be 100% compatible with regular
-ssb-db. Overall there are two major parts: [`db`](#db) and
-[`net`](#net).
-
-If you use ssb-browser-core in an app where the user can open multiple
-tabs, it is *highly* recommended to use the ssb-singleton as you
-otherwise will corrupt your database.
-
-I highly recommend looking at [ssb-browser-demo] for an example of how
-this library can be used to build applications.
 
 ## config
 
@@ -169,7 +158,8 @@ The [ssb-ooo] module
 
 For partial replication a special plugin has been created and
 implemented in browser core, other clients such as a pub needs to have
-the [ssb-partial-replication] plugin installed.
+the [ssb-partial-replication] plugin installed. This will be removed
+in the future.
 
 Once a rpc connection has been established, a few extra methods are
 available under SSB.net.partialReplication. See plugin for
@@ -214,10 +204,10 @@ There are a few other undocumented methods, these will probably be
 moved to another module in a later version as they are quite tied to
 [ssb-browser-demo].
 
-# SSB Singleton
+## SSB Singleton
 
 Several of the libraries we use (such as db2 and
-async-append-only-log) are not thread-safe.  This poses problems for
+async-append-only-log) are not thread-safe. This poses problems for
 apps written using ssb-browser-core because you, as a developer, have
 no control over the number of concurrent tabs a user can have open.
 This causes all kinds of problems with data corruption.
@@ -234,9 +224,9 @@ This does result in a slight delay upon startup where it checks for
 open locks.  So we've provided several ways to be notified when SSB
 has been initialized.  Here is a rough idea of how the API works:
 
-## SSB Singleon API
+### SSB Singleton API
 
-### `setup(dir, config, extraModules, ssbLoaded)`
+#### `setup(dir, config, extraModules, ssbLoaded)`
 
 Initialize the SSB Singleton module. Does *not* actually trigger the
 initialization of SSB (see `getSSBEventually`). This is required to be
@@ -248,13 +238,13 @@ called before trying to access SSB.
 * `ssbLoaded` - *Function*, function which is called if we are the primary controller window and SSB is completely done initializing.  No parameters are passed - it is just a notification function to let you know that our window has just initialized an SSB object, in case any other initialization steps have to be done.
 
 
-### `init(config, extraModules, ssbLoaded)`
+#### `init(config, extraModules, ssbLoaded)`
 
 Similar to setup. Defaults to "/.ssb-lite" as dir, because of this it
 is recommended to use setup instead so multiple apps on the same
 domain can choose their own store!
 
-### `onChangeSSB(cb)`
+#### `onChangeSSB(cb)`
 
 Register a callback which is called when the primary controller window
 changes and SSB has been reinitialized.  The intended use is for
@@ -265,7 +255,7 @@ happens.
 
 * `cb` - *Function*, callback with zero parameters to be called when the primary controller changes.
 
-### `onError(cb)`
+#### `onError(cb)`
 
 Register a callback which is called when an error occurs in trying to
 access SSB, such as if we're waiting for a lock or otherwise cannot
@@ -275,7 +265,7 @@ so you only need to register here once.
 
 * `cb` - *Function*, callback with zero parameters to be called when an error occurs in acquiring an SSB object.
 
-### `onSuccess(cb)`
+#### `onSuccess(cb)`
 
 Register a callback which is called when SSB has been successfully
 acquired within our window/tab.  The intended use of this is to hide
@@ -286,7 +276,7 @@ operation.  Keep your callback short, sweet, and to the point.
 
 * `cb` - *Function*, callback with zero parameters to be called when an SSB object has been successfully acquired.  Does not provide the actual SSB object - this is strictly a notification function.
 
-### `getSSB() => [ err, SSB ]`
+#### `getSSB() => [ err, SSB ]`
 
 Attempt to get an SSB object and immediately fail if it is not
 available.  If the SSB object is available, `err` will be null and
@@ -295,7 +285,7 @@ completely initialized yet, whatever is available will be returned.
 If an SSB object is not available, `err` will contain a String reason
 why.
 
-### `getSSBEventually(timeout, isRelevantCB, ssbCheckCB, resultCB)`
+#### `getSSBEventually(timeout, isRelevantCB, ssbCheckCB, resultCB)`
 
 Asynchronous function to keep trying to get an SSB object, even if one
 is not currently available.
@@ -305,7 +295,7 @@ is not currently available.
 * `ssbCheckCB` - *Function*, since `getSSBEventually` might be called while an SSB object is still initializing, this function is called to ask whether what we have for an SSB object is initiailized enough to use.  The function is passed what we have for an SSB and is expected to return a boolean value for whether it's good enough to use.  A callback like this might want to return something like `(SSB && SSB.db)` or `(SSB && SSB.net)`.
 * `resultCB` - *Function*, function which takes two arguments `(err, SSB)` which is called when either there's an error, a timeout, or we successfully acquired an SSB and it has been declared suitable by `ssbCheckCB`.  Basically the only situation this is not called for an end result is if `isRelevantCB` returns false.
 
-### `getSimpleSSBEventually(isRelevantCB, resultCB)`
+#### `getSimpleSSBEventually(isRelevantCB, resultCB)`
 
 Shorthand easy version of `getSSBEventually`. Retries indefinitely
 (without timing out) and assumes that an SSB which has initialized its
@@ -315,7 +305,7 @@ works).
 * `isRelevantCB` - Passed through.  See `getSSBEventually` for more information.
 * `resultCB` - Passed through.  See `getSSBEventually` for more information.
 
-### `openWindow(href)`
+#### `openWindow(href)`
 
 Since we can only have one SSB object active, if we want child windows
 to be able to operate concurrently with us, we need to be able to
@@ -360,8 +350,7 @@ battery.
 
 [rooms]: https://github.com/ssb-ngi-pointer/go-ssb-room
 [8K demo]: https://github.com/ssb-ngi-pointer/8k-demo
-[example-repo]: https://github.com/arj03/ssb-browser-example/
-[ssb-get-thread]: https://github.com/arj03/ssb-get-thread
+[ssb-browser-example]: https://github.com/arj03/ssb-browser-example/
 [ssb-partial-replication]: https://github.com/arj03/ssb-partial-replication
 [jitdb]: https://github.com/arj03/jitdb
 
