@@ -16,8 +16,7 @@ the [ssb-browser-example] repo. For a more full fledged example see
 [8K demo].
 
 Note a browser can have multiple tabs open and for this reason you
-need to use [`SSB Singleton`](#SSB Singleton) to avoid data
-corruption.
+need to use a [`singleton`](#ssb-singleton) to avoid data corruption.
 
 ## Browser compatibility
 
@@ -50,21 +49,24 @@ SSBBrowserCore->{Network Connections Sync SSBDB2 Feed} Feed->{Validate Keys} Con
 3`
 </details>
 
-## config
+## Configuration
 
-Loading the bundle-core file as above will use `browser.js`, meaning
-default options. It is also possible to overwrite config options,
-like:
+To change some of the default options from `net.js` you can use:
 
 ```
-require('../core.js').init(dir, { blobs: { max: 512 * 1024 } }, extraModules)
+const ssbSingleton = require('ssb-browser-core/ssb-singleton')
+
+function extraModules(secretStack) {
+  // add extra modules here
+  return secretStack
+}
+
+const config = {
+  blobs: { max: 512 * 1024 }
+}
+
+ssbSingleton.setup("/.ssb-example", config, extraModules, () => {})
 ```
-
-Default config options are defined in `net.js`.
-
-`extraModules` is a function that takes a secret stack and attaches
-extra modules. This allow you to add db2 indexes or extra plugins like
-ssb-threads.
 
 DHT connections are enabled by default. If you don't want that, you
 can configure `connections` to not include DHT in incoming and
@@ -185,24 +187,6 @@ Returns an object of: following, blocking and extended given the feed.
 
 [box](https://github.com/ssbc/ssb-keys#boxcontent-recipients--boxed)
 method from ssb-keys. Useful for private messages.
-
-### SSB: loaded event
-
-Because loading wasm is async, an event will be fired when `SSB` is
-ready to use. Example:
-
-```
-SSB.events.on('SSB: loaded', function() {
-  console.log("ready to rock!")
-})
-```
-
-&nbsp;
-&nbsp;
-
-There are a few other undocumented methods, these will probably be
-moved to another module in a later version as they are quite tied to
-[ssb-browser-demo].
 
 ## SSB Singleton
 
