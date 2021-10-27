@@ -68,20 +68,24 @@ const config = {
 ssbSingleton.setup("/.ssb-example", config, extraModules, () => {})
 ```
 
-## db
+## API
+
+The `SSB` object one gets from the singleton has the following:
+
+### db
 
 This is the [ssb-db2] module.
 
-## net
+### net
 
 This is the [secret-stack] module with a few extra modules
-loaded. [ssb-ws] is used to create web socket connections to pubs.
+loaded.
 
-### id
+#### id
 
 The public key of the current user
 
-### rpc:connect event
+#### rpc:connect event
 
 Example:
 
@@ -92,22 +96,22 @@ SSB.net.on('rpc:connect', (rpc) => {
 })
 ```
 
-### connectAndRemember(addr, data)
+#### connectAndRemember(addr, data)
 
 Will connect and store as to automatically reconnect on
 reload. Options are as described in [ssb-conn].
 
-### directConnect(addr, cb)
+#### directConnect(addr, cb)
 
 Connect to addr only once. Cb is (err, rpc)
 
-### blobs
+#### blobs
 
 This is where the `blobs` api can be found. The module implements the
 blobs protocol and so can exchange blobs with connection peers. It
 also contains with the the following extra methods:
 
-#### hash(data, cb)
+##### hash(data, cb)
 
 Hashes data and returns the digest or err
 
@@ -123,24 +127,24 @@ onFileSelect: function(ev) {
 }
 ```
 
-#### add(blobId, file, cb)
+##### add(blobId, file, cb)
 
 Adds the `file` (such as one obtained from ev.target.files when using
 a file select) to the blob store using the blobId name. BlobId is & +
 hash.
 
-#### remoteURL(blobId)
+##### remoteURL(blobId)
 
 Returns a http URL string for the current connection. This is useful
 in a browser for images that you don't want to store directly on the
 device.
 
-#### privateGet(blobId, unbox, cb)
+##### privateGet(blobId, unbox, cb)
 
 Callback with err or a url that works for e.g images that was received
 in a private message.
 
-#### localGet(blobId, unbox, cb)
+##### localGet(blobId, unbox, cb)
 
 If blob already exists will callback with err or a url that can be
 used for images for a blob. Otherwise the blob will get requested and
@@ -148,24 +152,21 @@ if size is smaller than the maximum size, the blob will be stored
 locally and used for callback, otherwise the callback will return a
 `remoteURL` link.
 
-### ooo
+#### ooo
 
 The [ssb-ooo] module
 
-### Browser specific methods on net
+#### Browser specific methods on net
+
+*** Warning: This will be removed in the future ***
 
 For partial replication a special plugin has been created and
 implemented in browser core, other clients such as a pub needs to have
-the [ssb-partial-replication] plugin installed. This will be removed
-in the future.
+the [ssb-partial-replication] plugin installed.
 
 Once a rpc connection has been established, a few extra methods are
 available under SSB.net.partialReplication. See plugin for
 documentation.
-
-## SSB
-
-Other things directly on the global SSB object
 
 ### dir
 
@@ -322,7 +323,6 @@ battery.
 [ssb-server]: https://github.com/ssbc/ssb-server
 [ssb-browser-demo]: https://github.com/arj03/ssb-browser-demo
 [secret-stack]: https://github.com/ssbc/secret-stack
-[ssb-ws]: https://github.com/ssbc/ssb-ws
 [ssb-blob-files]: https://github.com/ssbc/ssb-blob-files
 [ssb-ooo]: https://github.com/ssbc/ssb-ooo
 [ssb-conn]: https://github.com/staltz/ssb-conn
