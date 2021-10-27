@@ -227,7 +227,8 @@ Shorthand easy version of `getSSBEventually`. Retries indefinitely
 database is suitable for your use (see `ssbCheckCB` for how this
 works).
 
-* `isRelevant` - See `getSSBEventually` for more information.
+* `isRelevant` - Optional, if not provided will be a function that
+  always returns true. See `getSSBEventually` for more information.
 * `cb` - See `getSSBEventually` for more information.
 
 #### `getSSBEventually(timeout, isRelevant, ssbCheck, result)`

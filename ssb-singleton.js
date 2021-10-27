@@ -160,6 +160,11 @@ module.exports.getSSBEventually = function(timeout, isRelevant, ssbCheck, cb) {
 }
 
 module.exports.getSimpleSSBEventually = function(isRelevant, cb) {
+  if (!cb) {
+    cb = isRelevant
+    isRelevant = () => { return true }
+  }
+
   module.exports.getSSBEventually(-1, isRelevant, (SSB) => { return SSB && SSB.db }, cb)
 }
 
