@@ -113,20 +113,20 @@ function checkSSBEventually()
   for (let i = 0; i < ssbEventuallyCB.length; ++i)
   {
     const check = ssbEventuallyCB[i]
-    if (check.isRelevantCB && !check.isRelevantCB())
+    if (check.isRelevant && !check.isRelevant())
       ssbEventuallyCB.splice(i, 1)
 
     let isOk = false
     if (!err)
-      try { isOk = check.ssbCheckCB(maybeSSB) } catch (e) {}
+      try { isOk = check.ssbCheck(maybeSSB) } catch (e) {}
 
     if (isOk) {
-      try { check.resultCB(err, maybeSSB) } catch (e) {}
+      try { check.cb(err, maybeSSB) } catch (e) {}
       ssbEventuallyCB.splice(i, 1)
     } else if (check.retries > 0) {
       check.retries -= 1
     } else {
-      try { check.resultCB("Could not lock database", null) } catch (e) {}
+      try { check.cb("Could not lock database", null) } catch (e) {}
       ssbEventuallyCB.splice(i, 1)
     }
   }
@@ -135,15 +135,20 @@ function checkSSBEventually()
     setTimeout(checkSSBEventually, 250)
 }
 
-module.exports.getSSBEventually = function(timeout, isRelevantCB, ssbCheckCB, resultCB) {
+module.exports.getSSBEventually = function(timeout, isRelevant, ssbCheck, cb) {
   let [ err, maybeSSB ] = this.getSSB()
 
-  const isOk = ssbCheckCB(maybeSSB)
+  const isOk = ssbCheck(maybeSSB)
 
   if (!isOk) {
     if (timeout != 0) {
-      ssbEventuallyCB.push({ retries: timeout === -1 ? 10000 : timeout / 250,
-                             isRelevantCB, ssbCheckCB, resultCB })
+      ssbEventuallyCB.push({
+        retries: timeout === -1 ? 10000 : timeout / 250,
+        isRelevant,
+        ssbCheck,
+        cb
+      })
+
       if (ssbEventuallyCB.length === 1)
         setTimeout(checkSSBEventually, 250)
 
@@ -151,11 +156,11 @@ module.exports.getSSBEventually = function(timeout, isRelevantCB, ssbCheckCB, re
     }
   }
 
-  resultCB(err, isOk ? maybeSSB : null)
+  cb(err, isOk ? maybeSSB : null)
 }
 
-module.exports.getSimpleSSBEventually = function(isRelevantCB, resultCB) {
-  module.exports.getSSBEventually(-1, isRelevantCB, (SSB) => { return SSB && SSB.db }, resultCB)
+module.exports.getSimpleSSBEventually = function(isRelevant, cb) {
+  module.exports.getSSBEventually(-1, isRelevant, (SSB) => { return SSB && SSB.db }, cb)
 }
 
 module.exports.openWindow = function(href) {
