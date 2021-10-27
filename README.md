@@ -1,27 +1,26 @@
 # SSB browser core
 
-Secure scuttlebutt core (similar to [ssb-server]) in a browser.
+Secure Scuttlebutt (similar to [ssb-server]) in a browser.
 
-This is a full implementation of ssb running in the browser only (but
-not limited to, of course). The key of your feed is stored in the
-browser together with the log, indexes and smaller images. To reduce
-storage and network requirements, partial replication has been
-implemented. Wasm is used for crypto and is around 90% the speed of
-the C implementation. A WebSocket is used to connect to pubs or
-rooms. The `bundle-core.js` file in dist/ is roughly 2mb.
+SSB browser core is a full implementation of SSB running in the
+browser only (but not limited to, of course). Your feed key is stored
+in the browser together with the log, indexes and smaller images. Wasm
+is used for crypto and is around 90% the speed of the C
+implementation. A WebSocket is used to connect to pubs or [rooms]. The
+`bundle-core.js` file in dist/ is roughly 2.5 mb.
 
-Replication in the browser is quite a bit slower than in node, around
-2x. There doesn't seem to be a single cause, it appears to be all the
-diferrent layers that are [slower]: end-to-end encryption, database
-write etc.
+## Usage
 
-SSB conn is used for connections and rooms are supported. Partial
-replication is implemented which allows two connected browsers to do a
-partial sync.
+The simplest way to get started using ssb-browser-core is to look at
+the [example repo]. For a more full fledged example see [8K demo].
 
-Partial replication [speed] on a fast laptop is roughly 425 feeds in 56
-seconds, and roughly half of that on a slow laptop or when running on
-battery.
+## Browser compatibility
+
+Tested with Chrome and Firefox. Chrome is faster because it uses fs
+instead of indexeddb. Also tested on android using Chrome and on iOS
+using safari.
+
+## Modules
 
 ![Diagram](./diagram.svg)
 
@@ -46,7 +45,7 @@ SSBBrowserCore->{Network Connections Sync SSBDB2 Feed} Feed->{Validate Keys} Con
 3`
 </details>
 
-# api
+## api
 
 Once you load the `bundle-core.js` file in a browser a global SSB
 object will be available.
@@ -62,7 +61,7 @@ otherwise will corrupt your database.
 I highly recommend looking at [ssb-browser-demo] for an example of how
 this library can be used to build applications.
 
-# config
+## config
 
 Loading the bundle-core file as above will use `browser.js`, meaning
 default options. It is also possible to overwrite config options,
@@ -330,19 +329,25 @@ window calls this function.
 
 * `href` - *String*, URL to open in the new window, just like you would normally pass to `window.open`.
 
-# Browser compatibility
-
-Tested with Chrome and Firefox. Chrome is faster because it uses fs
-instead of indexeddb. Also tested on android using Chrome and iOS
-using safari.
-
-# Building
+## Building
 
 Run `npm run build` for debugging and `npm run release` for a smaller
 dist file.
 
 For a smaller bundle file you can apply (patch -p0 < x.patch):
  - patches/sodium-browserify.patch
+
+## Notes on performance
+
+Replication in the browser is quite a bit slower than in node, around
+2x. There doesn't seem to be a single cause, it appears to be all the
+diferrent layers that are [slower]: end-to-end encryption, database
+write etc.
+
+Partial replication [speed] on a fast laptop is roughly 425 feeds in 56
+seconds, and roughly half of that on a slow laptop or when running on
+battery.
+
 
 [ssb-server]: https://github.com/ssbc/ssb-server
 [ssb-browser-demo]: https://github.com/arj03/ssb-browser-demo
@@ -353,6 +358,9 @@ For a smaller bundle file you can apply (patch -p0 < x.patch):
 [ssb-conn]: https://github.com/staltz/ssb-conn
 [ssb-db2]: https://github.com/ssb-ngi-pointer/ssb-db2
 
+[rooms]: https://github.com/ssb-ngi-pointer/go-ssb-room
+[8K demo]: https://github.com/ssb-ngi-pointer/8k-demo
+[example-repo]: https://github.com/arj03/ssb-browser-example/
 [ssb-get-thread]: https://github.com/arj03/ssb-get-thread
 [ssb-partial-replication]: https://github.com/arj03/ssb-partial-replication
 [jitdb]: https://github.com/arj03/jitdb
