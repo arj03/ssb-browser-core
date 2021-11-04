@@ -105,27 +105,6 @@ SSB.events.on('SSB: loaded', function() {
     })
   })
 
-  test('getFeed', t => {
-    pull(
-      SSB.net.partialReplication.getFeed({ id: SSB.net.id, keys: false }),
-      pull.collect((err, results) => {
-        t.equal(results.length, 3)
-        t.end()
-      })
-    )
-  })
-
-  test('getFeedReverse', t => {
-    pull(
-      SSB.net.partialReplication.getFeedReverse({ id: SSB.net.id, limit: 1, keys: false }),
-      pull.collect((err, results) => {
-        t.equal(results.length, 1)
-        t.equal(typeof results[0].content, 'string')
-        t.end()
-      })
-    )
-  })
-
   test('getTangle', t => {
     var content = { type: 'post', text: 'Thread' }
 
@@ -161,23 +140,6 @@ SSB.events.on('SSB: loaded', function() {
             t.end()
           })
         })
-      })
-    })
-  })
-
-  test('getMessagesOfType', t => {
-    var content = { type: 'about', name: 'Monty' }
-
-    SSB.db.publish(content, (err, content) => {
-      SSB.db.onDrain(() => {
-        pull(
-          SSB.net.partialReplication.getMessagesOfType({ id: SSB.net.id, type: 'post', keys: false }),
-          pull.collect((err, results) => {
-            t.equal(results.length, 7)
-            t.equal(results.filter(x => typeof x.content !== 'string').length, 4)
-            t.end()
-          })
-        )
       })
     })
   })

@@ -12,8 +12,7 @@ exports.init = function(dir, overwriteConfig, extraModules) {
     caps: { shs: Buffer.from(caps.shs, 'base64') },
     keys,
     friends: {
-      hops: 2,
-      hookReplicate: false
+      hops: 2
     },
     connections: {
       incoming: {
@@ -50,9 +49,8 @@ exports.init = function(dir, overwriteConfig, extraModules) {
       .use(require('ssb-conn'))
       .use(require('ssb-friends'))
       .use(require('ssb-ebt'))
-      .use(require('./feed-replication'))
       .use(require('ssb-replication-scheduler'))
-      .use(require('./ssb-partial-replication'))
+      .use(require('./ssb-partial-replication')) // tangles
       .use(require('./simple-ooo'))
       .use(require('ssb-ws'))
       .use(require('ssb-room-client'))

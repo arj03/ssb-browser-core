@@ -14,10 +14,7 @@ const {
 } = require('ssb-db2/operators')
 
 exports.manifest = {
-  getFeed: 'source',
-  getFeedReverse: 'source',
-  getTangle: 'async',
-  getMessagesOfType: 'source'
+  getTangle: 'async'
 }
 exports.permissions = {
   anonymous: {allow: Object.keys(exports.manifest)}
@@ -27,33 +24,6 @@ exports.name = 'partial-replication'
 
 exports.init = function (sbot, config) {
   return {
-    getFeed: function (opts) {
-      return pull(
-        sbot.createHistoryStream(opts)
-      )
-    },
-
-    getFeedReverse: function (opts) {
-      return pull(
-        pullCont(function(cb) {
-          SSB.db.getLatest(opts.id, (err, latest) => {
-            if (err) {
-              console.error("Got error on feed reverse", err)
-              return cb(null, pull.empty())
-            }
-
-            var seqStart = latest ? latest.sequence - (opts.limit - 1) : 0
-            if (seqStart < 0)
-              seqStart = 0
-
-            opts.seq = seqStart
-
-            cb(null, sbot.createHistoryStream(opts))
-          })
-        })
-      )
-    },
-
     getTangle: function(msgId, cb) {
       if (!msgId) return cb("msg not found:" + msgId)
 
@@ -69,37 +39,6 @@ exports.init = function (sbot, config) {
           })
         )
       })
-    },
-
-    // opts: { id: feedId, type: string, seq: int?, limit: int? }
-    getMessagesOfType: function(opts)
-    {
-      if (!opts.id) throw new Error("id is required!")
-      if (!opts.type) throw new Error("type is required!")
-
-      const seq = opts.sequence || opts.seq || 0
-      const limit = opts.limit || 1e10
-
-      return pull(
-        pullCont(function(cb) {
-          let q = SSB.db.query(
-            where(and(author(opts.id), type(opts.type)))
-          )
-
-          if (seq) // sequences starts with 1, offset starts with 0 ;-)
-            q = SSB.db.query(q, (startFrom(seq-1)))
-
-          SSB.db.query(
-            q,
-            paginate(limit),
-            toCallback((err, answer) => {
-              if (err) return cb(err)
-              let results = answer.results.map(x => reEncrypt(x).value)
-              cb(null, pull.values(results))
-            })
-          )
-        })
-      )
     }
   }
 }
