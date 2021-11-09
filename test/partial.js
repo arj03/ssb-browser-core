@@ -7,14 +7,14 @@ require('rimraf').sync(dir)
 
 require('../core.js').init(dir)
 
-SSB.events.on('SSB: loaded', function() {
+SSB.on('SSB: loaded', function() {
   test('Base', t => {
     const post = { type: 'post', text: 'Testing!' }
 
     SSB.db.publish(post, (err, postMsg) => {
       SSB.db.onDrain('ebt', () => {
         pull(
-          SSB.net.createHistoryStream({ id: SSB.net.id, keys: false }),
+          SSB.createHistoryStream({ id: SSB.id, keys: false }),
           pull.collect((err, results) => {
             t.equal(results.length, 1)
             // values directly
@@ -28,7 +28,7 @@ SSB.events.on('SSB: loaded', function() {
   
   test('Keys', t => {
     pull(
-      SSB.net.createHistoryStream({ id: SSB.net.id }),
+      SSB.createHistoryStream({ id: SSB.id }),
       pull.collect((err, results) => {
         t.equal(results.length, 1)
         t.equal(typeof results[0].key, 'string')
@@ -39,7 +39,7 @@ SSB.events.on('SSB: loaded', function() {
 
   test('No values', t => {
     pull(
-      SSB.net.createHistoryStream({ id: SSB.net.id, values: false }),
+      SSB.createHistoryStream({ id: SSB.id, values: false }),
       pull.collect((err, results) => {
         t.equal(results.length, 1)
         t.equal(typeof results[0], 'string')
@@ -50,12 +50,12 @@ SSB.events.on('SSB: loaded', function() {
   
   test('Seq', t => {
     pull(
-      SSB.net.createHistoryStream({ id: SSB.net.id, keys: false, seq: 1 }),
+      SSB.createHistoryStream({ id: SSB.id, keys: false, seq: 1 }),
       pull.collect((err, results) => {
         t.equal(results.length, 1)
 
         pull(
-          SSB.net.createHistoryStream({ id: SSB.net.id, keys: false, seq: 0 }),
+          SSB.createHistoryStream({ id: SSB.id, keys: false, seq: 0 }),
           pull.collect((err, results) => {
             t.equal(results.length, 1)
 
@@ -63,13 +63,13 @@ SSB.events.on('SSB: loaded', function() {
             SSB.db.publish(post, (err, postMsg) => {
               SSB.db.onDrain(() => {
                 pull(
-                  SSB.net.createHistoryStream({ id: SSB.net.id, keys: false, seq: 2 }),
+                  SSB.createHistoryStream({ id: SSB.id, keys: false, seq: 2 }),
                   pull.collect((err, results) => {
                     t.equal(results.length, 1)
                     t.equal(results[0].content.text, post.text)
                     
                     pull(
-                      SSB.net.createHistoryStream({ id: SSB.net.id, keys: false, seq: 1, limit: 1 }),
+                      SSB.createHistoryStream({ id: SSB.id, keys: false, seq: 1, limit: 1 }),
                       pull.collect((err, results) => {
                         t.equal(results.length, 1)
                         t.equal(results[0].content.text, 'Testing!')
@@ -88,13 +88,13 @@ SSB.events.on('SSB: loaded', function() {
   })
   
   test('Encrypted', t => {
-    var content = { type: 'post', text: 'super secret', recps: [SSB.net.id] }
-    content = SSB.box(content, content.recps.map(x => x.substr(1)))
+    var content = { type: 'post', text: 'super secret', recps: [SSB.id] }
+    content = SSB.helpers.box(content, content.recps.map(x => x.substr(1)))
     
     SSB.db.publish(content, (err, privateMsg) => {
       SSB.db.onDrain(() => {
         pull(
-          SSB.net.createHistoryStream({ id: SSB.net.id, keys: false }),
+          SSB.createHistoryStream({ id: SSB.id, keys: false }),
           pull.collect((err, results) => {
             t.equal(results.length, 3)
             t.equal(typeof results[2].content, 'string')
@@ -112,7 +112,7 @@ SSB.events.on('SSB: loaded', function() {
       var reply = { type: 'post', text: 'Thread msg', root: threadMsg.key, branch: threadMsg.key }
       SSB.db.publish(reply, (err, replyMsg) => {
         SSB.db.onDrain(() => {
-          SSB.net.partialReplication.getTangle(threadMsg.key, (err, results) => {
+          SSB.partialReplication.getTangle(threadMsg.key, (err, results) => {
             t.error(err, 'no err')
             t.equal(results.length, 2)
             t.equal(results[0].content.text, content.text)
@@ -125,16 +125,16 @@ SSB.events.on('SSB: loaded', function() {
   })
 
   test('getTangle private', t => {
-    var content = { type: 'post', text: 'Private thread', recps: [SSB.net.id] }
-    content = SSB.box(content, content.recps.map(x => x.substr(1)))
+    var content = { type: 'post', text: 'Private thread', recps: [SSB.id] }
+    content = SSB.helpers.box(content, content.recps.map(x => x.substr(1)))
 
     SSB.db.publish(content, (err, threadMsg) => {
       var reply = { type: 'post', text: 'Thread msg', root: threadMsg.key, branch: threadMsg.key,
-                    recps: [SSB.net.id] }
-      reply = SSB.box(reply, reply.recps.map(x => x.substr(1)))
+                    recps: [SSB.id] }
+      reply = SSB.helpers.box(reply, reply.recps.map(x => x.substr(1)))
       SSB.db.publish(reply, (err, replyMsg) => {
         SSB.db.onDrain(() => {
-          SSB.net.partialReplication.getTangle(threadMsg.key, (err, results) => {
+          SSB.partialReplication.getTangle(threadMsg.key, (err, results) => {
             t.equal(results.length, 1, "only the original message")
             t.equal(results[0].text, content.text)
             t.end()
