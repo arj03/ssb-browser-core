@@ -1,47 +1,35 @@
 exports.init = function (dir, config, extraModules) {
-  const EventEmitter = require('events')
-  SSB = {
-    events: new EventEmitter(),
-    dbOperators: require('ssb-db2/operators')
-  }
-  SSB.dbOperators.mentions = require('ssb-db2/operators/full-mentions')
+  // init secret stack
+  SSB = require('./net').init(dir, config, extraModules)
+  console.log("my id: ", SSB.id)
 
   const s = require('sodium-browserify')
-  s.events.on('sodium-browserify:wasm loaded', function() {
-
+  s.events.on('sodium-browserify:wasm loaded', () => {
     console.log("wasm loaded")
 
-    var net = require('./net').init(dir, config, extraModules)
+    const helpers = require('./core-helpers')
 
-    console.log("my id: ", net.id)
+    SSB.helpers = {
+      box: require('ssb-keys').box,
 
-    var helpers = require('./core-helpers')
-
-    SSB = Object.assign(SSB, {
-      db: net.db,
-      net,
-      dir,
-
+      connectAndRemember: helpers.connectAndRemember,
       getPeer: helpers.getPeer,
-
-      removeDB: helpers.removeDB,
-      removeIndexes: helpers.removeIndexes,
-      removeBlobs: helpers.removeBlobs,
-
       convertHopsIntoGraph: helpers.convertHopsIntoGraph,
       getGraphForFeed: helpers.getGraphForFeed,
 
-      box: require('ssb-keys').box
-    })
+      removeDB: helpers.removeDB,
+      removeIndexes: helpers.removeIndexes,
+      removeBlobs: helpers.removeBlobs
+    }
 
     // delay startup a bit
     const startOffline = config && config.core && config.core.startOffline
     if (!startOffline) {
       setTimeout(() => {
-        SSB.net.conn.start()
+        SSB.conn.start()
       }, 2500)
     }
 
-    SSB.events.emit("SSB: loaded")
+    SSB.emit("SSB: loaded")    
   })
 }

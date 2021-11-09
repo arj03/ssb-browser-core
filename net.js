@@ -85,15 +85,5 @@ exports.init = function(dir, overwriteConfig, extraModules) {
     ping()
   })
 
-  r.connectAndRemember = function(addr, data) {
-    r.conn.connect(addr, data, (err, rpc) => {
-      r.conn.remember(addr, Object.assign(data, { autoconnect: true }))
-    })
-  }
-
-  r.directConnect = function(addr, cb) {
-    r.conn.connect(addr, cb)
-  }
-
   return r
 }

@@ -4,13 +4,18 @@ const pull = require('pull-stream')
 const raf = require('polyraf')
 const path = require('path')
 
-exports.getPeer = function()
-{
-  let connPeers = Array.from(SSB.net.conn.hub().entries())
+exports.connectAndRemember = function (addr, data) {
+  SSB.conn.connect(addr, data, (err, rpc) => {
+    SSB.conn.remember(addr, Object.assign(data, { autoconnect: true }))
+  })
+}
+
+exports.getPeer = function() {
+  let connPeers = Array.from(SSB.conn.hub().entries())
   connPeers = connPeers.filter(([, x]) => !!x.key).map(([address, data]) => ({ address, data }))
   var goodPeer = connPeers.find(cp => cp.data.type != 'room')
 
-  let peers = Object.values(SSB.net.peers).flat()
+  let peers = Object.values(SSB.peers).flat()
 
   if (goodPeer) return peers.find(p => p.id == goodPeer.data.key)
   else if (peers.length > 0) return peers[0]
@@ -18,8 +23,7 @@ exports.getPeer = function()
 }
 
 function deleteDatabaseFile(filename) {
-  const path = require('path')
-  const file = raf(path.join(SSB.dir, filename))
+  const file = raf(path.join(SSB.config.path, filename))
   file.open((err, done) => {
     if (err) return console.error(err)
     file.destroy()
@@ -79,7 +83,7 @@ exports.convertHopsIntoGraph = function(hops) {
     const feed = feeds[i]
     if (hops[feed] == 1)
       following.push(feed)
-    else if (hops[feed] > 0 && hops[feed] <= SSB.net.config.friends.hops)
+    else if (hops[feed] > 0 && hops[feed] <= SSB.config.friends.hops)
       extended.push(feed)
     else if (hops[feed] == -1)
       blocking.push(feed) 
@@ -89,8 +93,8 @@ exports.convertHopsIntoGraph = function(hops) {
 }
 
 exports.getGraphForFeed = function(feedId, cb) {
-  SSB.net.friends.hops({ start: feedId }, (err, hops) => {
+  SSB.friends.hops({ start: feedId }, (err, hops) => {
     if (err) return cb(err)
-    else cb(null, exports.convertHopsIntoGraph(hops, feedId == SSB.net.id))
+    else cb(null, exports.convertHopsIntoGraph(hops, feedId == SSB.id))
   })
 }
