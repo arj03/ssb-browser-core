@@ -172,7 +172,7 @@ exports.init = function (sbot, config) {
   function remoteURL(id) {
     if (!id) return ""
 
-    const peer = SSB.getPeer()
+    const peer = SSB.helpers.getPeer()
     if (!peer) return ''
 
     let remoteAddress = peer.stream.address
