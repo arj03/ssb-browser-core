@@ -93,10 +93,12 @@ The
 [box](https://github.com/ssbc/ssb-keys#boxcontent-recipients--boxed)
 method from ssb-keys. Useful for private messages.
 
+### blobs
+
 The blobs module is a little special compared to default ssb-blobs. It
 also contains with the the following extra methods:
 
-### hash(data, cb)
+#### hash(data, cb)
 
 Hashes data and returns the digest or err
 
@@ -112,24 +114,24 @@ onFileSelect: function(ev) {
 }
 ```
 
-### add(blobId, file, cb)
+#### add(blobId, file, cb)
 
 Adds the `file` (such as one obtained from ev.target.files when using
 a file select) to the blob store using the blobId name. BlobId is & +
 hash.
 
-### remoteURL(blobId)
+#### remoteURL(blobId)
 
 Returns a http URL string for the current connection. This is useful
 in a browser for images that you don't want to store directly on the
 device.
 
-### privateGet(blobId, unbox, cb)
+#### privateGet(blobId, unbox, cb)
 
 Callback with err or a url that works for e.g images that was received
 in a private message.
 
-### localGet(blobId, unbox, cb)
+#### localGet(blobId, unbox, cb)
 
 If blob already exists will callback with err or a url that can be
 used for images for a blob. Otherwise the blob will get requested and
