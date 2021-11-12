@@ -1,11 +1,14 @@
 exports.init = function (dir, config, extraModules) {
-  // init secret stack
-  SSB = require('./net').init(dir, config, extraModules)
-  console.log("my id: ", SSB.id)
+  const EventEmitter = require('events')
+  SSBLOADER = new EventEmitter()
 
+  // init secret stack
   const s = require('sodium-browserify')
   s.events.on('sodium-browserify:wasm loaded', () => {
     console.log("wasm loaded")
+
+    SSB = require('./net').init(dir, config, extraModules)
+    console.log("my id: ", SSB.id)
 
     const helpers = require('./core-helpers')
 
@@ -30,6 +33,6 @@ exports.init = function (dir, config, extraModules) {
       }, 2500)
     }
 
-    SSB.emit("SSB: loaded")    
+    SSBLOADER.emit("ready")
   })
 }

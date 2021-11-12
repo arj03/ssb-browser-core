@@ -11,7 +11,7 @@ fs.copyFileSync("scripts/secret", dir + "/secret")
 
 require('../core.js').init(dir)
 
-SSB.on('SSB: loaded', function() {
+SSBLOADER.on('ready', function() {
 
   process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = 0 // wtf
   // var remoteAddress = 'wss://between-two-worlds.dk:8990~noauth:lbocEWqF2Fg6WMYLgmfYvqJlMfL7hiqVAV6ANjHWNw8='
