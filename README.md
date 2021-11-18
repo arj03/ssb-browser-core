@@ -70,49 +70,35 @@ ssbSingleton.setup("/.ssb-example", config, extraModules)
 
 ## API
 
-The `SSB` object one gets from the [`singleton`](#ssb-singleton) has
-the following:
+The `SSB` object one gets from the [`singleton`](#ssb-singleton) is a
+[secret-stack] with some extra plugins loadings by default. A few
+helper functions are included under helpers:
 
-### db
-
-This is the [ssb-db2] module.
-
-### net
-
-This is the [secret-stack] module with a few extra modules
-loaded.
-
-#### id
-
-The public key of the current user
-
-#### rpc:connect event
-
-Example:
-
-```
-SSB.net.on('rpc:connect', (rpc) => {
-  console.log("connected")
-  rpc.on('closed', () => console.log("bye"))
-})
-```
-
-#### connectAndRemember(addr, data)
+### connectAndRemember(addr, data)
 
 Will connect and store as to automatically reconnect on
 reload. Options are as described in [ssb-conn].
 
-#### directConnect(addr, cb)
+### getPeer()
 
-Connect to addr only once. Cb is (err, rpc)
+Gets one of the connected peers that is not a room server.
 
-#### blobs
+### getGraphForFeed(feed, cb)
 
-This is where the `blobs` api can be found. The module implements the
-blobs protocol and so can exchange blobs with connection peers. It
+Returns an object of: following, blocking and extended given the feed.
+
+### box
+
+The
+[box](https://github.com/ssbc/ssb-keys#boxcontent-recipients--boxed)
+method from ssb-keys. Useful for private messages.
+
+### blobs
+
+The blobs module is a little special compared to default ssb-blobs. It
 also contains with the the following extra methods:
 
-##### hash(data, cb)
+#### hash(data, cb)
 
 Hashes data and returns the digest or err
 
@@ -128,63 +114,30 @@ onFileSelect: function(ev) {
 }
 ```
 
-##### add(blobId, file, cb)
+#### add(blobId, file, cb)
 
 Adds the `file` (such as one obtained from ev.target.files when using
 a file select) to the blob store using the blobId name. BlobId is & +
 hash.
 
-##### remoteURL(blobId)
+#### remoteURL(blobId)
 
 Returns a http URL string for the current connection. This is useful
 in a browser for images that you don't want to store directly on the
 device.
 
-##### privateGet(blobId, unbox, cb)
+#### privateGet(blobId, unbox, cb)
 
 Callback with err or a url that works for e.g images that was received
 in a private message.
 
-##### localGet(blobId, unbox, cb)
+#### localGet(blobId, unbox, cb)
 
 If blob already exists will callback with err or a url that can be
 used for images for a blob. Otherwise the blob will get requested and
 if size is smaller than the maximum size, the blob will be stored
 locally and used for callback, otherwise the callback will return a
 `remoteURL` link.
-
-#### ooo
-
-The [ssb-ooo] module
-
-#### Browser specific methods on net
-
-*** Warning: This will be removed in the future ***
-
-For partial replication a special plugin has been created and
-implemented in browser core, other clients such as a pub needs to have
-the [ssb-partial-replication] plugin installed.
-
-Once a rpc connection has been established, a few extra methods are
-available under SSB.net.partialReplication. See plugin for
-documentation.
-
-### dir
-
-The path to where the database and blobs are stored.
-
-### getPeer()
-
-Gets one of the connected peers that is not a room server.
-
-### getGraphForFeed(feed, cb)
-
-Returns an object of: following, blocking and extended given the feed.
-
-### box
-
-[box](https://github.com/ssbc/ssb-keys#boxcontent-recipients--boxed)
-method from ssb-keys. Useful for private messages.
 
 ## SSB Singleton
 

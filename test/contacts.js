@@ -7,7 +7,7 @@ require('rimraf').sync(dir)
 
 require('../core.js').init(dir)
 
-SSB.events.on('SSB: loaded', function() {
+SSB.on('SSB: loaded', function() {
   test('Base', t => {
     const contactMsg = { type: 'contact',
                          contact: '@6CAxOI3f+LUOVrbAl0IemqiS7ATpQvr9Mdw9LC4+Uv0=.ed25519',
@@ -18,7 +18,7 @@ SSB.events.on('SSB: loaded', function() {
         t.equal(graph.following[0], contactMsg.contact)
         t.end()
       }
-      SSB.getGraphForFeed(SSB.net.id, onGraph)
+      SSB.helpers.getGraphForFeed(SSB.id, onGraph)
     })
   })
 })

@@ -11,7 +11,7 @@ fs.copyFileSync("scripts/secret", dir + "/secret")
 
 require('../core.js').init(dir)
 
-SSB.events.on('SSB: loaded', function() {
+SSBLOADER.on('ready', function() {
 
   process.env["NODE_TLS_REJECT_UNAUTHORIZED"] = 0 // wtf
   // var remoteAddress = 'wss://between-two-worlds.dk:8990~noauth:lbocEWqF2Fg6WMYLgmfYvqJlMfL7hiqVAV6ANjHWNw8='
@@ -23,7 +23,7 @@ SSB.events.on('SSB: loaded', function() {
   console.log(new Date())
   
   //SSB.net.id = '@VIOn+8a/vaQvv/Ew3+KriCngyUXHxHbjXkj4GafBAY0=.ed25519'
-  SSB.net.conn.connect(remoteAddress, (err, rpc) => {
+  SSB.conn.connect(remoteAddress, (err, rpc) => {
     console.time("downloading main profile")
 
     if (err) console.error(err)
@@ -33,7 +33,6 @@ SSB.events.on('SSB: loaded', function() {
     function updateDB() {
       setTimeout(() => {
         console.log("db", SSB.db.getStatus().value)
-        console.log("replication", SSB.net.feedReplication.partialStatus())
         updateDB()
         //console.log("feed", SSB.feedSyncer.status())
       }, 5 * 1000)
