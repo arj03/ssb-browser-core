@@ -68,6 +68,9 @@ const config = {
 ssbSingleton.setup("/.ssb-example", config, extraModules)
 ```
 
+The string "/.ssb-example" is like a namespace in case you have multiple databases. When running in chrome it will actually write files to a folder under that name.
+
+
 ## API
 
 The `SSB` object one gets from the [`singleton`](#ssb-singleton) is a
