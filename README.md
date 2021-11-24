@@ -13,7 +13,7 @@ size of the bundle is roughly 2 mb.
 
 The simplest way to get started using ssb-browser-core is to look at
 the [ssb-browser-example] repo. For a more full fledged example see
-[8K demo].
+[8K demo] og [groupies] for private groups support.
 
 Note a browser can have multiple tabs open and for this reason you
 need to use a [`singleton`](#ssb-singleton) to avoid data corruption.
@@ -299,6 +299,7 @@ battery.
 
 [rooms]: https://github.com/ssb-ngi-pointer/go-ssb-room
 [8K demo]: https://github.com/ssb-ngi-pointer/8k-demo
+[groupies]: https://github.com/arj03/groupies
 [ssb-browser-example]: https://github.com/arj03/ssb-browser-example/
 [ssb-partial-replication]: https://github.com/arj03/ssb-partial-replication
 [jitdb]: https://github.com/arj03/jitdb
