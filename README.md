@@ -13,7 +13,7 @@ size of the bundle is roughly 2 mb.
 
 The simplest way to get started using ssb-browser-core is to look at
 the [ssb-browser-example] repo. For a more full fledged example see
-[8K demo] og [groupies] for private groups support.
+[8K demo] and [groupies] for private groups support.
 
 Note a browser can have multiple tabs open and for this reason you
 need to use a [`singleton`](#ssb-singleton) to avoid data corruption.
