@@ -21,7 +21,7 @@
     "secret-stack": "^6.3.2",
     "ssb-caps": "^1.1.0",
     "ssb-conn": "^6.0.0",
-    "ssb-db2": "^3.0.0",
+    "ssb-db2": "^4.0.3",
     "ssb-ebt": "^8.1.0",
     "ssb-friends": "^5.1.0",
     "ssb-keys": "^8.0.2",
