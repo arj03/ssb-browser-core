@@ -44,7 +44,12 @@ exports.init = function(dir, overwriteConfig, extraModules) {
   }, overwriteConfig)
 
   let secretStack = SecretStack(config)
-      .use(require('ssb-db2/db'))
+      .use(require('ssb-db2/core'))
+      .use(require('ssb-classic'))
+      .use(require('ssb-box'))
+      .use(require('ssb-box2'))
+      .use(require('ssb-db2/compat/publish'))
+      .use(require('ssb-db2/compat/post'))
       .use(require('ssb-db2/compat'))
       .use(require('ssb-conn'))
       .use(require('ssb-friends'))
