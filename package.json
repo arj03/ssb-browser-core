@@ -8,7 +8,7 @@
     "url": "git@github.com:arj03/ssb-browser-core.git"
   },
   "dependencies": {
-    "atomic-file-rw": "^0.2.2",
+    "atomic-file-rw": "^0.3.0",
     "gossip-query": "^2.0.2",
     "polyraf": "^1.1.0",
     "pull-cont": "^0.1.1",
@@ -21,8 +21,8 @@
     "secret-stack": "^6.3.2",
     "ssb-caps": "^1.1.0",
     "ssb-conn": "^6.0.0",
-    "ssb-db2": "^4.0.4",
-    "ssb-ebt": "^8.1.0",
+    "ssb-db2": "^6.0.0",
+    "ssb-ebt": "^9.0.0",
     "ssb-friends": "^5.1.0",
     "ssb-keys": "^8.0.2",
     "ssb-no-auth": "^1.0.0",
