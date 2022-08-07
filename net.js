@@ -47,7 +47,6 @@ exports.init = function(dir, overwriteConfig, extraModules) {
       .use(require('ssb-db2/core'))
       .use(require('ssb-classic'))
       .use(require('ssb-box'))
-      .use(require('ssb-box2'))
       .use(require('ssb-db2/compat/publish'))
       .use(require('ssb-db2/compat/post'))
       .use(require('ssb-db2/compat'))
