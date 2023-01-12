@@ -1,0 +1,12 @@
+--- node_modules/sodium-universal/package.json~	2022-08-07 09:34:56.376914270 +0200
++++ node_modules/sodium-universal/package.json	2023-01-12 13:39:07.100309164 +0100
+@@ -19,7 +19,8 @@
+     "prepublish": "./build-scripts/generate.js"
+   },
+   "browser": {
+-    "sodium-native": "sodium-javascript"
++    "sodium-native": "sodium-javascript",
++    "worker_threads": false
+   },
+   "browserify": {
+     "transform": [
