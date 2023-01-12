@@ -30,10 +30,6 @@ function deleteDatabaseFile(filename) {
   })
 }
 
-exports.removeIndexes = function removeIndexes(fs) {
-  SSB.db.clearIndexes()
-}
-
 exports.removeDB = function() {
   deleteDatabaseFile('log.bipf')
 

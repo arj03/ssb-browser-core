@@ -21,7 +21,6 @@ exports.init = function (dir, config, extraModules) {
       getGraphForFeed: helpers.getGraphForFeed,
 
       removeDB: helpers.removeDB,
-      removeIndexes: helpers.removeIndexes,
       removeBlobs: helpers.removeBlobs
     }
 
